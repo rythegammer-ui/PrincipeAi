@@ -44,7 +44,7 @@ export function defaultTemplateVars(): TemplateVars {
     bookUrl: absoluteUrl("/book"),
     coursesUrl: absoluteUrl("/courses"),
     assessmentUrl: absoluteUrl("/assessment"),
-    guideUrl: absoluteUrl("/guide"),
+    guideUrl: absoluteUrl("/guide?src=email"),
     loginUrl: absoluteUrl("/login"),
     businessName: site.name,
   };

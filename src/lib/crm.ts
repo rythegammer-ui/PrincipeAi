@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { ActivityType, Contact, SequenceTrigger, Stage } from "@/db/schema";
 import { STAGES } from "@/db/schema";
+import { SCORE_RULES } from "@/components/admin/crm-utils";
 import { triggerAutomations } from "@/lib/automations";
 import { notifyOwner } from "@/lib/email";
 import { getSettings } from "@/lib/settings";
@@ -64,17 +65,6 @@ export async function addTags(contactId: string, tags: string[]): Promise<void> 
   const merged = [...new Set([...(c.tags ?? []), ...clean])];
   await db.update(schema.contacts).set({ tags: merged }).where(eq(schema.contacts.id, contactId));
 }
-
-const SCORE_RULES: Partial<Record<ActivityType, { points: number; max: number }>> = {
-  optin: { points: 10, max: 10 },
-  quiz_completed: { points: 15, max: 15 },
-  form: { points: 10, max: 15 },
-  chat: { points: 5, max: 10 },
-  booking_created: { points: 25, max: 30 },
-  purchase: { points: 30, max: 40 },
-  login: { points: 3, max: 6 },
-  lesson_completed: { points: 2, max: 10 },
-};
 
 /**
  * Recomputes the 0–100 lead score from profile completeness + engagement history.

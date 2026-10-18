@@ -1,0 +1,129 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/*
+ * Principe AI design tokens.
+ * Brand = royal violet, accent = gold, neutrals = zinc. Use these via Tailwind classes:
+ *   bg-brand-600, text-brand-700, ring-brand-500, bg-gold-400, bg-ink, font-display …
+ */
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
+
+  --color-brand-50: #f4f3ff;
+  --color-brand-100: #ebe9fe;
+  --color-brand-200: #d9d6fe;
+  --color-brand-300: #bdb4fe;
+  --color-brand-400: #9b8afb;
+  --color-brand-500: #7a5af8;
+  --color-brand-600: #6938ef;
+  --color-brand-700: #5925dc;
+  --color-brand-800: #4a1fb8;
+  --color-brand-900: #3e1c96;
+  --color-brand-950: #27115f;
+
+  --color-gold-50: #fffaeb;
+  --color-gold-100: #fef0c7;
+  --color-gold-200: #fedf89;
+  --color-gold-300: #fec84b;
+  --color-gold-400: #fdb022;
+  --color-gold-500: #f79009;
+  --color-gold-600: #dc6803;
+  --color-gold-700: #b54708;
+
+  /* Near-black with a violet cast — used for dark hero / CTA bands. */
+  --color-ink: #0c0a1d;
+  --color-ink-2: #15122b;
+
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.25rem;
+
+  --shadow-soft: 0 1px 2px rgb(16 12 40 / 0.04), 0 4px 16px -4px rgb(16 12 40 / 0.08);
+  --shadow-lift: 0 2px 4px rgb(16 12 40 / 0.04), 0 16px 40px -12px rgb(76 29 149 / 0.25);
+
+  --animate-fade-up: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-blink: blink 1s steps(2, start) infinite;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes blink {
+    to {
+      visibility: hidden;
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-white text-zinc-900 antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    @apply bg-brand-200 text-brand-950;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Page-width container used by every marketing section. */
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+  }
+  .container-narrow {
+    @apply mx-auto w-full max-w-3xl px-4 sm:px-6;
+  }
+  .text-gradient {
+    @apply bg-gradient-to-r from-brand-600 via-brand-500 to-gold-500 bg-clip-text text-transparent;
+  }
+  .text-gradient-light {
+    @apply bg-gradient-to-r from-brand-300 via-brand-200 to-gold-300 bg-clip-text text-transparent;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold tracking-[0.14em] text-brand-600 uppercase;
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgb(105 56 239 / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(105 56 239 / 0.07) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+  .bg-grid-dark {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+  .glow-brand {
+    background: radial-gradient(60% 60% at 50% 0%, rgb(122 90 248 / 0.28) 0%, transparent 70%);
+  }
+  /* Markdown content (lessons, AI output, emails preview). */
+  .prose-content {
+    @apply prose prose-zinc max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-brand-700 prose-a:underline-offset-2 prose-strong:text-zinc-900 prose-code:rounded prose-code:bg-zinc-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-pre:bg-ink prose-pre:text-zinc-100 prose-blockquote:border-brand-300 prose-blockquote:text-zinc-700 prose-li:marker:text-brand-500;
+  }
+}

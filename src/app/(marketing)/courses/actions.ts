@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { getStudent } from "@/lib/auth";
 import { emailHasCourse } from "@/lib/courses";
 import { CheckoutError, createCheckout } from "@/lib/payments";
 import { rateLimitByIp } from "@/lib/rate-limit";
@@ -9,7 +10,7 @@ import { rateLimitByIp } from "@/lib/rate-limit";
 export type EnrollState = {
   error?: string;
   fieldErrors?: { email?: string; name?: string };
-  /** The email already has access — show a sign-in link instead. */
+  /** The signed-in student's own email already has access — show a link to the course instead. */
   alreadyOwned?: boolean;
   values?: { email: string; name: string };
 };
@@ -44,7 +45,11 @@ export async function startCourseCheckoutAction(_prev: EnrollState, formData: Fo
   if (!limit.ok) return { error: "Too many attempts. Please wait a few minutes and try again.", values };
 
   const { courseId, email, name } = parsed.data;
-  if (await emailHasCourse(email, courseId)) {
+  // Only the signed-in owner of an email learns that it already has the course: telling anyone else would let the
+  // form look up who bought what. Everyone else gets a normal checkout; if it turns out to be a course this email
+  // already had, fulfilment refunds the payment and emails the address a sign-in link (see settleDuplicatePurchase).
+  const student = await getStudent();
+  if (student?.email === email && (await emailHasCourse(email, courseId))) {
     return { alreadyOwned: true, values };
   }
 

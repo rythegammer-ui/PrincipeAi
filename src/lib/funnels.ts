@@ -2,7 +2,7 @@ import "server-only";
 import { sql, type SQL } from "drizzle-orm";
 import { DateTime } from "luxon";
 import { getDb } from "@/db";
-import { CHECKOUT_FAILED_REASON, HOLD_EXPIRED_REASON } from "@/lib/booking-service";
+import { CHANGED_BEFORE_PAYING_REASON, CHECKOUT_FAILED_REASON, HOLD_EXPIRED_REASON } from "@/lib/booking-service";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import type { FunnelEventName } from "@/lib/tracking";
 import { absoluteUrl } from "@/lib/utils";
@@ -454,7 +454,12 @@ export async function getAttribution(range: Pick<DateRange, "from" | "to">): Pro
       select contact_id from bookings
       where created_at >= ${ts(range.from)} and created_at < ${ts(range.to)}
         and status <> 'pending_payment'
-        and not (status = 'cancelled' and coalesce(cancel_reason, '') in (${HOLD_EXPIRED_REASON}, ${CHECKOUT_FAILED_REASON}))
+        -- Not a cancelled booking that was never paid for (released hold, or a paid session cancelled before payment).
+        and not (status = 'cancelled' and (
+          coalesce(cancel_reason, '') in (${HOLD_EXPIRED_REASON}, ${CHECKOUT_FAILED_REASON}, ${CHANGED_BEFORE_PAYING_REASON})
+          or (exists (select 1 from meeting_types bmt where bmt.id = bookings.meeting_type_id and bmt.price_cents > 0)
+            and not exists (select 1 from orders bo where bo.booking_id = bookings.id and bo.status in ('paid', 'refunded')))
+        ))
       group by contact_id
     ),
     o as (

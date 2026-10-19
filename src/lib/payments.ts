@@ -1,18 +1,19 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { getDb, isDemoMode, schema } from "@/db";
 import type { Order } from "@/db/schema";
 import { site } from "@/config/site";
 import { stopAutomations } from "@/lib/automations";
+import { createLoginToken } from "@/lib/auth";
 import { CHECKOUT_FAILED_REASON, confirmPaidBooking, HOLD_EXPIRED_REASON } from "@/lib/booking-service";
 import { emailHasCourse, enrollInCourse } from "@/lib/courses";
-import { addLifetimeValue, captureLead, logActivity } from "@/lib/crm";
+import { addLifetimeValue, captureLead, logActivity, upsertContact } from "@/lib/crm";
 import { escapeMarkdown, notifyOwner, sendEmail } from "@/lib/email";
 import { testCheckoutAllowed } from "@/lib/integrations";
 import { rateLimit } from "@/lib/rate-limit";
 import { formatMeetingTime, getBusinessTimezone } from "@/lib/scheduling";
-import { getStripe } from "@/lib/stripe";
+import { getStripe, stripeDashboardUrl, stripeTestMode } from "@/lib/stripe";
 import { absoluteUrl, firstName, formatDate, formatDateTime, formatMoney, normalizeEmail } from "@/lib/utils";
 
 /**
@@ -24,8 +25,17 @@ export type CheckoutInput =
   | { itemType: "course"; courseId: string; email: string; name?: string | null }
   | { itemType: "booking"; bookingId: string; email: string; name?: string | null };
 
+/**
+ * A demo deployment (DEMO_MODE=1, in-memory database) never takes real money: its orders live in one
+ * server instance's memory and are lost. With a live Stripe key there, checkout is turned off (a test key is fine).
+ */
+export function livePaymentsBlocked(): boolean {
+  return isDemoMode() && Boolean(getStripe()) && !stripeTestMode();
+}
+
 /** How buyers will pay right now: real Stripe Checkout, the built-in test checkout, or not at all. */
 export function checkoutMode(): "stripe" | "test" | "disabled" {
+  if (livePaymentsBlocked()) return "disabled";
   if (getStripe()) return "stripe";
   return testCheckoutAllowed() ? "test" : "disabled";
 }
@@ -121,6 +131,7 @@ export async function createCheckout(input: CheckoutInput): Promise<{ url: strin
   const email = normalizeEmail(input.email);
   const name = input.name?.trim() || null;
   const item = await loadItem(input, email, name);
+  if (item.amountCents > 0 && livePaymentsBlocked()) throw new CheckoutError("Payments are turned off on this demo site.");
   if (item.amountCents > 0 && !stripe && !testCheckoutAllowed()) throw new Error("Payments are not configured");
 
   const db = await getDb();
@@ -245,7 +256,19 @@ export async function fulfillOrder(orderId: string, payment: PaymentDetails = {}
     console.error("[payments] delivery raised an error but the order was delivered concurrently", order.id, err);
   }
 
-  // 2. CRM, automations, receipt — best effort, never undo a delivered order.
+  // 2. A course this email already had: nothing new was delivered, so don't keep the money.
+  let duplicate = false;
+  try {
+    duplicate = await isDuplicatePurchase(order);
+  } catch (err) {
+    console.error("[payments] duplicate-purchase check failed", order.id, err);
+  }
+  if (duplicate) {
+    await settleDuplicatePurchase(order);
+    return;
+  }
+
+  // 3. CRM, automations, receipt — best effort, never undo a delivered order.
   try {
     await recordPurchase(order);
   } catch (err) {
@@ -261,9 +284,155 @@ async function deliver(order: Order): Promise<void> {
     }
     await enrollInCourse({ email: order.email, name: order.name, courseId: order.courseId, source: "purchase", orderId: order.id });
   } else {
-    if (!order.bookingId) throw new Error(`Order ${order.id} has no booking`);
+    if (!order.bookingId) {
+      // orders.booking_id is cleared when the booking is deleted (e.g. along with its contact) mid-checkout.
+      await alertUndeliverable(order, "the booking it was for has been deleted");
+      throw new Error(`Order ${order.id} has no booking`);
+    }
     await confirmPaidBooking(order.bookingId);
   }
+}
+
+/**
+ * True when a course order bought nothing new: this email already had the course through another order or a
+ * manual grant. The enroll form only tells a signed-in owner that they have a course (never a signed-out
+ * visitor, or it would reveal who bought what), so a buyer can pay for a course their email already has.
+ */
+export async function isDuplicatePurchase(order: Pick<Order, "id" | "itemType" | "courseId" | "email">): Promise<boolean> {
+  if (order.itemType !== "course" || !order.courseId) return false;
+  const db = await getDb();
+  const [enrollment] = await db
+    .select({ orderId: schema.enrollments.orderId })
+    .from(schema.enrollments)
+    .innerJoin(schema.users, eq(schema.users.id, schema.enrollments.userId))
+    .where(and(eq(schema.users.email, normalizeEmail(order.email)), eq(schema.enrollments.courseId, order.courseId)))
+    .limit(1);
+  return enrollment !== undefined && enrollment.orderId !== order.id;
+}
+
+/**
+ * Settles a paid order for a course the email already had (see isDuplicatePurchase): refunds the payment —
+ * through Stripe for real checkouts — and emails the buyer a sign-in link instead of a receipt. Never throws;
+ * when the refund can't be made automatically, the owner is asked to make it.
+ */
+async function settleDuplicatePurchase(claimed: Order): Promise<void> {
+  let order = claimed;
+  try {
+    // Link the order to the buyer's CRM contact (as recordPurchase does) so lifetime value and the timeline stay right.
+    if (!order.contactId) {
+      const { contact } = await upsertContact({ email: order.email, name: order.name, source: "checkout" });
+      const db = await getDb();
+      await db.update(schema.orders).set({ contactId: contact.id }).where(eq(schema.orders.id, order.id));
+      order = { ...order, contactId: contact.id };
+    }
+  } catch (err) {
+    console.error("[payments] linking a duplicate purchase to its contact failed", order.id, err);
+  }
+  const outcome = order.amountCents <= 0 ? "free" : (await refundDuplicatePayment(order)) ? "refunded" : "refund_pending";
+  try {
+    if (order.contactId) {
+      await logActivity(order.contactId, "note", `Bought ${order.description} again — already had access`, {
+        body: outcome === "refunded" ? "Payment refunded automatically." : outcome === "refund_pending" ? "The automatic refund failed — please refund this payment." : null,
+        meta: { orderId: order.id, courseId: order.courseId, duplicatePurchase: true, amountCents: order.amountCents, refunded: outcome === "refunded" },
+      });
+    }
+    await sendAlreadyOwnedEmail(order, outcome);
+  } catch (err) {
+    console.error("[payments] duplicate-purchase follow-up failed", order.id, err);
+  }
+}
+
+/** Refunds a duplicate purchase in full. Returns false (after asking the owner to do it) when that wasn't possible. */
+async function refundDuplicatePayment(order: Order): Promise<boolean> {
+  // Lifetime value counts the payment as received; recording the refund then takes it off again.
+  const countPayment = async () => {
+    if (order.contactId && !order.isTest) await addLifetimeValue(order.contactId, order.amountCents);
+  };
+  try {
+    if (order.stripePaymentIntentId) {
+      const stripe = getStripe();
+      if (!stripe) throw new Error("Stripe is not configured");
+      await stripe.refunds.create(
+        { payment_intent: order.stripePaymentIntentId, reason: "duplicate", metadata: { orderId: order.id } },
+        { idempotencyKey: `duplicate-purchase-refund:${order.id}` },
+      );
+    } else if (!order.isTest) {
+      throw new Error("No Stripe payment to refund");
+    }
+  } catch (err) {
+    console.error("[payments] automatic refund of a duplicate purchase failed", order.id, err);
+    await alertDuplicateRefund(order);
+    // Still a paid order until the owner refunds it (their refund then subtracts it again).
+    await countPayment().catch((e) => console.error("[payments] lifetime value update failed", order.id, e));
+    return false;
+  }
+  // The money is on its way back. The charge.refunded webhook records the refund too; refundOrder applies it once.
+  try {
+    await countPayment();
+    await refundOrder(order.id, { source: order.stripePaymentIntentId ? "stripe" : "auto", reason: "Duplicate purchase: this email already had the course" });
+  } catch (err) {
+    console.error("[payments] recording the duplicate-purchase refund failed", order.id, err);
+  }
+  return true;
+}
+
+/** Asks the owner to refund a duplicate purchase the app couldn't refund itself. */
+async function alertDuplicateRefund(order: Order): Promise<void> {
+  try {
+    await notifyOwner(
+      `Action needed: refund a duplicate purchase`,
+      [
+        `**${escapeMarkdown(order.name || order.email)}** paid ${formatMoney(order.amountCents, order.currency)} for **${escapeMarkdown(order.description)}**, which this email address already had, and the automatic refund didn't go through.`,
+        order.stripePaymentIntentId
+          ? `Please [refund the payment in Stripe](${stripeDashboardUrl(order.stripePaymentIntentId, order.isTest)}) — their existing access is unaffected.`
+          : `Please refund the payment — their existing access is unaffected.`,
+        `- Email: ${escapeMarkdown(order.email)}`,
+        `- Order: ${order.id}`,
+      ].join("\n\n"),
+    );
+  } catch (err) {
+    console.error("[payments] duplicate-refund alert failed", order.id, err);
+  }
+}
+
+/** Tells a buyer who paid for a course they already had where their payment went, with a fresh sign-in link. */
+async function sendAlreadyOwnedEmail(order: Order, outcome: "free" | "refunded" | "refund_pending"): Promise<void> {
+  if (!order.courseId) return;
+  const db = await getDb();
+  const [course] = await db
+    .select({ slug: schema.courses.slug, title: schema.courses.title })
+    .from(schema.courses)
+    .where(eq(schema.courses.id, order.courseId))
+    .limit(1);
+  if (!course) return;
+  const token = await createLoginToken(order.email, `/learn/${course.slug}`);
+  const link = absoluteUrl(`/auth/verify?token=${encodeURIComponent(token)}`);
+  const amount = formatMoney(order.amountCents, order.currency);
+  const payment =
+    outcome === "free"
+      ? ""
+      : order.isTest
+        ? "This was a test purchase, so no payment was taken."
+        : outcome === "refunded"
+          ? `So you're not charged twice, we've refunded the ${amount} you just paid in full. Refunds usually reach your account within 5–10 business days.`
+          : `So you're not charged twice, we'll refund the ${amount} you just paid in full — we'll be in touch shortly.`;
+  await sendEmail({
+    to: order.email,
+    subject: `You already have ${course.title}`,
+    kind: "welcome",
+    contactId: order.contactId,
+    preheader: "Your course is ready — here's your sign-in link.",
+    markdown: [
+      `Hi ${firstName(order.name, order.email)},`,
+      `Good news: this email address already has access to **${course.title}**, so there was nothing new to buy.`,
+      payment,
+      `**[Sign in and keep learning →](${link})**`,
+      `This one-click sign-in link works once and expires in 30 minutes. After that, you can always get a fresh link at ${absoluteUrl("/login")} using this email address.`,
+      `Questions? Just reply to this email.`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  });
 }
 
 /**
@@ -285,11 +454,18 @@ async function isDelivered(order: Order): Promise<boolean> {
   return !(booking.status === "cancelled" && (booking.cancelReason === HOLD_EXPIRED_REASON || booking.cancelReason === CHECKOUT_FAILED_REASON));
 }
 
+/**
+ * rate_limits key prefix of the "owner already alerted" marker for an undeliverable order. The marker must outlive
+ * Stripe's webhook retries (about 3 days), so the rate-limit cleanup job keeps these rows for UNDELIVERABLE_ALERT_TTL_MS.
+ */
+export const UNDELIVERABLE_ALERT_PREFIX = "undeliverable-order:";
+export const UNDELIVERABLE_ALERT_TTL_MS = 7 * 86_400_000;
+
 /** Tells the owner (once per order) about a payment that can never be delivered, so they can refund it. */
 async function alertUndeliverable(order: Order, why: string): Promise<void> {
   try {
     // rate_limits doubles as a cheap "already sent" marker: Stripe retries the event for days.
-    if (!(await rateLimit(`undeliverable-order:${order.id}`, 1, 7 * 86_400)).ok) return;
+    if (!(await rateLimit(`${UNDELIVERABLE_ALERT_PREFIX}${order.id}`, 1, UNDELIVERABLE_ALERT_TTL_MS / 1000)).ok) return;
     await notifyOwner(
       `Action needed: payment received for an order that can't be delivered`,
       [
@@ -317,11 +493,30 @@ async function loadBookingSnapshot(order: Order): Promise<BookingSnapshot | null
   return booking ?? null;
 }
 
+/**
+ * True when another order paid for the same booking first: this payment bought nothing new. Same order as
+ * confirmPaidBooking, which asks the owner to refund every paid order after the first one.
+ */
+async function isDuplicateBookingPayment(order: Order): Promise<boolean> {
+  if (order.itemType !== "booking" || !order.bookingId) return false;
+  const db = await getDb();
+  const [first] = await db
+    .select({ id: schema.orders.id })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.bookingId, order.bookingId), eq(schema.orders.status, "paid")))
+    .orderBy(asc(schema.orders.paidAt), asc(schema.orders.createdAt))
+    .limit(1);
+  return first !== undefined && first.id !== order.id;
+}
+
 async function recordPurchase(order: Order): Promise<void> {
   const db = await getDb();
   const amount = formatMoney(order.amountCents, order.currency);
   const booking = await loadBookingSnapshot(order);
   const businessTz = booking ? await getBusinessTimezone() : null;
+  // A second payment for a booking that was already paid for: the owner gets the separate "duplicate payment"
+  // alert (from confirmPaidBooking), so this notification says so, and the buyer's receipt says it will be refunded.
+  const duplicateBookingPayment = await isDuplicateBookingPayment(order);
   const { contact } = await captureLead({
     email: order.email,
     name: order.name,
@@ -337,12 +532,16 @@ async function recordPurchase(order: Order): Promise<void> {
     automation: order.itemType === "course" ? "purchase" : undefined,
     notify: {
       kind: "purchase",
-      subject: `New purchase: ${order.description} (${amount})`,
+      subject: duplicateBookingPayment ? `Duplicate payment: ${order.description} (${amount})` : `New purchase: ${order.description} (${amount})`,
       // Name and email are buyer-supplied: escape them so they can't become links in the owner's inbox.
       markdown: [
         `**${escapeMarkdown(order.name || order.email)}** just bought **${escapeMarkdown(order.description)}** for **${amount}**${order.isTest ? " _(test payment — no real money)_" : ""}.`,
         booking && businessTz ? `- Session: ${formatMeetingTime(booking.startAt, booking.endAt, businessTz)}` : "",
-        booking && !isBookedStatus(booking.status) ? "- **The time was no longer available** — see the separate “Action needed” email." : "",
+        duplicateBookingPayment
+          ? "- **This booking was already paid for** — see the separate “Action needed: duplicate payment” email."
+          : booking && !isBookedStatus(booking.status)
+            ? "- **The time was no longer available** — see the separate “Action needed” email."
+            : "",
         `- Email: ${escapeMarkdown(order.email)}`,
         `- Order: ${order.id}`,
       ]
@@ -350,14 +549,16 @@ async function recordPurchase(order: Order): Promise<void> {
         .join("\n\n"),
     },
   });
-  await addLifetimeValue(contact.id, order.amountCents);
+  // Test payments (built-in test checkout, Stripe test mode) aren't real money. A duplicate booking payment still
+  // counts until the owner refunds it: refundOrder (Stripe's charge.refunded, or Admin → Orders) then subtracts it.
+  if (!order.isTest) await addLifetimeValue(contact.id, order.amountCents);
   if (order.contactId !== contact.id) {
     await db.update(schema.orders).set({ contactId: contact.id }).where(eq(schema.orders.id, order.id));
   }
   // They bought — stop the top-of-funnel nurture sequences.
   await stopAutomations(contact.id, "lead_magnet");
   await stopAutomations(contact.id, "quiz_completed");
-  await sendReceipt(order, contact.id, booking);
+  await sendReceipt(order, contact.id, booking, duplicateBookingPayment);
 }
 
 /** Booking statuses that mean the paid session actually holds its time. */
@@ -365,11 +566,13 @@ function isBookedStatus(status: string): boolean {
   return status === "confirmed" || status === "completed" || status === "no_show";
 }
 
-async function sendReceipt(order: Order, contactId: string, booking: BookingSnapshot | null): Promise<void> {
+async function sendReceipt(order: Order, contactId: string, booking: BookingSnapshot | null, duplicateBookingPayment = false): Promise<void> {
   const amount = formatMoney(order.amountCents, order.currency);
   const next =
     order.itemType === "course"
       ? `Your course access link is in a separate email. You can sign in any time at ${absoluteUrl("/login")} with this email address.`
+      : duplicateBookingPayment
+        ? `**This session was already paid for**, so this second payment wasn't needed. ${order.isTest ? "As a test purchase, no money was taken." : "We'll refund it in full — refunds usually reach your account within 5–10 business days."} Your session is unaffected.`
       : booking && isBookedStatus(booking.status)
         ? "Your session is confirmed — the calendar invite and meeting details are in your confirmation email."
         : "**Your session isn't booked yet:** your payment arrived after the time you picked had been released, and it's no longer available. We'll be in touch shortly to find a new time or refund you in full — or just reply to this email.";
@@ -511,6 +714,22 @@ export async function sendPaymentFailedEmail(order: Order): Promise<void> {
   });
 }
 
+/**
+ * Marks a still-pending order failed (its payment didn't go through) and emails the buyer a link to try again.
+ * Returns the order when it changed (null for duplicate or late events). The email is best effort.
+ */
+export async function failPendingOrder(orderId: string): Promise<Order | null> {
+  const db = await getDb();
+  const [order] = await db
+    .update(schema.orders)
+    .set({ status: "failed" })
+    .where(and(eq(schema.orders.id, orderId), eq(schema.orders.status, "pending")))
+    .returning();
+  if (!order) return null;
+  await sendPaymentFailedEmail(order).catch((err) => console.error("[payments] payment-failed email failed", order.id, err));
+  return order;
+}
+
 /** True when a pending-payment booking can no longer be paid for (released or hold expired). */
 export function bookingHoldExpired(booking: OrderDetails["booking"], now = Date.now()): boolean {
   if (!booking || booking.status !== "pending_payment") return true;
@@ -535,10 +754,13 @@ export function newTestSessionId(): string {
   return proofToken("test");
 }
 
-/** Records a refund: order → refunded, lifetime value reduced, timeline entry, and (optionally) course access removed. */
+/**
+ * Records a refund: order → refunded, lifetime value reduced, timeline entry, and (optionally) course access removed.
+ * `source`: refunded in Stripe, marked by the admin, or settled automatically by the app without Stripe (test orders).
+ */
 export async function refundOrder(
   orderId: string,
-  opts: { revokeAccess?: boolean; reason?: string; source: "stripe" | "manual" },
+  opts: { revokeAccess?: boolean; reason?: string; source: "stripe" | "manual" | "auto" },
 ): Promise<boolean> {
   const db = await getDb();
   const [order] = await db
@@ -553,7 +775,8 @@ export async function refundOrder(
     revoked = removed.length > 0;
   }
   if (order.contactId) {
-    await addLifetimeValue(order.contactId, -order.amountCents);
+    // Test payments never added to lifetime value (see recordPurchase).
+    if (!order.isTest) await addLifetimeValue(order.contactId, -order.amountCents);
     await logActivity(order.contactId, "note", `Refunded ${order.description} (${formatMoney(order.amountCents, order.currency)})`, {
       body: opts.reason ?? null,
       meta: { orderId: order.id, amountCents: order.amountCents, refund: true, source: opts.source, accessRevoked: revoked },

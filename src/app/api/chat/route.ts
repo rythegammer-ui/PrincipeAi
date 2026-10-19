@@ -2,14 +2,14 @@ import { eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
-import { aiStream, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
+import { aiStream, claimPublicAiReply, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
 import { buildAssistantSystemPrompt, chatEmailNote, toModelMessages, withNoteOnLastUserMessage } from "@/lib/ai-prompts";
 import { buildChatFallback, extractEmail, extractOwnEmail } from "@/lib/chat-fallback";
 import { captureLead, contactForVisitor, logActivity, recomputeScore } from "@/lib/crm";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
 import { getVisitorContext, trackEvent } from "@/lib/tracking";
-import { absoluteUrl, truncate } from "@/lib/utils";
+import { absoluteUrl, escapeMarkdown, truncate } from "@/lib/utils";
 import {
   CONTEXT_MESSAGES,
   MAX_STORED_MESSAGES,
@@ -87,8 +87,9 @@ export async function POST(request: NextRequest) {
   }
   const conversationId = conversation.id;
 
-  // Lead capture: only an address the visitor offers as their own ("my email is …", the follow-up form, or just the
-  // address). Others — e.g. "write a reminder to my client jane@acme.com" — must never become leads or notifications.
+  // Lead capture: only an address the visitor offers as their own ("my email is …", the follow-up form, just the
+  // address, or a short message ending with it). Others — e.g. "write a reminder to my client jane@acme.com" — must
+  // never become leads or notifications; the reply then says the address wasn't passed on.
   const email = extractOwnEmail(message);
   let emailCaptured: string | null = null;
   if (email) {
@@ -109,7 +110,8 @@ export async function POST(request: NextRequest) {
           notify: {
             kind: "lead",
             subject: `New lead from the AI chat: ${email}`,
-            markdown: `**${email}** shared their email with the AI assistant${path ? ` on ${path}` : ""} and would like a follow-up.\n\nTheir message:\n\n${quoteForEmail(message)}\n\n[Read the full conversation](${absoluteUrl(`/admin/conversations/${conversationId}`)})`,
+            // The address and page path come from the request: escaped so neither can become a link in the owner's inbox.
+            markdown: `**${escapeMarkdown(email)}** shared their email with the AI assistant${path ? ` on ${escapeMarkdown(path)}` : ""} and would like a follow-up.\n\nTheir message:\n\n${quoteForEmail(message)}\n\n[Read the full conversation](${absoluteUrl(`/admin/conversations/${conversationId}`)})`,
           },
         });
         contactId = contact.id;
@@ -135,18 +137,25 @@ export async function POST(request: NextRequest) {
   }
 
   const { courses, meetingTypes } = await loadAssistantKnowledge();
+  // The address the replies talk about when it wasn't passed on: the visitor's own (rate limited or capture failed)
+  // or, when none was recognized, the first one in the message.
+  const emailInMessage = email ?? extractEmail(message);
+  const emailCaptureFailed = email !== null && emailCaptured === null;
 
+  // Site-wide daily ceiling on AI spend: past it, the reply is the non-AI fallback.
+  const useAi = await claimPublicAiReply();
   const stream = aiStream({
     system: buildAssistantSystemPrompt({ settings, courses, meetingTypes }),
     // Tell the model whether an address really reached the team (only the visitor's own, and not when rate limited
     // or capture failed) so it never promises a follow-up that isn't coming. The cached system prompt stays unchanged.
     messages: withNoteOnLastUserMessage(
       toModelMessages(history, CONTEXT_MESSAGES),
-      chatEmailNote({ emailInMessage: extractEmail(message) !== null, emailCaptured: emailCaptured !== null }),
+      chatEmailNote({ emailInMessage: emailInMessage !== null, emailCaptured: emailCaptured !== null, captureFailed: emailCaptureFailed }),
     ),
     effort: "low",
     maxTokens: 4000,
-    fallbackText: buildChatFallback({ message, courses, meetingTypes, emailCaptured }),
+    useFallback: !useAi,
+    fallbackText: buildChatFallback({ message, courses, meetingTypes, emailCaptured, emailInMessage, emailCaptureFailed }),
     // A refusal shows the refusal sentence (not the non-AI fallback), and a reply the visitor stopped is still saved.
     refusalText: REFUSAL_MESSAGE,
     completeOnCancel: true,

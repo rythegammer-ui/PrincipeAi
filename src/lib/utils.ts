@@ -10,8 +10,21 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * Plausible email address. Quotes, brackets, parentheses, commas, colons, semicolons and backslashes are
+ * rejected too: real addresses almost never use them, and they are Markdown/RFC-special characters.
+ */
 export function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  return /^[^\s@"(),:;<>[\]\\]+@[^\s@"(),:;<>[\]\\]+\.[^\s@"(),:;<>[\]\\]{2,}$/.test(email.trim());
+}
+
+/**
+ * Escapes visitor-supplied text before it is interpolated into Markdown that will be emailed or rendered:
+ * Markdown/HTML control characters, plus `.`, `:` and `@` so bare URLs, `www.` hosts and email
+ * addresses can't become GFM autolinks. Renders as the same visible text. Client-safe (re-exported by lib/email.ts).
+ */
+export function escapeMarkdown(text: string): string {
+  return text.replace(/([\\`*_{}[\]()<>#+!|~.:@])/g, "\\$1").replace(/\n{3,}/g, "\n\n");
 }
 
 /** Anything a greeting name may not contain (it keeps letters, combining marks, apostrophes and hyphens). */
@@ -99,10 +112,23 @@ export function absoluteUrl(path = "/"): string {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-/** Only allow same-site relative redirects (prevents open redirects). */
+const REDIRECT_BASE = "http://redirect.invalid";
+
+/**
+ * Only allow same-site relative redirects (prevents open redirects). Control characters and
+ * backslashes are rejected outright: browsers strip tab/newline and treat `\` as `/`, so
+ * "/\t/evil.example" or "/\\evil.example" would become the protocol-relative "//evil.example".
+ * Returns the path normalized by the URL parser.
+ */
 export function safeRedirectPath(path: string | null | undefined, fallback = "/"): string {
-  if (!path || !path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\")) return fallback;
-  return path;
+  if (!path || !path.startsWith("/") || /[\u0000-\u001f\u007f\\]/.test(path)) return fallback;
+  try {
+    const url = new URL(path, REDIRECT_BASE);
+    if (url.origin !== REDIRECT_BASE) return fallback;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return fallback;
+  }
 }
 
 export function truncate(text: string, max: number): string {

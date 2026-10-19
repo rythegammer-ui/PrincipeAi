@@ -11,10 +11,12 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;
-  const target = safeRedirectPath(next, "/learn");
+  // Student sign-in only ever leads into the portal (same rule as the magic-link action).
+  const path = safeRedirectPath(next, "/learn");
+  const target = path.startsWith("/learn") ? path : "/learn";
   if (await getStudent()) redirect(target);
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-zinc-50 px-4 py-16">
+    <main id="main" className="relative flex min-h-screen items-center justify-center overflow-hidden bg-zinc-50 px-4 py-16">
       <div className="bg-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]" />
       <div className="relative w-full max-w-sm">
         <Link href="/" className="mb-8 flex justify-center">
@@ -32,6 +34,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }

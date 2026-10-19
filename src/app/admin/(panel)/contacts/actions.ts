@@ -12,6 +12,7 @@ import { stopAutomations } from "@/lib/automations";
 import { addTags, logActivity, recomputeScore, setStage, upsertContact } from "@/lib/crm";
 import { sendEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
+import { PENDING_ORDER_TTL_MS } from "@/lib/jobs";
 import { isValidEmail, normalizeEmail, truncate } from "@/lib/utils";
 
 export type FormState = {
@@ -378,6 +379,24 @@ export async function deleteContactAction(contactId: string): Promise<ActionResu
   const id = Id.safeParse(contactId);
   if (!id.success) return { ok: false, error: "Invalid contact." };
   const db = await getDb();
+  // Deleting a contact deletes their bookings too: never while a checkout could still be paid, or the payment
+  // would arrive for a booking that no longer exists and couldn't be delivered.
+  const inCheckout = await db.execute<{ hold: boolean }>(sql`
+    select true as hold from bookings b
+    where b.contact_id = ${id.data} and b.status = 'pending_payment' and (b.hold_expires_at is null or b.hold_expires_at > now())
+    union all
+    select true from orders o
+    where o.status = 'pending' and o.created_at > ${new Date(Date.now() - PENDING_ORDER_TTL_MS).toISOString()}::timestamptz
+      and (o.contact_id = ${id.data} or o.booking_id in (select b2.id from bookings b2 where b2.contact_id = ${id.data}))
+    limit 1
+  `);
+  const busy = Array.isArray(inCheckout) ? inCheckout.length > 0 : (inCheckout as unknown as { rows: unknown[] }).rows.length > 0;
+  if (busy) {
+    return {
+      ok: false,
+      error: "This contact has a checkout in progress (an unpaid booking hold or a pending order). Try again once it has been paid or has expired.",
+    };
+  }
   const [deleted] = await db.delete(c).where(eq(c.id, id.data)).returning({ id: c.id });
   if (!deleted) return { ok: false, error: "This contact was already deleted." };
   revalidateCrm();

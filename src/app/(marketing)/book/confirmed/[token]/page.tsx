@@ -33,14 +33,23 @@ const NEXT_STEPS = [
   },
 ];
 
-export default async function BookingConfirmedPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
+export default async function BookingConfirmedPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [{ token }, sp] = await Promise.all([params, searchParams]);
   if (!isManageToken(token)) notFound();
   const details = await getBookingDetails({ token });
   if (!details) notFound();
   const { booking, meetingType, contact } = details;
   const rebookHref = meetingType.active ? `/book/${meetingType.slug}` : "/book";
-  const name = firstName(contact.name, contact.email);
+  // Greet with the first name typed into this booking form (passed by the redirect, shown as plain text), never the
+  // stored CRM contact's name: the email may belong to an existing contact whose name is someone else's.
+  const typed = typeof sp.n === "string" ? firstName(sp.n.slice(0, 80)) : "";
+  const name = typed && typed !== "there" ? typed : null;
 
   if (booking.status === "pending_payment") {
     const expired = isHoldExpired(booking);
@@ -95,14 +104,14 @@ export default async function BookingConfirmedPage({ params }: { params: Promise
           <>
             <h1 className="mt-6 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl">We received your payment, but this time was released</h1>
             <p className="mt-3 text-lg text-zinc-600">
-              Sorry, {name}: the time you picked was released before your payment completed, and it&apos;s since been taken. We&apos;ve let the team know,
+              Sorry{name ? `, ${name}` : ""}: the time you picked was released before your payment completed, and it&apos;s since been taken. We&apos;ve let the team know,
               and we&apos;ll email you at {contact.email} to arrange a new time or a full refund.
             </p>
           </>
         ) : (
           <>
             <h1 className="mt-6 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl">This booking was cancelled</h1>
-            <p className="mt-3 text-lg text-zinc-600">No problem, {name}. Whenever you&apos;re ready, pick a new time that works for you.</p>
+            <p className="mt-3 text-lg text-zinc-600">No problem{name ? `, ${name}` : ""}. Whenever you&apos;re ready, pick a new time that works for you.</p>
           </>
         )}
         <BookingSummary
@@ -130,7 +139,8 @@ export default async function BookingConfirmedPage({ params }: { params: Promise
         <CheckCircle2 className="size-7" aria-hidden />
       </div>
       <h1 className="mt-6 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl">
-        You&apos;re <span className="font-display text-[1.1em] font-normal text-brand-700 italic">booked</span>, {name}!
+        You&apos;re <span className="font-display text-[1.1em] font-normal text-brand-700 italic">booked</span>
+        {name ? `, ${name}` : ""}!
       </h1>
       <p className="mt-3 text-lg text-pretty text-zinc-600">
         We&apos;ve sent a confirmation with a calendar invite to <span className="font-medium break-all text-zinc-900">{contact.email}</span>. If

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Contact, QuizSubmission } from "@/db/schema";
 import { OFFERS, STRATEGY_CALL_HREF, STRATEGY_CALL_SLUG, type Recommendation } from "@/lib/assessment";
+import { rateLimit } from "@/lib/rate-limit";
 import { getActiveMeetingType } from "@/lib/scheduling";
 import { formatMoney } from "@/lib/utils";
 
@@ -11,7 +12,11 @@ export const RESULT_TOKEN_RE = /^[a-zA-Z0-9]{16,64}$/;
 
 export type SubmissionWithContact = {
   submission: QuizSubmission;
-  contact: Pick<Contact, "id" | "name" | "email" | "company">;
+  /**
+   * Only the address the submission was made with. The contact's stored name and company may belong to
+   * someone else (anyone can type any email), so results show what was entered: `submittedContact()`.
+   */
+  contact: Pick<Contact, "id" | "email">;
 };
 
 export async function getSubmissionByToken(token: string): Promise<SubmissionWithContact | null> {
@@ -22,9 +27,7 @@ export async function getSubmissionByToken(token: string): Promise<SubmissionWit
       submission: schema.quizSubmissions,
       contact: {
         id: schema.contacts.id,
-        name: schema.contacts.name,
         email: schema.contacts.email,
-        company: schema.contacts.company,
       },
     })
     .from(schema.quizSubmissions)
@@ -128,4 +131,42 @@ export function withPrefill(href: string, person: { name?: string | null; email?
   if (person.email) params.set("email", person.email);
   const qs = params.toString();
   return qs ? `${href}?${qs}` : href;
+}
+
+const DAY_SEC = 24 * 60 * 60;
+
+/**
+ * Limits on Claude-written plans: each one is a medium-effort generation billed to the owner, and a
+ * results token is all it takes to ask for one.
+ */
+export const PLAN_LIMITS = {
+  /** One generation per submission at a time (outlasts the plan route's 60s maxDuration). */
+  leaseSec: 90,
+  /** Per submission per day: a visitor who leaves mid-stream gets no stored plan, so allow a couple of retries. */
+  perSubmissionPerDay: 3,
+  /** Generations started per IP address (IPv6: /64 network) per day. */
+  perIpPerDay: 30,
+  /** Site-wide per day: a ceiling on spend however many addresses are used. */
+  globalPerDay: 500,
+} as const;
+
+export type PlanClaim = { ok: true } | { ok: false; reason: "in_progress" | "ip_limit" | "submission_limit" | "daily_limit" };
+
+type IpLimiter = (bucket: string, limit: number, windowSec: number) => Promise<{ ok: boolean }>;
+
+/**
+ * Claims one Claude plan generation for a submission (call only when AI is configured). When it isn't
+ * granted, the caller streams the deterministic plan instead, unsaved, so a later visit can still get
+ * a Claude-written one. `ipLimit` is `rateLimitByIp` (a parameter so tests can run outside a request).
+ */
+export async function claimPlanGeneration(submissionId: string, ipLimit: IpLimiter): Promise<PlanClaim> {
+  // Single flight: concurrent requests for one token (or a quick retry) don't each start a generation.
+  const lease = await rateLimit(`assessment-plan:lease:${submissionId}`, 1, PLAN_LIMITS.leaseSec);
+  if (!lease.ok) return { ok: false, reason: "in_progress" };
+  if (!(await ipLimit("assessment-plan:day", PLAN_LIMITS.perIpPerDay, DAY_SEC)).ok) return { ok: false, reason: "ip_limit" };
+  const perSubmission = await rateLimit(`assessment-plan:sub:${submissionId}`, PLAN_LIMITS.perSubmissionPerDay, DAY_SEC);
+  if (!perSubmission.ok) return { ok: false, reason: "submission_limit" };
+  const global = await rateLimit("assessment-plan:global", PLAN_LIMITS.globalPerDay, DAY_SEC);
+  if (!global.ok) return { ok: false, reason: "daily_limit" };
+  return { ok: true };
 }

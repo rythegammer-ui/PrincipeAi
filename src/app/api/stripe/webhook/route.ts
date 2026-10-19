@@ -1,14 +1,18 @@
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import type { Order } from "@/db/schema";
 import { logActivity } from "@/lib/crm";
-import { fulfillOrder, refundOrder, sendPaymentFailedEmail } from "@/lib/payments";
-import { getStripe, paymentIntentId, type Stripe } from "@/lib/stripe";
+import { escapeMarkdown, notifyOwner } from "@/lib/email";
+import { failPendingOrder, fulfillOrder, refundOrder } from "@/lib/payments";
+import { getStripe, paymentIntentId, stripeDashboardUrl, type Stripe } from "@/lib/stripe";
+import { formatDate, formatMoney } from "@/lib/utils";
 
 /**
  * Stripe webhook. Configure the endpoint in Stripe → Developers → Webhooks:
  *   URL:    https://<your-domain>/api/stripe/webhook
  *   Events: checkout.session.completed, checkout.session.async_payment_succeeded,
- *           checkout.session.async_payment_failed, checkout.session.expired, charge.refunded
+ *           checkout.session.async_payment_failed, checkout.session.expired, charge.refunded,
+ *           charge.dispute.created, charge.dispute.closed
  * and set STRIPE_WEBHOOK_SECRET to the endpoint's signing secret (whsec_…).
  */
 export const dynamic = "force-dynamic";
@@ -21,7 +25,7 @@ function orderIdFrom(session: Stripe.Checkout.Session): string | null {
 }
 
 /** Moves a still-pending order to `status`; returns the order when it changed (null for duplicates/late events). */
-async function setPendingOrderStatus(orderId: string, status: "expired" | "failed") {
+async function setPendingOrderStatus(orderId: string, status: "expired") {
   const db = await getDb();
   const [order] = await db
     .update(schema.orders)
@@ -31,11 +35,17 @@ async function setPendingOrderStatus(orderId: string, status: "expired" | "faile
   return order ?? null;
 }
 
-async function handleRefund(charge: Stripe.Charge) {
-  const pi = paymentIntentId(charge.payment_intent);
-  if (!pi) return;
+/** Our order for a Stripe payment (charges and disputes carry the PaymentIntent the checkout created). */
+async function orderForPayment(value: string | Stripe.PaymentIntent | null): Promise<Order | null> {
+  const pi = paymentIntentId(value);
+  if (!pi) return null;
   const db = await getDb();
   const [order] = await db.select().from(schema.orders).where(eq(schema.orders.stripePaymentIntentId, pi)).limit(1);
+  return order ?? null;
+}
+
+async function handleRefund(charge: Stripe.Charge) {
+  const order = await orderForPayment(charge.payment_intent);
   if (!order) return;
   if (charge.refunded) {
     // Full refund: mark refunded and remove the course access bought with this order.
@@ -44,6 +54,45 @@ async function handleRefund(charge: Stripe.Charge) {
     await logActivity(order.contactId, "note", `Partial refund issued for ${order.description}`, {
       meta: { orderId: order.id, amountRefundedCents: charge.amount_refunded, refund: true, source: "stripe" },
     });
+  }
+}
+
+/**
+ * Chargebacks. A new dispute only alerts the owner — they may still win it. A lost dispute ends the purchase
+ * like a full refund (the course access goes too). Not on charge.dispute.funds_withdrawn: Stripe sends that as
+ * soon as a dispute opens, including ones the owner goes on to win.
+ */
+async function handleDispute(dispute: Stripe.Dispute, closed: boolean) {
+  const order = await orderForPayment(dispute.payment_intent);
+  if (!order) return;
+  const amount = formatMoney(dispute.amount, dispute.currency);
+  const reason = dispute.reason.replace(/_/g, " ");
+  const meta = { orderId: order.id, disputeId: dispute.id, amountCents: dispute.amount, reason: dispute.reason, status: dispute.status, dispute: true };
+
+  if (!closed) {
+    if (order.contactId) {
+      await logActivity(order.contactId, "note", `Payment disputed: ${order.description} (${amount})`, { body: `Reason given: ${reason}`, meta });
+    }
+    const dueBy = dispute.evidence_details?.due_by;
+    const deadline = dueBy ? ` by **${formatDate(new Date(dueBy * 1000), { dateStyle: "medium", timeStyle: "short" }, "UTC")} UTC**` : "";
+    const where = order.stripePaymentIntentId ? `[in Stripe](${stripeDashboardUrl(order.stripePaymentIntentId, order.isTest)})` : "in Stripe";
+    // Best effort: Stripe emails the account owner about disputes too, so don't make it retry over this.
+    await notifyOwner(
+      `Payment disputed: ${order.description} (${amount})`,
+      [
+        `**${escapeMarkdown(order.name || order.email)}** has disputed their payment for **${escapeMarkdown(order.description)}** (reason: ${escapeMarkdown(reason)}).`,
+        `Respond with evidence${deadline} ${where}. If the dispute is lost, the order is marked refunded and any course access bought with it is removed automatically.`,
+        `- Email: ${escapeMarkdown(order.email)}`,
+        `- Order: ${order.id}`,
+      ].join("\n\n"),
+    ).catch((err) => console.error("[stripe] dispute alert failed", order.id, err));
+    return;
+  }
+
+  if (dispute.status === "lost") {
+    await refundOrder(order.id, { revokeAccess: true, source: "stripe", reason: `Dispute lost (${reason})` });
+  } else if (order.contactId) {
+    await logActivity(order.contactId, "note", `Dispute closed (${dispute.status.replace(/_/g, " ")}): ${order.description}`, { meta });
   }
 }
 
@@ -76,7 +125,7 @@ export async function POST(request: Request) {
         if (orderId && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
           await fulfillOrder(orderId, {
             stripePaymentIntentId: paymentIntentId(session.payment_intent),
-            // Test-mode payments aren't real money: keep them out of revenue and lifetime value.
+            // Test-mode payments aren't real money: flagged so lifetime value and the revenue figures leave them out.
             isTest: event.livemode === false,
             // What was actually charged, after any promotion code.
             amountPaidCents: session.amount_total,
@@ -86,9 +135,8 @@ export async function POST(request: Request) {
       }
       case "checkout.session.async_payment_failed": {
         const orderId = orderIdFrom(event.data.object);
-        const failed = orderId ? await setPendingOrderStatus(orderId, "failed") : null;
-        // Best effort: the status change is what matters; don't make Stripe retry over an email.
-        if (failed) await sendPaymentFailedEmail(failed).catch((err) => console.error("[stripe] payment-failed email failed", failed.id, err));
+        // Marks the order failed and emails the buyer (best effort: don't make Stripe retry over an email).
+        if (orderId) await failPendingOrder(orderId);
         break;
       }
       case "checkout.session.expired": {
@@ -98,6 +146,12 @@ export async function POST(request: Request) {
       }
       case "charge.refunded":
         await handleRefund(event.data.object);
+        break;
+      case "charge.dispute.created":
+        await handleDispute(event.data.object, false);
+        break;
+      case "charge.dispute.closed":
+        await handleDispute(event.data.object, true);
         break;
       default:
         // Not an event we act on — acknowledge so Stripe doesn't retry.

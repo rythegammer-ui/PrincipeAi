@@ -1,5 +1,6 @@
 import "server-only";
 import { dbMode, isDemoMode } from "@/db";
+import { MIN_AUTH_SECRET_LENGTH } from "@/lib/runtime-mode";
 
 /** Which third-party integrations are configured. Features degrade gracefully when one is missing. */
 export function integrations() {
@@ -12,7 +13,7 @@ export function integrations() {
     email: Boolean(process.env.RESEND_API_KEY),
     cron: Boolean(process.env.CRON_SECRET),
     adminConfigured: Boolean(process.env.ADMIN_PASSWORD),
-    authSecret: Boolean(process.env.AUTH_SECRET),
+    authSecret: (process.env.AUTH_SECRET?.length ?? 0) >= MIN_AUTH_SECRET_LENGTH,
   };
 }
 

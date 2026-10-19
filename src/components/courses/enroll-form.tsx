@@ -26,6 +26,7 @@ export function EnrollForm({
 }) {
   const [state, action] = useActionState<EnrollState, FormData>(startCourseCheckoutAction, {});
   const idPrefix = `enroll-${courseSlug}`;
+  const signInHref = `/login?next=${encodeURIComponent(`/learn/${courseSlug}`)}`;
 
   return (
     <form action={action} className="flex flex-col gap-3.5" noValidate>
@@ -33,10 +34,10 @@ export function EnrollForm({
       {state.error && <Alert tone="error">{state.error}</Alert>}
       {state.alreadyOwned && (
         <Alert tone="info" title="You already have this course">
-          <Link href={`/login?next=${encodeURIComponent(`/learn/${courseSlug}`)}`} className="font-medium underline">
-            Sign in to start learning
+          <Link href={`/learn/${courseSlug}`} className="font-medium underline">
+            Go to the course
           </Link>{" "}
-          — we&apos;ll email you a one-click link.
+          to pick up where you left off.
         </Alert>
       )}
       <Field label="Your name" htmlFor={`${idPrefix}-name`} error={state.fieldErrors?.name}>
@@ -76,6 +77,15 @@ export function EnrollForm({
             ? "Free — no card needed"
             : "Test mode — no real payment will be taken"}
       </p>
+      {/* The same for everyone (signed-in students are prefilled): never hint at whether a typed email owns the course. */}
+      {!defaultEmail && (
+        <p className="text-center text-sm text-zinc-600">
+          Already enrolled?{" "}
+          <Link href={signInHref} className="inline-flex min-h-11 items-center font-medium text-brand-700 hover:underline">
+            Sign in
+          </Link>
+        </p>
+      )}
     </form>
   );
 }

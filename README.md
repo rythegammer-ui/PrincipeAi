@@ -43,27 +43,35 @@ Reset the local database with `npm run db:reset-local`.
    database migrations and then `next build`) and a daily cron job.
 2. **Add a Postgres database**: in the project, open **Storage** (Marketplace), add **Neon** (or Supabase) and connect it
    to the project. It injects `DATABASE_URL` / `POSTGRES_URL` automatically.
-   *Without a database the site still deploys in **demo mode** (in-memory data that resets), which is handy for a first look.*
+   *Until a database is connected the deployed site refuses to start (every page that needs data shows an error), so
+   it never runs as an open demo by accident. For a throwaway preview without a database, set `DEMO_MODE=1`: the site
+   then runs in **demo mode** on in-memory data that resets, with the public demo login `admin@principe.ai` / `demo1234`
+   (offered only while `ADMIN_PASSWORD` is unset and no Resend, Stripe or Anthropic key is set). Don't take real
+   payments in demo mode: orders live in memory and are lost. Remove `DEMO_MODE` once the database is connected.*
 3. **Set environment variables** (Project → Settings → Environment Variables). See `.env.example`:
 
    | Variable | Required | Purpose |
    |---|---|---|
    | `DATABASE_URL` | yes | Postgres connection (added by the Neon/Supabase integration) |
-   | `AUTH_SECRET` | yes | Signs login sessions: `openssl rand -base64 32` |
-   | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | yes | Your admin dashboard login |
+   | `AUTH_SECRET` | yes | Signs login sessions (at least 16 characters): `openssl rand -base64 32`. Changing it signs **everyone** out, admin and students |
+   | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | yes | Your admin dashboard login. The password must be at least 12 characters (use a long, unique one); admin login stays disabled until it and `AUTH_SECRET` are set. Changing the password signs out every admin session |
+   | `ADMIN_SESSION_VERSION` | optional | Change it to any new value (e.g. `2`) and redeploy to sign out every admin session without changing the password, e.g. after a lost laptop |
    | `NEXT_PUBLIC_SITE_URL` | yes | e.g. `https://principe.ai` (used in emails, Stripe redirects, invites) |
    | `CRON_SECRET` | yes (scheduled jobs) | Any random string (`openssl rand -base64 32`). Vercel Cron sends it to `/api/cron`; **without it every cron run is refused in production**, so follow-up automation emails, booking reminders and hold/checkout cleanup never run |
    | `ANTHROPIC_API_KEY` | for AI | From [console.anthropic.com](https://console.anthropic.com) |
    | `ANTHROPIC_MODEL` | optional | Defaults to `claude-opus-5-5`; set `claude-sonnet-5-5` or `claude-haiku-5-5` to lower cost |
+   | `AI_DAILY_LIMIT` | optional | Site-wide ceiling on AI chat and tutor replies per day (default `2000`, `0` = none). Past it they answer with the built-in fallback until the next day. Also set a monthly spend limit in the Anthropic console |
    | `STRIPE_SECRET_KEY` | for payments | Stripe secret key |
    | `STRIPE_WEBHOOK_SECRET` | for payments | From the webhook endpoint below |
    | `RESEND_API_KEY`, `EMAIL_FROM` | for email | Resend key and a verified sender, e.g. `Principe AI <hello@yourdomain.com>` |
    | `BUSINESS_TIMEZONE` | optional | Default `America/New_York` (also editable in Admin → Settings) |
    | `CRON_INTERVAL_HOURS` | optional | How often the cron runs, in hours (default `24`). Set `1` if you switch `vercel.json` to an hourly schedule |
+   | `DEMO_MODE` | optional | `1` runs a deployment without a database as a throwaway demo (see step 2). Leave unset in production |
 
 4. **Stripe webhook**: in the Stripe dashboard, add an endpoint `https://YOUR-DOMAIN/api/stripe/webhook` with events
-   `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`,
-   `charge.refunded`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`,
+   `checkout.session.expired`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`. Copy its signing
+   secret into `STRIPE_WEBHOOK_SECRET`.
 5. **Redeploy**, then sign in at `/admin` and visit **Settings**: it shows which integrations are connected and walks
    you through anything missing.
 
@@ -73,6 +81,9 @@ The catalog is seeded only into an empty database, so a database created before 
 After this update, open **Admin → Courses** and clear the **Compare-at price** of *AI Essentials*, *AI for Business*
 and *AI Automation Accelerator* (the old seed set $97 / $497 / $797 “was” prices that were never charged). Only show a
 compare-at price you have actually charged.
+
+Also add the `charge.dispute.created` and `charge.dispute.closed` events to your Stripe webhook endpoint (step 4), so
+chargebacks reach the app: a new dispute alerts you, and a lost one marks the order refunded and removes its course access.
 
 ### Cron
 
@@ -107,3 +118,28 @@ at the last run before the call (up to 24 hours ahead). You can also trigger it 
 | `npm run test:e2e` | End-to-end tests (Playwright) against a production build in demo mode |
 | `npm run db:generate` | Generate a SQL migration after editing `src/db/schema.ts` |
 | `npm run db:migrate` | Apply migrations to `DATABASE_URL` and seed the catalog if empty |
+
+### End-to-end tests
+
+The Playwright suite in `tests/e2e/` drives the real site in a browser: every public page, the free-guide funnel, the
+assessment, booking (book, reschedule, cancel), a course purchase through the test checkout and the student portal, the AI
+chat widget, the admin dashboard (contacts, notes, tasks, pipeline, settings, automations, CSV export) and security
+checks (admin-only actions and exports, the cron secret, open redirects). It needs no accounts or keys.
+
+```bash
+npx playwright install chromium   # once
+npx next build                    # the suite runs against a production build
+npm run test:e2e                  # starts `next start` on port 3400 and runs every test
+```
+
+- Playwright starts the server itself with a throwaway in-memory database, the built-in test checkout, simulated email
+  and the non-AI fallback answers, and switches off any `DATABASE_URL`, Resend, Stripe or Anthropic key set in your
+  shell. It also sets its own admin login, `AUTH_SECRET` and `CRON_SECRET` (see `tests/e2e/env.ts`).
+- Emails are read from **Admin → Email Log**. One-time sign-in links are stored redacted there, so student sign-in
+  uses the link the login page shows when no email provider is configured.
+- Two projects run: `desktop`, and `mobile` (390px wide) for the tests tagged `@mobile`. Run one with
+  `npm run test:e2e -- --project=desktop`, or one file with `npm run test:e2e -- tests/e2e/booking.spec.ts`.
+- To use a Chromium that's already installed, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chrome`.
+- To test a server that's already running, set `E2E_BASE_URL` (plus `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD` and
+  `E2E_CRON_SECRET` for that server). The suite creates contacts, bookings and orders, so never point it at production.
+- On failure, traces and screenshots are saved in `test-results/` (`npx playwright show-trace <trace.zip>`).

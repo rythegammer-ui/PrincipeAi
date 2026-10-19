@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { site } from "@/config/site";
 import { aiEnabled, aiText } from "@/lib/ai";
+import { escapeMarkdown } from "@/lib/email";
 import { getContact360, type Contact360 } from "@/lib/crm-queries";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { getSettings } from "@/lib/settings";
@@ -30,7 +31,7 @@ function answerLines(answers: Record<string, unknown> | null | undefined, max = 
 
 const UNTRUSTED_TAG = "untrusted_visitor_content";
 
-/** Wraps visitor-written lines (form answers, chat, messages) so the model treats them as data, never instructions. */
+/** Wraps visitor-written lines (profile fields, UTM values, form answers, chat, messages) so the model treats them as data, never instructions. */
 function untrustedBlock(body: string[]): string[] {
   if (!body.length) return [];
   const strip = (l: string) => l.replace(new RegExp(`</?${UNTRUSTED_TAG}\\b[^>]*>`, "gi"), "");
@@ -43,18 +44,24 @@ export function buildContactContext(data: Contact360, now = new Date()): string 
   const emailDomain = ct.email.split("@")[1] ?? "";
   const lines: string[] = [
     "## Profile",
-    `Name: ${ct.name ?? "(not given)"}`,
-    `Email domain: ${emailDomain}`,
-    `Company: ${ct.company ?? "(not given)"}${ct.website ? ` — ${ct.website}` : ""}`,
     `Phone on file: ${ct.phone ? "yes" : "no"}`,
     `Interest: ${segmentLabel(ct.segment)}`,
     `Pipeline stage: ${stageLabel(ct.stage)}`,
     `Lead score: ${ct.score}/100`,
     `Estimated deal value: ${formatMoney(ct.dealValueCents)} · Lifetime value: ${formatMoney(ct.lifetimeValueCents)}`,
-    `First touch: ${sourceLabel(ct.source)}${ct.utm?.source ? ` via ${ct.utm.source}${ct.utm.campaign ? ` (campaign ${ct.utm.campaign})` : ""}` : ""}`,
+    `First touch: ${sourceLabel(ct.source)}`,
     `Became a contact: ${fmtDate(ct.createdAt)} (${timeAgo(ct.createdAt, now)}) · Last activity: ${timeAgo(ct.lastActivityAt, now)}`,
     `Tags: ${ct.tags.length ? ct.tags.join(", ") : "none"}`,
     `Unsubscribed from marketing email: ${ct.unsubscribed ? "yes" : "no"}`,
+    // Name, email, company, website and UTM values are typed (or put in a link) by visitors.
+    ...untrustedBlock(
+      [
+        `Name: ${oneLine(ct.name, 120) || "(not given)"}`,
+        `Email domain: ${oneLine(emailDomain, 100)}`,
+        `Company: ${oneLine(ct.company, 160) || "(not given)"}${ct.website ? ` — ${oneLine(ct.website, 200)}` : ""}`,
+        ct.utm?.source ? `First-touch UTM: ${oneLine(ct.utm.source, 100)}${ct.utm.campaign ? ` / ${oneLine(ct.utm.campaign, 100)}` : ""}` : "",
+      ].filter(Boolean),
+    ),
   ];
   if (ct.notes?.trim()) lines.push("", "## Owner's notes", oneLine(ct.notes, 800));
 
@@ -80,7 +87,8 @@ export function buildContactContext(data: Contact360, now = new Date()): string 
   const openTasks = data.tasks.filter((t) => !t.completedAt);
   if (openTasks.length) {
     lines.push("", "## Open tasks");
-    for (const t of openTasks.slice(0, 6)) lines.push(`- ${t.title}${t.dueAt ? ` (due ${fmtDate(t.dueAt)})` : ""}`);
+    // Automatic task titles quote the visitor's name or company ("Reply to <name> — …").
+    lines.push(...untrustedBlock(openTasks.slice(0, 6).map((t) => `- ${oneLine(t.title, 160)}${t.dueAt ? ` (due ${fmtDate(t.dueAt)})` : ""}`)));
   }
 
   if (data.activities.length) {
@@ -357,7 +365,10 @@ function templateFollowUp(
 ): { subject: string; body: string } {
   const ct = data.contact;
   const first = firstName(ct.name, ct.email);
-  const forWho = ct.company ? ct.company : ct.segment === "life" ? "your day-to-day" : "your work";
+  const company = oneLine(ct.company, 160);
+  const forWho = company || (ct.segment === "life" ? "your day-to-day" : "your work");
+  // The company name is visitor-typed: escape it in the Markdown body (the subject is plain text).
+  const forWhoMd = company ? escapeMarkdown(company) : forWho;
   const quiz = data.quizzes[0];
   const upcoming = data.bookings.find((b) => b.status === "confirmed" && b.startAt > now);
   const lastOrder = data.orders.find((o) => o.status === "paid");
@@ -377,7 +388,7 @@ function templateFollowUp(
     case "after_call":
       return {
         subject: `Great speaking with you, ${first} — next steps`,
-        body: `Hi ${first},\n\nThanks again for your time. As promised, here's a short recap:\n\n- Where AI can help ${forWho} first\n- The quickest win to try this week\n- The best way for us to keep working together\n\nIf you'd like to start learning at your own pace, [the courses are here](${links.courses}). And if you'd rather have us build it with you, just reply to this email and I'll send over a simple proposal.\n\n${sign}`,
+        body: `Hi ${first},\n\nThanks again for your time. As promised, here's a short recap:\n\n- Where AI can help ${forWhoMd} first\n- The quickest win to try this week\n- The best way for us to keep working together\n\nIf you'd like to start learning at your own pace, [the courses are here](${links.courses}). And if you'd rather have us build it with you, just reply to this email and I'll send over a simple proposal.\n\n${sign}`,
       };
     case "proposal":
       return {

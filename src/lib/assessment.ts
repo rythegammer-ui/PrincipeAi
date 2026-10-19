@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 import { site } from "@/config/site";
-import { isValidEmail, normalizeEmail } from "@/lib/utils";
+import { escapeMarkdown, isValidEmail, normalizeEmail } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
 /* Answer values                                                       */
@@ -399,6 +399,39 @@ export function serializeAnswers(a: AssessmentAnswers): Record<string, string | 
   return out;
 }
 
+/**
+ * Extra keys in quiz_submissions.answers holding the name and company typed in with that submission.
+ * parseAnswers drops them (they aren't questions).
+ */
+const SUBMITTED_NAME_KEY = "_name";
+const SUBMITTED_COMPANY_KEY = "_company";
+
+/** What the submit action stores in quiz_submissions.answers: the answers plus the name and company entered with them. */
+export function serializeSubmission(a: AssessmentAnswers, entered: { name: string; company?: string | null }): Record<string, string | string[]> {
+  const out = serializeAnswers(a);
+  out[SUBMITTED_NAME_KEY] = entered.name;
+  if (entered.company) out[SUBMITTED_COMPANY_KEY] = entered.company;
+  return out;
+}
+
+/**
+ * The name and company entered with a submission (null when missing, e.g. submissions stored before
+ * they were kept). The results page and plan use only these, never the CRM contact's stored name or
+ * company: nothing proves the visitor owns the email address they typed, so the contact's details may
+ * belong to someone else.
+ */
+export function submittedContact(stored: unknown): { name: string | null; company: string | null } {
+  const record = stored && typeof stored === "object" && !Array.isArray(stored) ? (stored as Record<string, unknown>) : {};
+  const read = (value: unknown, max: number) => (typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null);
+  return { name: read(record[SUBMITTED_NAME_KEY], 80), company: read(record[SUBMITTED_COMPANY_KEY], 120) };
+}
+
+/**
+ * Characters no ordinary address needs (quoted local parts aren't supported) that could turn an
+ * "email" into Markdown or HTML, e.g. `[Open](https://evil.example)@example.com`.
+ */
+const EMAIL_MARKUP_CHARS = /["(),:;<>[\]\\]/;
+
 function buildContactSchema() {
   return z.object({
     name: z.string().trim().min(1, "Please tell us your first name.").max(80, "That name is a little long."),
@@ -406,7 +439,7 @@ function buildContactSchema() {
       .string()
       .trim()
       .max(254, "That email address is too long.")
-      .refine(isValidEmail, "Please enter a valid email address.")
+      .refine((v) => isValidEmail(v) && !EMAIL_MARKUP_CHARS.test(v), "Please enter a valid email address.")
       .transform(normalizeEmail),
     company: z
       .string()
@@ -918,7 +951,16 @@ export function isHotLead(result: Pick<AssessmentResult, "scoreBoost" | "recomme
 /* Summaries (CRM, email, AI prompt)                                   */
 /* ------------------------------------------------------------------ */
 
-/** Strips characters that could turn user text into Markdown links, images or HTML. */
+/**
+ * Escapes visitor text for Markdown that becomes email HTML (so URLs, `www.` hosts and email addresses
+ * can't become (auto)links). The client-safe `escapeMarkdown` from lib/utils.ts, under its old name.
+ */
+export const escapeMarkdownText = escapeMarkdown;
+
+/**
+ * Strips characters that could turn user text into Markdown links, images or HTML. Bare URLs survive
+ * (and can autolink), so also apply `escapeMarkdownText` where the result is rendered as Markdown.
+ */
 export function plainText(input: string | null | undefined, max = 120): string {
   return (input ?? "")
     .replace(/[\r\n\t]+/g, " ")
@@ -1087,7 +1129,7 @@ export function shouldStorePlan(plan: string, outcome: PlanStreamOutcome, aiConf
 
 /** Deterministic plan used when AI isn't configured or unavailable. */
 export function buildFallbackPlan(a: AssessmentAnswers, result: AssessmentResult, ctx: PlanContext = {}): string {
-  const first = displayFirstName(ctx.name);
+  const first = escapeMarkdownText(displayFirstName(ctx.name));
   const offer = OFFERS[result.recommendation];
   const offerTitle = ctx.offerTitle ?? offer.name;
   const offerUrl = ctx.offerUrl ?? offer.href;
@@ -1217,9 +1259,10 @@ export function buildOwnerNotification(input: {
 }): string {
   const { answers, result } = input;
   const hot = isHotLead(result);
-  const company = plainText(input.company);
+  // Visitor-typed values (the email address included) are escaped so none of them can become a link.
+  const company = escapeMarkdownText(plainText(input.company));
   const lines = [
-    `**${plainText(input.name)}** (${input.email}${company ? ` · ${company}` : ""}) just completed the AI readiness assessment.`,
+    `**${escapeMarkdownText(plainText(input.name))}** (${escapeMarkdownText(input.email)}${company ? ` · ${company}` : ""}) just completed the AI readiness assessment.`,
     "",
     `- **Score:** ${result.score}/100 — ${result.tier.label}`,
     `- **Buying intent:** ${result.scoreBoost}/20${hot ? " 🔥 hot lead" : ""}`,
@@ -1241,7 +1284,8 @@ export function buildResultsEmail(input: {
   strategyCallUrl: string;
 }): { subject: string; preheader: string; markdown: string } {
   const { result } = input;
-  const first = displayFirstName(input.name) || "there";
+  // Sent to whatever address was typed in, so the visitor-typed name must not become a link.
+  const first = escapeMarkdownText(displayFirstName(input.name)) || "there";
   const win = result.quickWins[0];
   return {
     subject: `Your AI readiness results: ${result.score}/100 (${result.tier.label})`,

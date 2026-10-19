@@ -7,7 +7,7 @@ import { extractEmailBody } from "@/components/funnels/automation-utils";
 import { getDb, schema } from "@/db";
 import type { EmailStatus } from "@/db/schema";
 import { assertAdmin } from "@/lib/auth";
-import { sendEmail } from "@/lib/email";
+import { hasRedactedSignInLink, sendEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 
 export type ResendResult = { ok: true; status: EmailStatus } | { ok: false; error: string };
@@ -24,6 +24,13 @@ export async function resendEmailAction(emailId: string): Promise<ResendResult> 
   const [log] = await db.select().from(schema.emailLog).where(eq(schema.emailLog.id, id.data)).limit(1);
   if (!log) return { ok: false, error: "This email no longer exists." };
   if (log.status !== "failed") return { ok: false, error: "Only failed emails can be resent." };
+  // The log keeps sign-in links redacted, so re-sending would deliver a broken link.
+  if (hasRedactedSignInLink(log.html)) {
+    return {
+      ok: false,
+      error: "Emails with a one-time sign-in link can't be resent (the log keeps the link redacted). Ask the student to request a fresh link on the student login page (/login).",
+    };
+  }
   const inner = extractEmailBody(log.html);
   if (!inner) return { ok: false, error: "This email's content can't be resent. Send a new one from the contact's page instead." };
 

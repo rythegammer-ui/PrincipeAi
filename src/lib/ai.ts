@@ -21,6 +21,31 @@ export function aiEnabled(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 }
 
+/** Default site-wide ceiling on visitor-triggered AI replies per day (see `claimPublicAiReply`). */
+export const DEFAULT_AI_DAILY_LIMIT = 2000;
+
+/** The site-wide daily ceiling: AI_DAILY_LIMIT when set to a whole number (0 = no ceiling), else the default. */
+export function publicAiDailyLimit(): number {
+  const raw = process.env.AI_DAILY_LIMIT?.trim();
+  const n = raw ? Number(raw) : Number.NaN;
+  return Number.isInteger(n) && n >= 0 ? n : DEFAULT_AI_DAILY_LIMIT;
+}
+
+/**
+ * Counts one visitor-triggered AI reply (website chat, course tutor) against a site-wide daily ceiling, on top
+ * of their per-visitor limits: a cap on spend however many addresses are used. Returns false once the ceiling
+ * is spent; the caller then streams its non-AI fallback (`aiStream({ useFallback: true })`) until it resets.
+ */
+export async function claimPublicAiReply(): Promise<boolean> {
+  if (!aiEnabled()) return true;
+  const limit = publicAiDailyLimit();
+  if (limit === 0) return true;
+  const { rateLimit } = await import("@/lib/rate-limit");
+  const { ok } = await rateLimit("ai:global:day", limit, 24 * 60 * 60);
+  if (!ok) console.warn("[ai] site-wide daily AI reply limit reached; using the non-AI fallback");
+  return ok;
+}
+
 let client: Anthropic | null = null;
 export function anthropic(): Anthropic {
   if (!client) client = new Anthropic({ maxRetries: 2, timeout: 120_000 });
@@ -95,6 +120,8 @@ export type AiStreamInfo = {
 export type AiStreamOptions = AiTextOptions & {
   /** Streamed when AI isn't configured, or the request fails before any text arrived. */
   fallbackText: string;
+  /** Stream `fallbackText` without calling the API (e.g. past the daily ceiling of `claimPublicAiReply`). */
+  useFallback?: boolean;
   /** Streamed when the model declines. Defaults to `fallbackText` before any output, `REFUSAL_MESSAGE` after. */
   refusalText?: string;
   /**
@@ -136,7 +163,7 @@ export function aiStream(opts: AiStreamOptions): ReadableStream<Uint8Array> {
         }
       };
 
-      if (!aiEnabled()) {
+      if (!aiEnabled() || opts.useFallback) {
         info.source = "fallback";
         // Simulate streaming so the UI behaves the same with or without an API key.
         for (const chunk of opts.fallbackText.match(/.{1,24}(\s|$)|.+/gs) ?? [opts.fallbackText]) {

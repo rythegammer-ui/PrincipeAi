@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function VerifyPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
   const { token = "" } = await searchParams;
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-16">
+    <main id="main" className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-16">
       <div className="w-full max-w-sm">
         <Link href="/" className="mb-8 flex justify-center">
           <Logo />
@@ -20,6 +20,6 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
           <VerifyForm token={token} />
         </div>
       </div>
-    </div>
+    </main>
   );
 }

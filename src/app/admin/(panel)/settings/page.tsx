@@ -52,7 +52,7 @@ function integrationItems(): IntegrationItem[] {
       envVars: ["AUTH_SECRET"],
       status: s.authSecret ? "ready" : "attention",
       statusLabel: s.authSecret ? "Set" : "Using a development key",
-      summary: "A long random secret that signs admin and student logins. Required once a real database is connected.",
+      summary: "A long random secret (at least 16 characters) that signs admin and student logins. Required in production for the admin login.",
       steps: [
         <>Generate a secret in a terminal: <Code>openssl rand -base64 32</Code> (or use any password manager&apos;s 32+ character generator).</>,
         <>Add it in {VERCEL_ENV} as <Code>AUTH_SECRET</Code>.</>,
@@ -68,9 +68,10 @@ function integrationItems(): IntegrationItem[] {
       statusLabel: s.adminConfigured ? "Set" : "Using the demo login",
       summary: "The email and password for this dashboard.",
       steps: [
-        <>In {VERCEL_ENV}, add <Code>ADMIN_EMAIL</Code> (your email) and <Code>ADMIN_PASSWORD</Code> (a long, unique password).</>,
+        <>In {VERCEL_ENV}, add <Code>ADMIN_EMAIL</Code> (your email) and <Code>ADMIN_PASSWORD</Code> (a long, unique password of at least 12 characters). <Code>AUTH_SECRET</Code> above must be set too.</>,
         redeploy,
         <>Sign in at <Code>/admin/login</Code> with the new details. The demo login stops working.</>,
+        <>Changing <Code>ADMIN_PASSWORD</Code> later signs out every admin session. To do that without a new password, set <Code>ADMIN_SESSION_VERSION</Code> to a new value (e.g. <Code>2</Code>) and redeploy.</>,
       ],
     },
     {
@@ -143,7 +144,11 @@ function integrationItems(): IntegrationItem[] {
         <>In the <ExtLink href="https://dashboard.stripe.com/apikeys">Stripe dashboard</ExtLink>, open <strong>Developers → API keys</strong> and copy the <strong>Secret key</strong>. Start with test mode (<Code>sk_test_…</Code>).</>,
         <>Add it in {VERCEL_ENV} as <Code>STRIPE_SECRET_KEY</Code>.</>,
         <>Open <strong>Developers → Webhooks → Add endpoint</strong> and use this URL: <Code>{webhookUrl}</Code></>,
-        <>Select these events: <Code>checkout.session.completed</Code>, <Code>checkout.session.async_payment_succeeded</Code>, <Code>checkout.session.expired</Code> and <Code>charge.refunded</Code>.</>,
+        <>
+          Select these events: <Code>checkout.session.completed</Code>, <Code>checkout.session.async_payment_succeeded</Code>,{" "}
+          <Code>checkout.session.async_payment_failed</Code>, <Code>checkout.session.expired</Code>, <Code>charge.refunded</Code>,{" "}
+          <Code>charge.dispute.created</Code> and <Code>charge.dispute.closed</Code>.
+        </>,
         <>Copy the endpoint&apos;s <strong>Signing secret</strong> (<Code>whsec_…</Code>) and add it as <Code>STRIPE_WEBHOOK_SECRET</Code>.</>,
         <>{redeploy} When you&apos;re ready to take real payments, repeat with your live-mode key and a live webhook.</>,
       ],

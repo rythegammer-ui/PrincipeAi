@@ -5,7 +5,7 @@ import { z } from "zod";
 import { ButtonLink } from "@/components/ui/button";
 import { getStudent } from "@/lib/auth";
 import { PAID_UNAVAILABLE_REASON } from "@/lib/booking-service";
-import { fulfillOrder, getOrderDetails, isStripeSessionId, withinClaimWindow, type OrderDetails } from "@/lib/payments";
+import { fulfillOrder, getOrderDetails, isDuplicatePurchase, isStripeSessionId, withinClaimWindow, type OrderDetails } from "@/lib/payments";
 import { getStripe, paymentIntentId } from "@/lib/stripe";
 import { formatDateTime } from "@/lib/utils";
 import { AccessLinkForm } from "../checkout-forms";
@@ -102,6 +102,27 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
   const trusted = proof || isBuyer;
 
   if (order.status === "refunded") {
+    // Paid for a course this email already had (checkout doesn't reveal ownership): refunded automatically.
+    // Only the payer sees why — anyone else with the order link gets the plain notice below.
+    if (trusted && course && (await isDuplicatePurchase(order))) {
+      return (
+        <Shell icon={<CheckCircle2 className="size-6" aria-hidden />} title="You already have this course">
+          <p className="mx-auto mt-3 max-w-md text-zinc-600">
+            <strong className="text-zinc-900">{order.email}</strong> already has access to <strong className="text-zinc-900">{course.title}</strong>, so
+            this payment has been refunded in full{order.isTest ? " (test mode — no real payment was taken)" : ""}. We&apos;ve emailed a one-click
+            sign-in link to that address.
+          </p>
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <ButtonLink href={isBuyer ? learnHref : loginHref}>
+              {isBuyer ? "Go to course" : "Sign in to start learning"} <ArrowRight aria-hidden />
+            </ButtonLink>
+            <ButtonLink href="/contact" variant="outline">
+              Contact us
+            </ButtonLink>
+          </div>
+        </Shell>
+      );
+    }
     return (
       <Shell icon={<CheckCircle2 className="size-6" aria-hidden />} title="This order was refunded">
         <p className="mx-auto mt-3 max-w-md text-zinc-600">If you have any questions about your refund, just reply to your receipt email.</p>

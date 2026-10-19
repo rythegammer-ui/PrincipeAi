@@ -8,7 +8,7 @@ import { createCheckout } from "@/lib/payments";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { describeTime, getActiveMeetingType, getBusinessTimezone, isSlotAvailable, isValidTimezone } from "@/lib/scheduling";
 import { getVisitorContext } from "@/lib/tracking";
-import { isValidEmail, normalizeEmail } from "@/lib/utils";
+import { firstName, isValidEmail, normalizeEmail } from "@/lib/utils";
 
 export type BookingFormState = {
   error?: string;
@@ -116,7 +116,9 @@ export async function createBookingAction(_prev: BookingFormState, formData: For
 
   if (!paid) {
     await finalizeConfirmedBooking({ booking, meetingType, contact }, { paid: false });
-    redirect(`/book/confirmed/${booking.manageToken}`);
+    // The confirmation page greets with the name typed here (not the stored contact's, which may be someone else's).
+    const typedName = firstName(input.name);
+    redirect(`/book/confirmed/${booking.manageToken}${typedName !== "there" ? `?n=${encodeURIComponent(typedName)}` : ""}`);
   }
 
   // Paid session: record intent, then send the invitee to checkout while the slot is held.

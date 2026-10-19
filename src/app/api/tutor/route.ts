@@ -13,7 +13,7 @@ import {
   jsonError,
   publicMessages,
 } from "@/app/api/chat/conversation-store";
-import { aiStream, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
+import { aiStream, claimPublicAiReply, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
 import { buildTutorSystemPrompt, toModelMessages } from "@/lib/ai-prompts";
 import { getStudent } from "@/lib/auth";
 import { buildTutorFallback } from "@/lib/chat-fallback";
@@ -99,11 +99,14 @@ export async function POST(request: NextRequest) {
   }
   const conversationId = conversation.id;
 
+  // Site-wide daily ceiling on AI spend: past it, the reply is the non-AI fallback.
+  const useAi = await claimPublicAiReply();
   const stream = aiStream({
     system: buildTutorSystemPrompt({ course, lesson }),
     messages: toModelMessages(history, CONTEXT_MESSAGES),
     effort: "low",
     maxTokens: 4000,
+    useFallback: !useAi,
     fallbackText: buildTutorFallback({ lessonTitle: lesson.title, lessonSummary: lesson.summary, lessonContent: lesson.content, message }),
     // A refusal shows the refusal sentence (not the non-AI fallback), and a reply the visitor stopped is still saved.
     refusalText: REFUSAL_MESSAGE,

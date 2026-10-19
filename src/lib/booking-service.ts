@@ -1,12 +1,13 @@
 import "server-only";
-import { and, count, eq, gt, inArray, isNull, lt, lte, ne, notLike, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNull, lt, lte, ne, notLike, or, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "@/db";
-import type { Booking, BookingStatus, Contact, MeetingType } from "@/db/schema";
+import type { Booking, BookingStatus, Contact, MeetingType, Order } from "@/db/schema";
 import { site } from "@/config/site";
 import { stopAutomations } from "@/lib/automations";
 import { captureLead, createTask, logActivity } from "@/lib/crm";
-import { notifyOwner, sendEmail } from "@/lib/email";
+import { escapeMarkdown, notifyOwner, sendEmail } from "@/lib/email";
 import { buildIcs, formatIcsDate, type IcsMethod } from "@/lib/ics";
+import { rateLimit } from "@/lib/rate-limit";
 import {
   bufferBetween,
   describeTime,
@@ -18,7 +19,7 @@ import {
   occupiesSlot,
 } from "@/lib/scheduling";
 import { getSettings } from "@/lib/settings";
-import { getStripe } from "@/lib/stripe";
+import { getStripe, paymentIntentId, stripeDashboardUrl, type Stripe } from "@/lib/stripe";
 import { absoluteUrl, firstName, formatMoney } from "@/lib/utils";
 
 /**
@@ -41,6 +42,8 @@ export const PAYMENT_HOLD_MINUTES = 30;
 export const MAX_PAYMENT_HOLD_MINUTES = 2 * PAYMENT_HOLD_MINUTES;
 export const HOLD_EXPIRED_REASON = "Payment not completed";
 export const CHECKOUT_FAILED_REASON = "Checkout could not be started";
+/** Set when the invitee releases their own unpaid hold to pick another time (never a booked call). */
+export const CHANGED_BEFORE_PAYING_REASON = "Chose a different time before paying";
 /** Set when payment arrives for a booking whose time is gone (owner follows up with a new time or refund). */
 export const PAID_UNAVAILABLE_REASON = "Paid after the time was released";
 const ICS_UID_DOMAIN = "principe.ai";
@@ -164,14 +167,74 @@ export async function releaseHold(bookingId: string, reason: string = CHECKOUT_F
     .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.status, "pending_payment")));
 }
 
+type ClosedCheckout = { state: "closed" } | { state: "paid"; session: Stripe.Checkout.Session } | { state: "processing" };
+
+/**
+ * Makes sure an earlier checkout for a booking can no longer be paid, and marks its order expired.
+ * Stripe refuses to expire a session that has already completed: paid while its webhook is late or
+ * missing ("paid"), or paid with a delayed method such as a bank debit that is still clearing
+ * ("processing"). Those orders stay pending for the webhook and the reconcile job. Throws when Stripe
+ * can't confirm the session is closed, so callers never assume it is.
+ */
+async function closeCheckout(order: Pick<Order, "id" | "stripeSessionId">): Promise<ClosedCheckout> {
+  const stripe = getStripe();
+  const sessionId = order.stripeSessionId;
+  if (stripe && sessionId?.startsWith("cs_")) {
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.expire(sessionId);
+    } catch {
+      session = await stripe.checkout.sessions.retrieve(sessionId);
+    }
+    if (session.status === "complete") {
+      return session.payment_status === "unpaid" ? { state: "processing" } : { state: "paid", session };
+    }
+    if (session.status !== "expired") throw new Error(`Stripe checkout ${sessionId} could not be closed (${session.status})`);
+  }
+  const db = await getDb();
+  await db
+    .update(schema.orders)
+    .set({ status: "expired" })
+    .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, "pending")));
+  return { state: "closed" };
+}
+
+async function openCheckouts(bookingId: string): Promise<Pick<Order, "id" | "stripeSessionId">[]> {
+  const db = await getDb();
+  return db
+    .select({ id: schema.orders.id, stripeSessionId: schema.orders.stripeSessionId })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.bookingId, bookingId), eq(schema.orders.status, "pending")));
+}
+
+/** Best effort, once a booking has been paid for: closes its other checkouts so they can't be paid as well. */
+async function retireOpenCheckouts(bookingId: string): Promise<void> {
+  try {
+    for (const order of await openCheckouts(bookingId)) {
+      // A session that completed meanwhile stays pending: its webhook fulfils it and alertDuplicatePayments flags it.
+      await closeCheckout(order).catch((err) => console.error("[booking] could not close checkout", order.id, err));
+    }
+  } catch (err) {
+    console.error("[booking] could not retire open checkouts", bookingId, err);
+  }
+}
+
+/**
+ * - `ok`: start a new checkout.
+ * - `lapsed`: the hold has lapsed or the booking is no longer awaiting payment.
+ * - `paid`: an earlier checkout had been paid after all (its webhook hadn't arrived); it's been fulfilled now.
+ * - `processing`: an earlier checkout's delayed payment (e.g. a bank debit) is still clearing.
+ */
+export type CheckoutRetry = "ok" | "lapsed" | "paid" | "processing";
+
 /**
  * Gets a still-held, unpaid booking ready for a fresh checkout (the invitee backed out of the first
  * one): refreshes the hold so it covers the new checkout session (capped at MAX_PAYMENT_HOLD_MINUTES
- * after booking), and retires the earlier unpaid checkouts so the same booking can't be paid twice.
- * Returns false when the hold has lapsed or the booking is no longer awaiting payment.
+ * after booking), and closes the earlier checkouts so the same booking can't be paid twice. Only
+ * `ok` allows a new checkout. Throws when Stripe can't confirm an earlier checkout is closed.
  */
-export async function prepareCheckoutRetry(bookingId: string): Promise<boolean> {
-  if (!isUuid(bookingId)) return false;
+export async function prepareCheckoutRetry(bookingId: string): Promise<CheckoutRetry> {
+  if (!isUuid(bookingId)) return "lapsed";
   const now = new Date();
   const refreshed = await withBookingLock(async (tx) => {
     const [held] = await tx
@@ -188,26 +251,34 @@ export async function prepareCheckoutRetry(bookingId: string): Promise<boolean> 
     }
     return true;
   });
-  if (!refreshed) return false;
+  if (!refreshed) return "lapsed";
 
-  const db = await getDb();
-  const stale = await db
-    .update(schema.orders)
-    .set({ status: "expired" })
-    .where(and(eq(schema.orders.bookingId, bookingId), eq(schema.orders.status, "pending")))
-    .returning({ stripeSessionId: schema.orders.stripeSessionId });
-  // Close the abandoned Stripe sessions too. If one was paid in the meantime, Stripe refuses to
-  // expire it and its webhook still fulfils the order (fulfilment accepts expired orders).
-  const stripe = getStripe();
-  if (stripe) {
-    await Promise.allSettled(
-      stale
-        .map((o) => o.stripeSessionId)
-        .filter((id): id is string => typeof id === "string" && id.startsWith("cs_"))
-        .map((id) => stripe.checkout.sessions.expire(id)),
-    );
+  const paid: { orderId: string; session: Stripe.Checkout.Session }[] = [];
+  let processing = false;
+  let failure: unknown = null;
+  for (const order of await openCheckouts(bookingId)) {
+    try {
+      const closed = await closeCheckout(order);
+      if (closed.state === "paid") paid.push({ orderId: order.id, session: closed.session });
+      else if (closed.state === "processing") processing = true;
+    } catch (err) {
+      failure ??= err;
+    }
   }
-  return true;
+  if (paid.length) {
+    // Imported lazily: payments imports this module.
+    const { fulfillOrder } = await import("@/lib/payments");
+    for (const { orderId, session } of paid) {
+      await fulfillOrder(orderId, {
+        stripePaymentIntentId: paymentIntentId(session.payment_intent),
+        isTest: session.livemode === false,
+        amountPaidCents: session.amount_total,
+      });
+    }
+    return "paid";
+  }
+  if (failure) throw failure;
+  return processing ? "processing" : "ok";
 }
 
 /* ------------------------------------------------------------------ */
@@ -224,6 +295,14 @@ export function icsDownloadUrl(booking: Pick<Booking, "manageToken">): string {
 
 export function meetingLinkFor(details: Pick<BookingDetails, "booking" | "meetingType">): string | null {
   return details.booking.meetingUrl?.trim() || details.meetingType.locationUrl?.trim() || null;
+}
+
+/** Bookings whose invitee gets the meeting link: never an unpaid hold or a cancelled booking. */
+const JOIN_LINK_STATUSES: ReadonlySet<BookingStatus> = new Set<BookingStatus>(["confirmed", "completed", "no_show"]);
+
+/** The meeting link to hand to the invitee (calendar invites and emails), once the booking is confirmed. */
+export function joinLinkFor(details: Pick<BookingDetails, "booking" | "meetingType">): string | null {
+  return JOIN_LINK_STATUSES.has(details.booking.status) ? meetingLinkFor(details) : null;
 }
 
 /** "Add to Google Calendar" template link. */
@@ -243,7 +322,8 @@ function eventTitle(meetingType: MeetingType): string {
 }
 
 function eventDescription(details: BookingDetails): string {
-  const link = meetingLinkFor(details);
+  if (details.booking.status === "cancelled") return `This session has been cancelled. Details: ${manageUrl(details.booking)}`;
+  const link = joinLinkFor(details);
   return [
     link ? `Join the call: ${link}` : `${details.meetingType.locationLabel}: we'll email your meeting link before the call.`,
     `Need to reschedule or cancel? ${manageUrl(details.booking)}`,
@@ -256,7 +336,7 @@ export function bookingGoogleCalendarUrl(details: BookingDetails): string {
     start: details.booking.startAt,
     end: details.booking.endAt,
     details: eventDescription(details),
-    location: meetingLinkFor(details) ?? details.meetingType.locationLabel,
+    location: joinLinkFor(details) ?? details.meetingType.locationLabel,
   });
 }
 
@@ -271,7 +351,7 @@ export function bookingIcs(details: BookingDetails, method: IcsMethod, sequence 
       end: booking.endAt,
       summary: eventTitle(meetingType),
       description: eventDescription(details),
-      location: meetingLinkFor(details) ?? meetingType.locationLabel,
+      location: joinLinkFor(details) ?? meetingType.locationLabel,
       url: manageUrl(booking),
       organizer: { name: site.name, email: site.contactEmail },
       // iTIP PUBLISH (plain "add to calendar" downloads) must not list attendees.
@@ -283,9 +363,12 @@ export function bookingIcs(details: BookingDetails, method: IcsMethod, sequence 
   });
 }
 
-/** Escapes Markdown control characters in user-provided text (emails are rendered from Markdown). */
+/**
+ * Escapes user-provided text for the Markdown emails (so names, phone numbers or answers can't become
+ * formatting or links), keeping its line breaks.
+ */
 function md(text: string): string {
-  return text.replace(/([\\`*_[\]<>#|~])/g, "\\$1").replace(/\r?\n/g, "  \n");
+  return escapeMarkdown(text).replace(/\r?\n/g, "  \n");
 }
 
 /** Intake answers as Markdown bullets, labelled with the meeting type's questions. */
@@ -343,7 +426,7 @@ export function bookingEmailMarkdown(
   const { booking, meetingType, contact } = details;
   const when = describeTime(booking.startAt, booking.endAt, booking.timezone);
   const whenLine = `${when.dateLabel} · ${when.timeLabel} (${when.zoneLong})`;
-  const link = meetingLinkFor(details);
+  const link = joinLinkFor(details);
   const hi = `Hi ${md(firstName(contact.name, contact.email))},`;
   const where = link
     ? `[Join the video call](${link}) · ${md(meetingType.locationLabel)}`
@@ -492,7 +575,7 @@ function ownerSummary(details: BookingDetails, businessTz: string, headline: str
     headline,
     "",
     `- **When:** ${formatMeetingTime(booking.startAt, booking.endAt, businessTz)}`,
-    `- **Invitee:** ${md(contact.name ?? "")} · ${contact.email}${contact.phone ? ` · ${md(contact.phone)}` : ""}`,
+    `- **Invitee:** ${md(contact.name ?? "")} · ${md(contact.email)}${contact.phone ? ` · ${md(contact.phone)}` : ""}`,
     `- **Invitee timezone:** ${booking.timezone}`,
     ...(meetingType.priceCents > 0 ? [`- **Price:** ${formatMoney(meetingType.priceCents)}`] : []),
     ...(answers ? ["", "**Their answers**", "", answers] : []),
@@ -587,12 +670,61 @@ export async function finalizeConfirmedBooking(details: BookingDetails, opts: { 
 /* Paid bookings                                                       */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Tells the owner (once per extra payment) when one booking has been paid for more than once, e.g. two
+ * checkouts for the same hold both completed, so the duplicate can be refunded.
+ */
+async function alertDuplicatePayments(details: BookingDetails): Promise<void> {
+  const { booking, meetingType, contact } = details;
+  const db = await getDb();
+  const paid = await db
+    .select({
+      id: schema.orders.id,
+      amountCents: schema.orders.amountCents,
+      currency: schema.orders.currency,
+      isTest: schema.orders.isTest,
+      stripePaymentIntentId: schema.orders.stripePaymentIntentId,
+    })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.bookingId, booking.id), eq(schema.orders.status, "paid")))
+    .orderBy(asc(schema.orders.paidAt), asc(schema.orders.createdAt));
+  const who = contact.name ?? contact.email;
+  for (const extra of paid.slice(1)) {
+    // rate_limits doubles as an "already sent" marker: payment events are retried for days.
+    if (!(await rateLimit(`duplicate-booking-payment:${extra.id}`, 1, 7 * 86_400)).ok) continue;
+    const amount = `${formatMoney(extra.amountCents, extra.currency)}${extra.isTest ? ", test payment" : ""}`;
+    const refund = extra.stripePaymentIntentId
+      ? `[refund it in Stripe](${stripeDashboardUrl(extra.stripePaymentIntentId, extra.isTest)})`
+      : "refund it";
+    await notifyOwner(
+      `Action needed: duplicate payment for ${meetingType.name} (${who})`,
+      [
+        `**${md(who)}** paid for the same **${md(meetingType.name)}** booking more than once. Please ${refund} and let them know.`,
+        "",
+        `- **Duplicate order:** ${extra.id} (${amount})`,
+        `- **First payment:** order ${paid[0].id}`,
+        `- **Email:** ${md(contact.email)}`,
+        "",
+        `[View orders](${absoluteUrl("/admin/orders")})`,
+      ].join("\n"),
+    );
+    await createTask({
+      title: `Refund duplicate payment from ${who} (${formatMoney(extra.amountCents, extra.currency)})`,
+      contactId: contact.id,
+      priority: "high",
+      origin: "payment",
+      description: `${who} paid twice for ${meetingType.name}. Refund order ${extra.id} and keep order ${paid[0].id}.`,
+    });
+  }
+}
+
 /** Called by payments.fulfillOrder when a paid meeting's checkout completes. Confirms + emails. Idempotent. */
 export async function confirmPaidBooking(bookingId: string): Promise<void> {
   if (!isUuid(bookingId)) throw new Error(`Invalid booking id: ${bookingId}`);
   const existing = await getBookingDetails({ id: bookingId });
   if (!existing) throw new Error(`Booking ${bookingId} not found`);
   const { booking, meetingType, contact } = existing;
+  await alertDuplicatePayments(existing).catch((err) => console.error("[booking] duplicate payment check failed", bookingId, err));
   // Already confirmed (duplicate webhook) or finished → nothing to do.
   if (booking.status !== "pending_payment" && booking.status !== "cancelled") return;
   // A booking the invitee or admin cancelled on purpose is never revived by a late payment.
@@ -641,6 +773,8 @@ export async function confirmPaidBooking(bookingId: string): Promise<void> {
   });
 
   if (outcome === "noop") return;
+  // Paid for now: any other checkout still open for this booking (e.g. from a retry in another tab) must not take a second payment.
+  await retireOpenCheckouts(booking.id);
   if (outcome === "unavailable") {
     const businessTz = await getBusinessTimezone();
     await logActivity(contact.id, "note", `Payment received for ${meetingType.name}, but the time is no longer available`, {

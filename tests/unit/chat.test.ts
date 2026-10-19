@@ -150,6 +150,28 @@ describe("extractOwnEmail", () => {
     expect(extractOwnEmail("Can you email me a template I can send to jane@acme.com?")).toBeNull();
     expect(extractOwnEmail("jane@acme.com keeps ignoring my invoices")).toBeNull();
     expect(extractOwnEmail("How can AI help my business?")).toBeNull();
+    expect(extractOwnEmail("Send the guide to jane@acme.com")).toBeNull();
+    expect(extractOwnEmail("cc jane@acme.com")).toBeNull();
+    expect(extractOwnEmail("To: jane@acme.com Subject: invoice")).toBeNull();
+    expect(extractOwnEmail("Write her a thank-you note. jane@acme.com")).toBeNull();
+    expect(extractOwnEmail("Jane’s email is jane@acme.com")).toBeNull();
+    expect(extractOwnEmail("Can you forward this to my colleague? jane@acme.com")).toBeNull();
+    expect(extractOwnEmail("What do you think about jane@acme.com")).toBeNull();
+    expect(extractOwnEmail("Is this a valid address: jane@acme.com?")).toBeNull();
+  });
+
+  it("accepts a short message that ends with its only address", () => {
+    expect(extractOwnEmail("Hi, I would like a call about AI for my team. jo3.lead@example.com")).toBe("jo3.lead@example.com");
+    expect(extractOwnEmail("I’d like to talk to a human, jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("jo@example.com please follow up")).toBe("jo@example.com");
+    expect(extractOwnEmail("jo@example.com - get back to me asap, thanks")).toBe("jo@example.com");
+    expect(extractOwnEmail("Hola, quiero hablar con alguien sobre IA. jo@ejemplo.com")).toBe("jo@ejemplo.com");
+  });
+
+  it("does not treat a lone address in a long message as the visitor's own", () => {
+    const long = `${"I have a long question about how AI could help with many different parts of the work we do every single week at the office. ".repeat(2)}jo@example.com`;
+    expect(extractOwnEmail(long)).toBeNull();
+    expect(extractOwnEmail(`${long}. My email is jo@example.com`)).toBe("jo@example.com");
   });
 
   it("picks the visitor's own address when several are mentioned", () => {
@@ -227,6 +249,42 @@ describe("buildChatFallback", () => {
     expect(text).toContain("/assessment");
     expect(text).toContain("/courses");
     expect(text).toContain("/book/ai-strategy-call");
+  });
+
+  it("says when an address in the message was not passed to the team", () => {
+    const text = buildChatFallback({
+      message: "I'd like to talk to a human about my client jane@acme.com",
+      courses,
+      meetingTypes,
+      emailInMessage: "jane@acme.com",
+    });
+    expect(text).toMatch(/^I haven't passed \*\*jane@acme\.com\*\* to the team/);
+    expect(text).toContain("/contact");
+    expect(text).not.toMatch(/someone will follow up with you by email/);
+    // The request for a human is answered by the notice itself, not by "type your email address here".
+    expect(text).not.toContain("Get a reply by email");
+    expect(text).toContain("/book/ai-strategy-call");
+  });
+
+  it("keeps answering the question alongside the not-passed notice, ignoring the address's domain", () => {
+    const text = buildChatFallback({ message: "What are your prices? jo@coaching.io", courses, meetingTypes, emailInMessage: "jo@coaching.io" });
+    expect(text).toMatch(/^I haven't passed \*\*jo@coaching\.io\*\*/);
+    expect(text).toContain("$297");
+    expect(detectIntents("Tell me more jo@coaching.io")[0]).toBe("booking");
+    expect(buildChatFallback({ message: "Tell me more jo@coaching.io", courses, meetingTypes })).not.toContain("Here are the calls you can book");
+  });
+
+  it("points to the contact page when the visitor's own address couldn't be passed on", () => {
+    const text = buildChatFallback({
+      message: "My email is jo@example.com, please follow up",
+      courses,
+      meetingTypes,
+      emailInMessage: "jo@example.com",
+      emailCaptureFailed: true,
+    });
+    expect(text).toMatch(/^I couldn't pass \*\*jo@example\.com\*\* to the team just now/);
+    expect(text).toContain("/contact");
+    expect(text).not.toMatch(/reply with just the address|type your email|Get a reply by email/);
   });
 
   it("acknowledges a shared email without asking again", () => {
@@ -329,6 +387,10 @@ describe("chat email note", () => {
     expect(chatEmailNote({ emailInMessage: false, emailCaptured: false })).toBeNull();
     expect(chatEmailNote({ emailInMessage: true, emailCaptured: true })).toMatch(/was passed to the team/);
     expect(chatEmailNote({ emailInMessage: true, emailCaptured: false })).toMatch(/not passed to the team, so do not promise a follow-up/);
+    const failed = chatEmailNote({ emailInMessage: true, emailCaptured: false, captureFailed: true });
+    expect(failed).toMatch(/could not be passed to the team right now/);
+    expect(failed).toMatch(/do not ask them to send it again/);
+    expect(failed).toContain("/contact");
   });
 
   it("appends the note to the last user message only, without touching stored history", () => {

@@ -6,7 +6,17 @@ import { formatDuration, savingsPercent } from "@/components/courses/course-util
 import { emailHasCourse, firstIncomplete, getCourseWithCurriculum } from "@/lib/courses";
 import { HOLD_EXPIRED_REASON, PAID_UNAVAILABLE_REASON } from "@/lib/booking-service";
 import { upsertContact } from "@/lib/crm";
-import { checkoutMode, createCheckout, formatWithZone, fulfillOrder, refundOrder, withinClaimWindow } from "@/lib/payments";
+import { runScheduledJobs } from "@/lib/jobs";
+import {
+  checkoutMode,
+  createCheckout,
+  formatWithZone,
+  fulfillOrder,
+  isDuplicatePurchase,
+  refundOrder,
+  UNDELIVERABLE_ALERT_PREFIX,
+  withinClaimWindow,
+} from "@/lib/payments";
 import { parseVideoUrl, toEmbedUrl } from "@/lib/video";
 
 describe("video URLs", () => {
@@ -129,7 +139,8 @@ describe("checkout + fulfilment", () => {
 
     const [contact] = await db.select().from(schema.contacts).where(eq(schema.contacts.email, email));
     expect(contact.stage).toBe("customer");
-    expect(contact.lifetimeValueCents).toBe(priceCents);
+    // A test purchase isn't real money, so it never counts toward lifetime value.
+    expect(contact.lifetimeValueCents).toBe(0);
     expect(user.contactId).toBe(contact.id);
 
     const purchases = await db
@@ -176,6 +187,102 @@ describe("checkout + fulfilment", () => {
     // A refunded order can't be fulfilled again.
     await fulfillOrder(order.id, { isTest: true });
     expect(await emailHasCourse(email, courseId)).toBe(false);
+  });
+  it("refunds a test purchase of a course the email already has, without touching its existing access", async () => {
+    const db = await getDb();
+    const email = `twice-${randomUUID()}@example.com`;
+    const first = await pendingOrder(email);
+    await fulfillOrder(first.id, { isTest: true });
+    const second = await pendingOrder(email);
+    await fulfillOrder(second.id, { isTest: true });
+
+    const [row] = await db.select().from(schema.orders).where(eq(schema.orders.id, second.id));
+    expect(row.status).toBe("refunded");
+    expect(await isDuplicatePurchase(row)).toBe(true);
+    expect(await isDuplicatePurchase(first)).toBe(false);
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email));
+    const enrollments = await db.select().from(schema.enrollments).where(eq(schema.enrollments.userId, user.id));
+    expect(enrollments).toEqual([expect.objectContaining({ courseId, orderId: first.id })]);
+
+    // Not a second purchase: one receipt, one purchase activity, and a sign-in link instead of a receipt.
+    const emails = await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, email));
+    expect(emails.filter((e) => e.kind === "receipt")).toHaveLength(1);
+    const [notice] = emails.filter((e) => e.subject.startsWith("You already have"));
+    expect(notice.html).toContain("no payment was taken");
+    const [contact] = await db.select().from(schema.contacts).where(eq(schema.contacts.email, email));
+    const activities = await db.select().from(schema.activities).where(eq(schema.activities.contactId, contact.id));
+    expect(activities.filter((a) => a.type === "purchase")).toHaveLength(1);
+    expect(activities.some((a) => a.title === "Bought AI Essentials again — already had access")).toBe(true);
+    expect(contact.lifetimeValueCents).toBe(0);
+  });
+
+  it("re-sends the sign-in link (and nothing else) when a free course is claimed again", async () => {
+    const db = await getDb();
+    const [free] = await db
+      .insert(schema.courses)
+      .values({ slug: `free-again-${randomUUID().slice(0, 8)}`, title: "Free Starter Course", priceCents: 0, published: true })
+      .returning();
+    const email = `free-again-${randomUUID()}@example.com`;
+    await createCheckout({ itemType: "course", courseId: free.id, email, name: "Free Learner" });
+    const { url, orderId } = await createCheckout({ itemType: "course", courseId: free.id, email, name: "Free Learner" });
+
+    // Same response as a first enrollment: straight to the success page.
+    expect(url).toMatch(new RegExp(`^/checkout/success\\?order=${orderId}&session_id=free_`));
+    const [order] = await db.select().from(schema.orders).where(eq(schema.orders.id, orderId));
+    expect(order.status).toBe("paid");
+    const emails = await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, email));
+    expect(emails.filter((e) => e.kind === "receipt")).toHaveLength(1);
+    expect(emails.filter((e) => e.subject === "You already have Free Starter Course")).toHaveLength(1);
+  });
+});
+
+describe("undeliverable payments", () => {
+  beforeAll(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  async function alertsFor(orderId: string) {
+    const db = await getDb();
+    return (await db.select().from(schema.emailLog).where(eq(schema.emailLog.kind, "notification"))).filter(
+      (e) => e.subject.includes("can't be delivered") && e.html.includes(orderId),
+    );
+  }
+
+  it("alerts the owner (once) when a paid session's booking was deleted mid-checkout", async () => {
+    const db = await getDb();
+    const [order] = await db
+      .insert(schema.orders)
+      .values({ email: `gone-${randomUUID()}@example.com`, name: "Gone Booking", itemType: "booking", bookingId: null, description: "1:1 AI Coaching Session", amountCents: 15_000 })
+      .returning();
+
+    await expect(fulfillOrder(order.id, { isTest: true })).rejects.toThrow(/has no booking/);
+    await expect(fulfillOrder(order.id, { isTest: true })).rejects.toThrow(/has no booking/);
+    // Left unpaid so a later retry can still deliver it, and the owner hears about it exactly once.
+    expect((await db.select().from(schema.orders).where(eq(schema.orders.id, order.id)))[0].status).toBe("pending");
+    const alerts = await alertsFor(order.id);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].html).toContain("the booking it was for has been deleted");
+  });
+
+  it("keeps the 'already alerted' marker through Stripe's retry window when old rate limits are cleared", async () => {
+    const db = await getDb();
+    const day = 86_400_000;
+    const recentMarker = `${UNDELIVERABLE_ALERT_PREFIX}${randomUUID()}`;
+    const oldMarker = `${UNDELIVERABLE_ALERT_PREFIX}${randomUUID()}`;
+    const oldLimit = `course-checkout:${randomUUID()}`;
+    await db.insert(schema.rateLimits).values([
+      { key: recentMarker, count: 1, windowStart: new Date(Date.now() - 3 * day) },
+      { key: oldMarker, count: 1, windowStart: new Date(Date.now() - 8 * day) },
+      { key: oldLimit, count: 1, windowStart: new Date(Date.now() - 3 * day) },
+    ]);
+
+    const summary = await runScheduledJobs();
+    expect(summary.jobs.rateLimits.ok).toBe(true);
+    const left = new Set((await db.select({ key: schema.rateLimits.key }).from(schema.rateLimits)).map((r) => r.key));
+    expect(left.has(recentMarker)).toBe(true);
+    expect(left.has(oldMarker)).toBe(false);
+    expect(left.has(oldLimit)).toBe(false);
   });
 });
 

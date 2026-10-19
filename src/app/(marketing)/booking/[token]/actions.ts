@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { cancelBooking, getBookingDetails, isHoldExpired, prepareCheckoutRetry, rescheduleBooking } from "@/lib/booking-service";
+import {
+  cancelBooking,
+  CHANGED_BEFORE_PAYING_REASON,
+  getBookingDetails,
+  isHoldExpired,
+  prepareCheckoutRetry,
+  rescheduleBooking,
+  type CheckoutRetry,
+} from "@/lib/booking-service";
 import { CheckoutError, createCheckout } from "@/lib/payments";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { isValidTimezone } from "@/lib/scheduling";
@@ -68,10 +76,13 @@ export async function rescheduleBookingAction(_prev: ManageBookingState, formDat
 }
 
 const HOLD_LAPSED = "The hold on this time has expired, so it's been released. Please choose a new time.";
+const PAYMENT_PROCESSING = "Your payment is still processing, so there's nothing more to pay. We'll email you as soon as it clears.";
+const CHECKOUT_UNAVAILABLE = "We couldn't start the payment step just now. Please try again in a few minutes.";
 
 /**
  * Sends the invitee back to checkout for a booking whose payment hold is still live (they left
- * Stripe Checkout or the test checkout without paying). Retires the earlier checkout first.
+ * Stripe Checkout or the test checkout without paying). Closes the earlier checkout first, and never
+ * starts a new one while an earlier payment has gone through or is still clearing.
  */
 export async function resumeCheckoutAction(_prev: ManageBookingState, formData: FormData): Promise<ManageBookingState> {
   const parsed = TokenInput.safeParse({ token: str(formData, "token") });
@@ -84,7 +95,22 @@ export async function resumeCheckoutAction(_prev: ManageBookingState, formData: 
   const { booking, contact } = details;
   if (booking.status === "confirmed") return { error: "This booking is already paid for and confirmed. Refresh the page to see the details." };
   if (booking.status !== "pending_payment") return { error: "This booking is no longer awaiting payment. Refresh the page to see its status." };
-  if (isHoldExpired(booking) || !(await prepareCheckoutRetry(booking.id))) return { error: HOLD_LAPSED };
+  if (isHoldExpired(booking)) return { error: HOLD_LAPSED };
+
+  let retry: CheckoutRetry;
+  try {
+    retry = await prepareCheckoutRetry(booking.id);
+  } catch (err) {
+    console.error("[booking] earlier checkout could not be closed", booking.id, err);
+    return { error: CHECKOUT_UNAVAILABLE };
+  }
+  if (retry === "lapsed") return { error: HOLD_LAPSED };
+  if (retry === "processing") return { error: PAYMENT_PROCESSING };
+  if (retry === "paid") {
+    // The earlier payment had gone through after all (its confirmation was still on its way).
+    revalidatePath(`/booking/${parsed.data.token}`);
+    redirect(`/book/confirmed/${parsed.data.token}`);
+  }
 
   let url: string;
   try {
@@ -92,7 +118,7 @@ export async function resumeCheckoutAction(_prev: ManageBookingState, formData: 
   } catch (err) {
     if (err instanceof CheckoutError) return { error: err.message };
     console.error("[booking] checkout could not be restarted", booking.id, err);
-    return { error: "We couldn't start the payment step just now. Please try again in a few minutes." };
+    return { error: CHECKOUT_UNAVAILABLE };
   }
   redirect(url);
 }
@@ -111,7 +137,7 @@ export async function changeHeldTimeAction(_prev: ManageBookingState, formData: 
   const { booking, meetingType } = details;
   if (booking.status !== "pending_payment") return { error: "This booking is no longer awaiting payment. Refresh the page to see its status." };
   if (!isHoldExpired(booking)) {
-    const result = await cancelBooking(booking.id, { reason: "Chose a different time before paying", by: "invitee" });
+    const result = await cancelBooking(booking.id, { reason: CHANGED_BEFORE_PAYING_REASON, by: "invitee" });
     if (!result.ok) return { error: result.error };
   }
 

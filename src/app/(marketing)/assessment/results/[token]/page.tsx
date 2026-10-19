@@ -21,6 +21,7 @@ import {
   pickQuickWins,
   type Recommendation,
   resultFromStored,
+  submittedContact,
   tierForScore,
 } from "@/lib/assessment";
 import { getSubmissionByToken, loadOffer, loadStrategyCall, withPrefill } from "../../data";
@@ -63,8 +64,11 @@ export default async function AssessmentResultsPage({ params }: { params: Promis
   const { view, canGeneratePlan } = buildView(submission);
   const [offer, call] = await Promise.all([loadOffer(view.recommendation), loadStrategyCall()]);
 
-  const person = { name: contact.name, email: contact.email };
-  const first = displayFirstName(contact.name);
+  // Greet and pre-fill with the name typed into this submission, never the CRM contact's stored name:
+  // anyone can submit someone else's email address.
+  const entered = submittedContact(submission.answers);
+  const person = { name: entered.name, email: contact.email };
+  const first = displayFirstName(entered.name);
   const offerHref = withPrefill(offer.href, person);
   const callHref = withPrefill(call.href, person);
   // Without an Anthropic key the plan is rule-based, so don't present it as AI-written.

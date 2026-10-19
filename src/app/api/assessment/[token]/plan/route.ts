@@ -1,11 +1,18 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb, schema } from "@/db";
-import { getSubmissionByToken, loadOffer, loadStrategyCall, withPrefill } from "@/app/(marketing)/assessment/data";
+import { claimPlanGeneration, getSubmissionByToken, loadOffer, loadStrategyCall, withPrefill } from "@/app/(marketing)/assessment/data";
 import { aiEnabled, aiStream, textStreamResponse } from "@/lib/ai";
-import { buildFallbackPlan, buildPlanPrompt, parseAnswers, PLAN_SYSTEM_PROMPT, resultFromStored, shouldStorePlan } from "@/lib/assessment";
+import {
+  buildFallbackPlan,
+  buildPlanPrompt,
+  parseAnswers,
+  PLAN_SYSTEM_PROMPT,
+  resultFromStored,
+  shouldStorePlan,
+  submittedContact,
+} from "@/lib/assessment";
 import { rateLimitByIp } from "@/lib/rate-limit";
-import { absoluteUrl } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 // Plan generation streams for well under a minute; stay within every Vercel plan's limit.
@@ -26,6 +33,8 @@ function streamText(text: string): ReadableStream<Uint8Array> {
  * Returns the stored plan instantly when it exists; otherwise generates it with Claude
  * (or the deterministic fallback when AI isn't configured) and stores the first complete one.
  * A fallback streamed because Claude was briefly unavailable is not stored, so the next visit retries.
+ * Claude generations are single-flight per submission and capped per submission, per IP and per day
+ * (see PLAN_LIMITS); past a cap the deterministic plan is streamed instead, unsaved.
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -44,15 +53,35 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
   const answers = parsed.answers;
   const result = resultFromStored(answers, submission);
 
+  // Only what was typed in with this submission: the CRM contact's stored name may be someone else's.
+  const entered = submittedContact(submission.answers);
   const [offer, call] = await Promise.all([loadOffer(result.recommendation), loadStrategyCall()]);
-  const person = { name: contact.name, email: contact.email };
+  const person = { name: entered.name, email: contact.email };
+  // On-site links stay relative (and booking links pre-filled) in the fallback plan.
+  const fallbackText = buildFallbackPlan(answers, result, {
+    name: entered.name,
+    offerTitle: offer.title,
+    offerUrl: withPrefill(offer.href, person),
+    strategyCallUrl: withPrefill(call.href, person),
+  });
+
+  if (aiEnabled()) {
+    const claim = await claimPlanGeneration(submission.id, rateLimitByIp);
+    if (!claim.ok) {
+      if (claim.reason === "daily_limit") console.warn("[assessment] daily AI plan limit reached; serving the standard plan");
+      return textStreamResponse(streamText(fallbackText));
+    }
+  }
+
   const ctx = {
-    name: contact.name,
-    company: contact.company,
+    name: entered.name,
+    company: entered.company,
     offerTitle: offer.title,
     offerPrice: offer.priceLabel ?? undefined,
-    offerUrl: absoluteUrl(offer.href),
-    strategyCallUrl: absoluteUrl(call.href),
+    // The plan is only ever shown on this site, so links stay relative: untrusted-Markdown rendering keeps
+    // relative links clickable whatever the deployment's site URL (absoluteUrl may fall back to VERCEL_URL).
+    offerUrl: offer.href,
+    strategyCallUrl: call.href,
   };
 
   const stream = aiStream({
@@ -60,13 +89,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     messages: [{ role: "user", content: buildPlanPrompt(answers, result, ctx) }],
     effort: "medium",
     maxTokens: 8000,
-    // On-site links stay relative (and booking links pre-filled) in the fallback plan.
-    fallbackText: buildFallbackPlan(answers, result, {
-      name: contact.name,
-      offerTitle: offer.title,
-      offerUrl: withPrefill(offer.href, person),
-      strategyCallUrl: withPrefill(call.href, person),
-    }),
+    fallbackText,
     onComplete: async (text, info) => {
       if (!shouldStorePlan(text, info, aiEnabled())) return;
       const plan = text.trim();

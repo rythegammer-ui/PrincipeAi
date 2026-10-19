@@ -3,7 +3,7 @@ import path from "node:path";
 import { drizzle as drizzlePostgres, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
-import { databaseUrl, dbMode } from "@/lib/runtime-mode";
+import { databaseUrl, dbMode, missingDatabaseError } from "@/lib/runtime-mode";
 
 export type DB = PostgresJsDatabase<typeof schema>;
 
@@ -49,6 +49,9 @@ function createPostgres(url: string): DB {
  */
 export function getDb(): Promise<DB> {
   if (!g.__principeDb) {
+    // A deployment that lost (or never had) its database fails closed instead of becoming a public demo.
+    const missing = missingDatabaseError();
+    if (missing) return Promise.reject(new Error(missing));
     const url = databaseUrl();
     const mode = dbMode();
     g.__principeDb = url

@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { jwtVerify, SignJWT } from "jose";
 import { cookies } from "next/headers";
@@ -17,8 +17,20 @@ const LOGIN_TOKEN_TTL_MIN = 30;
 
 type SessionPayload = { sub: string; role: "admin" | "student"; email: string };
 
-async function sign(payload: SessionPayload, ttlSec: number): Promise<string> {
-  return new SignJWT({ role: payload.role, email: payload.email })
+/**
+ * Binds admin sessions to the current admin login: changing ADMIN_EMAIL / ADMIN_PASSWORD, or bumping
+ * ADMIN_SESSION_VERSION, invalidates every admin cookie already issued (student sessions are unaffected).
+ * Keyed with the signing secret so a token never allows offline guessing of the password.
+ */
+function adminCredentialVersion(creds: { email: string; password: string }): string {
+  return createHmac("sha256", authSecret())
+    .update(`${creds.email}\0${creds.password}\0${process.env.ADMIN_SESSION_VERSION ?? ""}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+async function sign(payload: SessionPayload, ttlSec: number, extra: Record<string, string> = {}): Promise<string> {
+  return new SignJWT({ ...extra, role: payload.role, email: payload.email })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(payload.sub)
     .setIssuedAt()
@@ -31,6 +43,10 @@ export async function verifySession(token: string | undefined, role: SessionPayl
   try {
     const { payload } = await jwtVerify(token, authSecret(), { algorithms: ["HS256"] });
     if (payload.role !== role || typeof payload.sub !== "string" || typeof payload.email !== "string") return null;
+    if (role === "admin") {
+      const creds = adminCredentials();
+      if (!creds || payload.email !== creds.email || payload.cv !== adminCredentialVersion(creds)) return null;
+    }
     return { sub: payload.sub, role, email: payload.email };
   } catch {
     return null;
@@ -65,10 +81,16 @@ export function checkAdminCredentials(email: string, password: string): boolean 
 }
 
 export async function startAdminSession(email: string) {
-  const token = await sign({ sub: "admin", role: "admin", email: normalizeEmail(email) }, ADMIN_TTL_SEC);
+  const creds = adminCredentials();
+  if (!creds) throw new Error("Admin login isn't configured.");
+  const token = await sign({ sub: "admin", role: "admin", email: normalizeEmail(email) }, ADMIN_TTL_SEC, { cv: adminCredentialVersion(creds) });
   (await cookies()).set(ADMIN_COOKIE, token, cookieOptions(ADMIN_TTL_SEC));
 }
 
+/**
+ * Signs this browser out. Sessions are stateless JWTs, so a copy of the cookie taken earlier stays valid
+ * until it expires; to end every admin session change ADMIN_PASSWORD or ADMIN_SESSION_VERSION.
+ */
 export async function endAdminSession() {
   (await cookies()).delete(ADMIN_COOKIE);
 }

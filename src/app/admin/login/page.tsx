@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Alert } from "@/components/ui/alert";
 import { Logo } from "@/components/ui/misc";
 import { getAdminSession } from "@/lib/auth";
-import { adminCredentials } from "@/lib/runtime-mode";
+import { adminCredentials, isDemoMode, MIN_ADMIN_PASSWORD_LENGTH, MIN_AUTH_SECRET_LENGTH } from "@/lib/runtime-mode";
 import { safeRedirectPath } from "@/lib/utils";
 import { AdminLoginForm } from "./login-form";
 
@@ -18,7 +18,7 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
   const creds = adminCredentials();
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-zinc-50 px-4 py-16">
+    <main id="main" className="relative flex min-h-screen items-center justify-center overflow-hidden bg-zinc-50 px-4 py-16">
       <div className="bg-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]" />
       <div className="relative w-full max-w-sm">
         <Link href="/" className="mb-8 flex justify-center">
@@ -29,13 +29,15 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
           <p className="mt-1 mb-6 text-sm text-zinc-500">Manage leads, bookings, courses and automations.</p>
           {!creds ? (
             <Alert tone="warning" title="Admin login isn't configured">
-              Set <code>ADMIN_EMAIL</code>, <code>ADMIN_PASSWORD</code> and <code>AUTH_SECRET</code> in your Vercel environment variables, then redeploy.
+              Set <code>ADMIN_EMAIL</code>, <code>ADMIN_PASSWORD</code> (at least {MIN_ADMIN_PASSWORD_LENGTH} characters) and <code>AUTH_SECRET</code> (at
+              least {MIN_AUTH_SECRET_LENGTH} characters, e.g. from <code>openssl rand -base64 32</code>) in your Vercel environment variables, then redeploy.
+              {isDemoMode() && " In demo mode the demo login is only offered while no live email, payment or AI keys are set."}
             </Alert>
           ) : (
             <>
               {creds.isDefault && (
                 <Alert tone="info" title="Demo credentials" className="mb-5">
-                  Email <code>{creds.email}</code> · password <code>demo1234</code>. Set <code>ADMIN_PASSWORD</code> to change this.
+                  Email <code>{creds.email}</code> · password <code>demo1234</code>. Set <code>ADMIN_PASSWORD</code> and <code>AUTH_SECRET</code> to change this.
                 </Alert>
               )}
               <AdminLoginForm next={target} defaultEmail={creds.isDefault ? creds.email : undefined} />
@@ -43,6 +45,6 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

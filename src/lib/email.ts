@@ -26,14 +26,8 @@ export function markdownToEmailHtml(markdown: string): string {
   return safeMarked.parse(markdown, { async: false }) as string;
 }
 
-/**
- * Escapes visitor-supplied text before it is interpolated into Markdown that will be emailed:
- * Markdown/HTML control characters, plus `.`, `:` and `@` so bare URLs, `www.` hosts and email
- * addresses can't become GFM autolinks. Renders as the same visible text.
- */
-export function escapeMarkdown(text: string): string {
-  return text.replace(/([\\`*_{}[\]()<>#+!|~.:@])/g, "\\$1").replace(/\n{3,}/g, "\n\n");
-}
+/** Escapes visitor-supplied text for emailed Markdown (defined in lib/utils.ts so client code can use it too). */
+export { escapeMarkdown } from "@/lib/utils";
 
 export type TemplateVars = Record<string, string | number | null | undefined>;
 
@@ -84,6 +78,22 @@ ${opts.unsubscribeUrl ? `<br><a href="${opts.unsubscribeUrl}" style="color:#8a8f
 </body></html>`;
 }
 
+const SIGN_IN_TOKEN = /(\/auth\/verify\?token=)[^"'&\s<>)]+/g;
+const REDACTED_TOKEN = "[redacted]";
+
+/**
+ * Login tokens are stored hashed, so a read-only copy of the database must not hold usable sign-in
+ * links either: the Email Log keeps magic-link emails with the token removed.
+ */
+export function redactSignInLinks(html: string): string {
+  return html.replace(SIGN_IN_TOKEN, `$1${REDACTED_TOKEN}`);
+}
+
+/** True for a logged email whose sign-in link was redacted (it can't be re-sent as is). */
+export function hasRedactedSignInLink(html: string): boolean {
+  return html.includes(`/auth/verify?token=${REDACTED_TOKEN}`);
+}
+
 export type SendEmailInput = {
   to: string;
   subject: string;
@@ -105,7 +115,8 @@ export type SendEmailInput = {
 
 /**
  * Sends an email through Resend when RESEND_API_KEY is set; otherwise records it as
- * "simulated" so the whole flow can be tested locally. Every email is logged to email_log.
+ * "simulated" so the whole flow can be tested locally. Every email is logged to email_log (with any
+ * one-time sign-in token redacted).
  */
 export async function sendEmail(input: SendEmailInput): Promise<{ status: EmailStatus; id?: string }> {
   const isMarketing = MARKETING_KINDS.has(input.kind);
@@ -162,7 +173,7 @@ export async function sendEmail(input: SendEmailInput): Promise<{ status: EmailS
       contactId: input.contactId ?? null,
       to: input.to,
       subject: input.subject,
-      html,
+      html: redactSignInLinks(html),
       kind: input.kind,
       status,
       providerId: providerId ?? null,

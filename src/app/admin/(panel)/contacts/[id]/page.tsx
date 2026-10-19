@@ -332,7 +332,8 @@ export default async function ContactPage({ params }: Params) {
                     <dl className="mt-2 flex flex-col gap-2">
                       {Object.entries(quiz.answers).map(([k, v]) => (
                         <div key={k}>
-                          <dt className="text-xs text-zinc-500">{titleCase(k)}</dt>
+                          {/* "_name" / "_company": what was typed in with this submission (not quiz answers). */}
+                          <dt className="text-xs text-zinc-500">{k.startsWith("_") ? `${titleCase(k.slice(1))} entered` : titleCase(k)}</dt>
                           <dd className="text-zinc-800">{Array.isArray(v) ? v.join(", ") : String(v)}</dd>
                         </div>
                       ))}

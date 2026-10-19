@@ -3,7 +3,7 @@
  * - buildChatFallback: keyword-matched website-assistant replies that always include useful links
  * - buildTutorFallback: lesson key points for the course tutor
  * - buildInsightsFallback: keyword-frequency "insights" for the admin conversations page
- * - extractEmail: finds an email address a visitor typed into the chat
+ * - extractEmail / extractOwnEmail: find an email address a visitor typed into the chat (any / their own)
  *
  * Pure functions (no server-only deps) so they are unit-testable.
  */
@@ -76,11 +76,45 @@ const FILLER_WORDS = new Set(
   ).split(" "),
 );
 
+/** …plus, after an address in a short message, a follow-up request ("jo@example.com please follow up asap"). */
+const FOLLOW_UP_WORDS = new Set(
+  "follow up followup follow-up me us contact reach out get back to asap soon as possible when you can reply call".split(" "),
+);
+
+/** Longest message (in words, not counting the address) where a lone address counts as the visitor's own. */
+const SHORT_MESSAGE_WORDS = 25;
+
+/** Text before an address that points at someone else: "my client …", "reply to …", "cc: …", "her …", "Jane's email …". */
+const THIRD_PARTY_CUES = new RegExp(
+  [
+    String.raw`\b(?:client|customer|colleague|co-?worker|boss|friend|recipient)`,
+    String.raw`\b(?:him|her|his|their|cc|bcc)\b`,
+    String.raw`\b(?:to|from)\s*:`,
+    String.raw`\b(?:send|sent|write|wrote|reply|replied|respond|forward|e-?mail|mail)\s+(?:(?:it|this|that|them|these|those)\s+)?to\b(?!\s+(?:me|us|you)\b)`,
+    String.raw`\b(?!(?:it|that|here|there|what|who|let)'s\b)[a-z]+'s\s+(?:(?:work|personal|business|contact)\s+)?(?:e-?mail|address)`,
+  ].join("|"),
+  "i",
+);
+
+/** …or a word that makes the address the object of a phrase: "… to jane@…", "… about jane@…". */
+const OBJECT_BEFORE = /\b(?:to|from|for|with|about|of|than|regarding|named|called)\s*[:\-–—]?\s*$/i;
+
+/** Lower-cased words of `text` (letters, apostrophes and hyphens). */
+function words(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z'-]+/)
+    .map((w) => w.replace(/^['-]+|['-]+$/g, ""))
+    .filter(Boolean);
+}
+
 /**
  * The address the visitor offers as their *own* contact email, or null. Visitors often paste other people's
  * addresses ("write a reminder to my client jane@acme.com"), so an address only counts when it comes with
  * first-person phrasing ("my email is …", "reach me at …", "follow up with me by email: …" — the follow-up form's
- * wording) or when the message is just the address plus a few filler words ("Sure, it's jo@example.com").
+ * wording), when the message is just the address plus a few filler words ("Sure, it's jo@example.com"), or when a
+ * short message ends with its only address and nothing in it points at someone else ("Hi, I'd like a call about AI
+ * for my team. jo@example.com", "jo@example.com please follow up").
  */
 export function extractOwnEmail(text: string): string | null {
   const matches = emailMatches(text);
@@ -93,13 +127,16 @@ export function extractOwnEmail(text: string): string | null {
   }
 
   if (new Set(matches.map((m) => m.email)).size !== 1) return null;
-  const rest = normalized
-    .replace(EMAIL_PATTERN, " ")
-    .toLowerCase()
-    .split(/[^a-z'-]+/)
-    .map((w) => w.replace(/^['-]+|['-]+$/g, ""))
-    .filter(Boolean);
-  return rest.every((w) => FILLER_WORDS.has(w)) ? matches[0].email : null;
+  const rest = words(normalized.replace(EMAIL_PATTERN, " "));
+  if (rest.every((w) => FILLER_WORDS.has(w))) return matches[0].email;
+
+  if (matches.length !== 1 || rest.length > SHORT_MESSAGE_WORDS) return null;
+  const [m] = matches;
+  const before = normalized.slice(0, m.start).replace(/\s+/g, " ");
+  const after = normalized.slice(m.end);
+  // "Is this a valid address: jane@acme.com?" asks about the address rather than offering it.
+  if (THIRD_PARTY_CUES.test(before) || OBJECT_BEFORE.test(before) || /^\s*\?/.test(after)) return null;
+  return words(after).every((w) => FILLER_WORDS.has(w) || FOLLOW_UP_WORDS.has(w)) ? m.email : null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -315,7 +352,7 @@ function humanAnswer(ctx: Ctx): string {
   return `I'm an AI assistant, but a real person from the team is happy to help:
 
 - **Talk it through live:** [book a free strategy call](${ctx.callHref}) at a time that suits you.
-- **Get a reply by email:** type your email address here and someone will follow up.
+- **Get a reply by email:** send your email address here (or use **Get a human follow-up** below the chat) and someone will follow up.
 - **Send a message:** use the [contact page](/contact).`;
 }
 
@@ -498,29 +535,45 @@ function answerFor(intent: ChatIntent | undefined, ctx: Ctx, intents: ChatIntent
 
 /**
  * Rule-based reply for the website assistant. Always includes at least one useful link.
- * `emailCaptured` is the address the visitor just shared (it has been passed to the team).
+ * - `emailCaptured`: the address the visitor just shared, which has been passed to the team.
+ * - `emailInMessage`: an address in the message (the visitor's own when recognized). When it wasn't captured the
+ *   reply says so, so the visitor never assumes someone will follow up.
+ * - `emailCaptureFailed`: the address was recognized as the visitor's own but couldn't be passed on (rate limit or
+ *   error) — the reply points to the contact page instead of asking them to send it again.
  */
 export function buildChatFallback(input: {
   message: string;
   courses: FallbackCourse[];
   meetingTypes: FallbackMeetingType[];
   emailCaptured?: string | null;
+  emailInMessage?: string | null;
+  emailCaptureFailed?: boolean;
 }): string {
   const courses = sortCourses(input.courses);
   const meetings = sortMeetingTypes(input.meetingTypes);
-  const message = input.emailCaptured ? input.message.replace(EMAIL_PATTERN, " ") : input.message;
+  // Addresses never decide the answer (a domain like coaching.io would otherwise read as a booking question).
+  const message = input.message.replace(EMAIL_PATTERN, " ");
   const ctx: Ctx = { courses, meetings, callHref: primaryCallHref(meetings), message };
   const intents = detectIntents(message);
+  // The visitor's request for a human (or a greeting/thanks) is already answered by the note about their email.
+  const main = intents.find((i) => i !== "human" && i !== "greeting" && i !== "thanks");
 
   if (input.emailCaptured) {
     const ack = `Thanks! I've passed **${input.emailCaptured}** to the team, and someone will follow up with you by email.`;
-    const main = intents.find((i) => i !== "human" && i !== "greeting" && i !== "thanks");
     if (main) return `${ack}\n\n${answerFor(main, ctx, intents)}`;
     return `${ack}
 
 While you wait, you might like:
 - The free [AI Readiness Assessment](/assessment) — a personalized AI action plan in about 3 minutes.
 - The free [${starterKitName()}](/free-guide) — copy-paste prompts you can use today.`;
+  }
+
+  if (input.emailInMessage) {
+    const notice = input.emailCaptureFailed
+      ? `I couldn't pass **${input.emailInMessage}** to the team just now, so please send your request through the [contact page](/contact) and someone will get back to you.`
+      : `I haven't passed **${input.emailInMessage}** to the team because I can't tell whether it's your own address. If it is, reply with just the address (or "My email is …") and someone will follow up — or use the [contact page](/contact).`;
+    if (main) return `${notice}\n\n${answerFor(main, ctx, intents)}`;
+    return `${notice}\n\nYou can also [book a free strategy call](${ctx.callHref}) to talk it through live, or take the free [AI Readiness Assessment](/assessment).`;
   }
 
   return answerFor(intents[0], ctx, intents);

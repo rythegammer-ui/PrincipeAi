@@ -15,7 +15,7 @@ import {
   OFFERS,
   parseAnswers,
   plainText,
-  serializeAnswers,
+  serializeSubmission,
 } from "@/lib/assessment";
 import { captureLead, createTask } from "@/lib/crm";
 import { sendEmail } from "@/lib/email";
@@ -120,7 +120,8 @@ export async function submitAssessmentAction(_prev: AssessmentFormState, formDat
     const db = await getDb();
     await db.insert(schema.quizSubmissions).values({
       contactId: lead.id,
-      answers: serializeAnswers(answers),
+      // Keeps the name/company typed in here: the results page shows these, not the contact's stored details.
+      answers: serializeSubmission(answers, { name, company }),
       score: result.score,
       tier: result.tier.id,
       recommendation: result.recommendation,

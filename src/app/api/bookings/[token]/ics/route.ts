@@ -12,7 +12,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (!limit.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": "60" } });
 
   const details = await getBookingDetails({ token });
-  if (!details) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // An unpaid hold isn't a booking yet: no page offers its calendar file, and paid sessions' details stay private until payment.
+  if (!details || details.booking.status === "pending_payment") return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const cancelled = details.booking.status === "cancelled";
   const sequence = await rescheduleCount(details.booking.id);

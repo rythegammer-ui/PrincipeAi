@@ -8,6 +8,8 @@ import {
   buildResultsEmail,
   computeAssessment,
   describeAnswers,
+  escapeMarkdownText,
+  getContactSchema,
   getQuestion,
   intentBoost,
   isHotLead,
@@ -24,7 +26,9 @@ import {
   recommend,
   resultFromStored,
   serializeAnswers,
+  serializeSubmission,
   shouldStorePlan,
+  submittedContact,
   TIERS,
   tierForScore,
   TIME_DRAINS,
@@ -426,5 +430,65 @@ describe("summaries", () => {
     expect(email.subject).toBe(`Your AI readiness results: ${result.score}/100 (${result.tier.label})`);
     expect(email.markdown).toContain("Hi Ada,");
     expect(email.markdown).toContain("(https://x.test/r)");
+  });
+});
+
+describe("submitted contact details", () => {
+  it("keeps the name and company entered with a submission beside the answers", () => {
+    const stored = serializeSubmission(base, { name: "Visitor Test", company: "Acme" });
+    expect(stored).toMatchObject({ ...serializeAnswers(base), _name: "Visitor Test", _company: "Acme" });
+    expect(submittedContact(stored)).toEqual({ name: "Visitor Test", company: "Acme" });
+    expect(serializeSubmission(base, { name: "Ada" })).not.toHaveProperty("_company");
+  });
+
+  it("still parses the answers and never shows the extra keys as answers", () => {
+    const stored = serializeSubmission(base, { name: "Visitor Test", company: "Acme" });
+    const parsed = parseAnswers(JSON.parse(JSON.stringify(stored)));
+    expect(parsed).toEqual({ ok: true, answers: base });
+    expect(answersSummary(base)).not.toContain("Visitor");
+  });
+
+  it("returns nothing for older submissions and malformed values", () => {
+    expect(submittedContact(serializeAnswers(base))).toEqual({ name: null, company: null });
+    expect(submittedContact(null)).toEqual({ name: null, company: null });
+    expect(submittedContact(["Ada"])).toEqual({ name: null, company: null });
+    expect(submittedContact({ _name: ["Ada"], _company: "   " })).toEqual({ name: null, company: null });
+    expect(submittedContact({ _name: `  ${"a".repeat(200)} ` }).name).toHaveLength(80);
+  });
+});
+
+describe("contact step", () => {
+  const parse = (email: string) => getContactSchema().safeParse({ name: "Ada", email, company: "", website: "" });
+
+  it("accepts ordinary addresses and normalizes them", () => {
+    for (const email of ["ada@example.com", "Ada.O'Brien+ai@Example.co.uk", "first_last-1@mail.example.org"]) {
+      const result = parse(email);
+      expect(result.success, email).toBe(true);
+      expect(result.data?.email).toBe(email.toLowerCase());
+    }
+  });
+
+  it("rejects addresses carrying Markdown or HTML", () => {
+    for (const email of ["[Open](https://example.org/x)@example.com", "<b>a</b>@example.com", "a@example.com\\", '"a b"@example.com', "a:b@example.com"]) {
+      expect(parse(email).success, email).toBe(false);
+    }
+  });
+});
+
+describe("escaping visitor text", () => {
+  it("backslash-escapes link, autolink and HTML characters", () => {
+    expect(escapeMarkdownText("[Open](https://evil.example)@x.com")).toBe("\\[Open\\]\\(https\\://evil\\.example\\)\\@x\\.com");
+    expect(escapeMarkdownText("Ada Lovelace")).toBe("Ada Lovelace");
+  });
+
+  it("escapes the visitor's name in the results email greeting", () => {
+    const result = computeAssessment(base);
+    const email = buildResultsEmail({ name: "www.evil.example", result, resultsUrl: "https://x.test/r", offerTitle: "Course", offerUrl: "https://x.test/c", strategyCallUrl: "https://x.test/b" });
+    expect(email.markdown).toContain("Hi Www\\.evil\\.example,");
+  });
+
+  it("escapes the name in the fallback plan", () => {
+    const plan = buildFallbackPlan(base, computeAssessment(base), { name: "www.evil.example" });
+    expect(plan).toContain("Www\\.evil\\.example, you scored");
   });
 });

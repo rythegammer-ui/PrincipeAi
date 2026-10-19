@@ -1,7 +1,7 @@
 /**
  * Applies SQL migrations in ./drizzle to DATABASE_URL (or POSTGRES_URL) and seeds the
  * default catalog if the database is empty. Runs automatically during `vercel-build`.
- * Without a database URL it exits quietly (the app falls back to embedded PGlite).
+ * Without a database URL it exits quietly (locally the app falls back to embedded PGlite).
  */
 import "dotenv/config";
 import path from "node:path";
@@ -14,7 +14,11 @@ import { seedIfEmpty } from "../src/db/seed";
 async function main() {
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!url) {
-    console.log("[migrate] No DATABASE_URL/POSTGRES_URL set — skipping (embedded PGlite will be used).");
+    console.log(
+      process.env.VERCEL
+        ? "[migrate] No DATABASE_URL/POSTGRES_URL set — skipping. The deployment won't serve data until a database is connected (or DEMO_MODE=1 for an in-memory demo)."
+        : "[migrate] No DATABASE_URL/POSTGRES_URL set — skipping (embedded PGlite will be used).",
+    );
     return;
   }
   // Prefer a direct (non-pooled) connection for DDL when the provider exposes one.

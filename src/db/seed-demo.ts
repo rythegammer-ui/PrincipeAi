@@ -553,6 +553,8 @@ export async function seedDemoData(db: DB): Promise<void> {
       act("purchase", `Purchased ${course.title}`, when, { meta: { amountCents: course.priceCents, course: course.slug } });
       emailOut(`Your receipt — ${course.title}`, "receipt", when + MIN);
       emailOut(`You're in: ${course.title}`, "course_access", when + 2 * MIN);
+      // Deliberately counted although the order is a test order (the app leaves real test orders out of lifetime
+      // value): sample contacts get realistic LTV and deal values. Refunding a sample order leaves its LTV as is.
       lifetimeValueCents += course.priceCents;
       return { orderId, course };
     };

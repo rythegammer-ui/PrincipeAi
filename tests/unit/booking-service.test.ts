@@ -235,7 +235,7 @@ describe("retrying checkout for a held booking", () => {
     const first = await createCheckout({ itemType: "booking", bookingId: booking.id, email: who.email, name: who.name });
     await backdate(booking.id, 20, 10); // 20 minutes in, 10 left
 
-    expect(await prepareCheckoutRetry(booking.id)).toBe(true);
+    expect(await prepareCheckoutRetry(booking.id)).toBe("ok");
     const left = await hold(booking.id);
     expect(left).toBeGreaterThan((PAYMENT_HOLD_MINUTES - 1) * MIN);
     expect(left).toBeLessThanOrEqual(PAYMENT_HOLD_MINUTES * MIN);
@@ -251,7 +251,7 @@ describe("retrying checkout for a held booking", () => {
   it("never stretches a hold past the maximum from when the booking was made", async () => {
     const { booking } = await heldBooking();
     await backdate(booking.id, MAX_PAYMENT_HOLD_MINUTES - 10, 5);
-    expect(await prepareCheckoutRetry(booking.id)).toBe(true);
+    expect(await prepareCheckoutRetry(booking.id)).toBe("ok");
     const left = await hold(booking.id);
     expect(left).toBeLessThanOrEqual(10 * MIN);
     expect(left).toBeGreaterThan(9 * MIN);
@@ -260,12 +260,12 @@ describe("retrying checkout for a held booking", () => {
   it("refuses when the hold has lapsed or the booking isn't awaiting payment", async () => {
     const { booking } = await heldBooking();
     await backdate(booking.id, 40, -1);
-    expect(await prepareCheckoutRetry(booking.id)).toBe(false);
+    expect(await prepareCheckoutRetry(booking.id)).toBe("lapsed");
 
     const free = await meetingType();
     const who = await contact();
     const confirmed = await reserve(free, who.id, new Date(Date.now() + 30 * 24 * HOUR));
-    expect(await prepareCheckoutRetry(confirmed!.id)).toBe(false);
-    expect(await prepareCheckoutRetry("not-a-uuid")).toBe(false);
+    expect(await prepareCheckoutRetry(confirmed!.id)).toBe("lapsed");
+    expect(await prepareCheckoutRetry("not-a-uuid")).toBe("lapsed");
   });
 });

@@ -72,7 +72,7 @@ src/
   lib/*                        see "Core libraries"
 drizzle/                       generated SQL migrations           [foundation — read-only]
 tests/unit/*.test.ts           vitest                             [each feature adds its own]
-tests/e2e/*.spec.ts            playwright                         [integration]
+tests/e2e/*.spec.ts            playwright (helpers.ts, env.ts)    [integration] — see README "End-to-end tests"
 ```
 
 ## Ground rules for feature work
@@ -103,18 +103,18 @@ tests/e2e/*.spec.ts            playwright                         [integration]
 
 | File | Exports | Notes |
 |---|---|---|
-| `db/index.ts` | `getDb()`, `schema`, `dbMode()`, `isDemoMode()` | `const db = await getDb()` inside handlers. Drizzle query builder (`db.select().from(schema.x)…`, `db.insert`, `db.update`, `db.transaction`, `db.execute(sql\`…\`)`) |
-| `auth.ts` | `requireAdmin()`, `assertAdmin()`, `getAdminSession()`, `getStudent()`, `requireStudent(next)`, `upsertStudent(email,name)`, `createLoginToken(email, redirectTo)`, `startStudentSession(user)` | Magic link URL: `absoluteUrl("/auth/verify?token=" + token)` |
+| `db/index.ts` | `getDb()`, `schema`, `dbMode()`, `isDemoMode()` | `const db = await getDb()` inside handlers. Drizzle query builder (`db.select().from(schema.x)…`, `db.insert`, `db.update`, `db.transaction`, `db.execute(sql\`…\`)`). On Vercel without `DATABASE_URL` it refuses to start unless `DEMO_MODE=1` (in-memory demo) |
+| `auth.ts` | `requireAdmin()`, `assertAdmin()`, `getAdminSession()`, `getStudent()`, `requireStudent(next)`, `upsertStudent(email,name)`, `createLoginToken(email, redirectTo)`, `startStudentSession(user)` | Magic link URL: `absoluteUrl("/auth/verify?token=" + token)`. Admin sessions are bound to the current admin credentials (changing `ADMIN_PASSWORD` or `ADMIN_SESSION_VERSION` signs every admin out) |
 | `crm.ts` | **`captureLead(input)`** (the one entry point for every conversion), `upsertContact`, `logActivity`, `advanceStage`, `setStage`, `addTags`, `recomputeScore`, `createTask`, `addLifetimeValue`, `contactForVisitor` | `captureLead` = upsert contact + activity + funnel event + stage + score + automations + owner notification |
 | `tracking.ts` | `trackEvent({name,…})`, `getVisitorContext()`, `FUNNEL_EVENTS`, `CLIENT_EVENTS` | Server-side funnel events. Client: `track(name, props)` from `components/analytics/page-view-tracker.tsx` (only `CLIENT_EVENTS`) |
-| `email.ts` | `sendEmail({to, subject, markdown, kind, contactId, attachments…})`, `notifyOwner`, `fillTemplate`, `defaultTemplateVars`, `markdownToEmailHtml` | Always send Markdown; layout + logging handled for you |
+| `email.ts` | `sendEmail({to, subject, markdown, kind, contactId, attachments…})`, `notifyOwner`, `fillTemplate`, `defaultTemplateVars`, `markdownToEmailHtml`, `escapeMarkdown` (re-exported from `utils.ts`) | Always send Markdown; layout + logging handled for you (`/auth/verify?token=…` links are stored redacted in `email_log`). Escape visitor text with `escapeMarkdown` |
 | `automations.ts` | `triggerAutomations(trigger, contactId)`, `stopAutomations`, `processDueEnrollments()` | Triggers: `lead_magnet`, `quiz_completed`, `call_booked`, `purchase`, `contact_form`, `manual` |
-| `ai.ts` | `aiEnabled()`, `aiText({system, messages, effort, maxTokens})`, `aiStream({…, fallbackText, onComplete})`, `textStreamResponse(stream)`, `AI_MODEL` | Opus 5.5 with server-side refusal fallback. `aiText` returns `null` when AI is unavailable → use your fallback. Effort: `"low"` for chat, `"medium"` for analysis/plans |
+| `ai.ts` | `aiEnabled()`, `aiText({system, messages, effort, maxTokens})`, `aiStream({…, fallbackText, useFallback, onComplete})`, `textStreamResponse(stream)`, `claimPublicAiReply()`, `AI_MODEL` | Opus 5.5 with server-side refusal fallback. `aiText` returns `null` when AI is unavailable → use your fallback. Effort: `"low"` for chat, `"medium"` for analysis/plans. Visitor-triggered replies (chat, tutor) call `claimPublicAiReply()` first: a site-wide daily ceiling (`AI_DAILY_LIMIT`, default 2000) after which they stream the fallback |
 | `settings.ts` | `getSettings()`, `updateSettings(patch)`, `DEFAULT_SETTINGS` | Business tz, notification toggles, assistant name/greeting/instructions, announcement bar |
-| `rate-limit.ts` | `rateLimit(key, limit, windowSec)`, `rateLimitByIp(bucket, limit, windowSec)`, `clientIp()` | |
+| `rate-limit.ts` | `rateLimit(key, limit, windowSec)`, `rateLimitByIp(bucket, limit, windowSec)`, `clientIp()` | `rateLimitByIp` buckets IPv6 clients by their /64 network |
 | `integrations.ts` | `integrations()`, `testCheckoutAllowed()` | Which services are configured |
-| `utils.ts` | `cn`, `formatMoney`, `formatDate`, `formatDateTime`, `timeAgo`, `absoluteUrl`, `safeRedirectPath`, `normalizeEmail`, `isValidEmail`, `firstName`, `slugify`, `truncate`, `pluralize` | |
-| `payments.ts` | `createCheckout(input)`, `fulfillOrder(orderId, payment)` | owned by **courses**; stubs until implemented |
+| `utils.ts` | `cn`, `formatMoney`, `formatDate`, `formatDateTime`, `timeAgo`, `absoluteUrl`, `safeRedirectPath`, `normalizeEmail`, `isValidEmail`, `escapeMarkdown`, `firstName`, `slugify`, `truncate`, `pluralize` | Client-safe. `isValidEmail` rejects quotes, brackets, parentheses, `,:;` and `\` |
+| `payments.ts` | `createCheckout(input)`, `fulfillOrder(orderId, payment)`, `refundOrder`, `failPendingOrder(orderId)`, `checkoutMode()` | owned by **courses**. A demo deployment (in-memory database) refuses a live Stripe key (`checkoutMode()` → `"disabled"`) |
 | `courses.ts` | `enrollInCourse({email,name,courseId,source,orderId})` | owned by **courses** |
 | `booking-service.ts` | `confirmPaidBooking(bookingId)`, `sendDueBookingReminders()`, `releaseExpiredHolds()` | owned by **scheduling**; cron calls the latter two |
 

@@ -103,11 +103,16 @@ export function toModelMessages(history: Pick<ChatMessage, "role" | "content">[]
 
 /**
  * Server-side note for the model about the visitor's latest message: whether an email address in it was actually
- * passed to the team (see `withNoteOnLastUserMessage`). Null when the message has no address.
+ * passed to the team (see `withNoteOnLastUserMessage`). Null when the message has no address. `captureFailed`: the
+ * address was recognized as the visitor's own but couldn't be passed on (rate limit or error), so asking for it
+ * again would not help.
  */
-export function chatEmailNote(input: { emailInMessage: boolean; emailCaptured: boolean }): string | null {
+export function chatEmailNote(input: { emailInMessage: boolean; emailCaptured: boolean; captureFailed?: boolean }): string | null {
   if (input.emailCaptured) {
     return "[System note: the visitor's email address was passed to the team, so you can confirm that someone will follow up by email.]";
+  }
+  if (input.captureFailed) {
+    return "[System note: the visitor's email address could not be passed to the team right now, so do not promise a follow-up and do not ask them to send it again. Briefly tell them, and suggest the contact page (/contact) so someone can get back to them.]";
   }
   if (!input.emailInMessage) return null;
   return '[System note: the email address in this message was not passed to the team, so do not promise a follow-up. If the visitor wants one, ask them to share their own email address (for example "My email is …") or use the "Get a human follow-up" button below the chat.]';

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/db";
 import type { Stage } from "@/db/schema";
 import { SEGMENTS, STAGE_ORDER } from "@/components/admin/crm-utils";
-import { CHECKOUT_FAILED_REASON, HOLD_EXPIRED_REASON } from "@/lib/booking-service";
+import { CHANGED_BEFORE_PAYING_REASON, CHECKOUT_FAILED_REASON, HOLD_EXPIRED_REASON } from "@/lib/booking-service";
 import { getBusinessTimezone } from "@/lib/scheduling";
 
 /**
@@ -258,11 +258,16 @@ export async function getDashboard(range: DashboardRange) {
 
   const inPeriod = (col: AnyPgColumn) => gte(col, start);
   const inPrev = (col: AnyPgColumn) => and(gte(col, prevStart), lt(col, start));
-  // A booked call = any booking except a live unpaid hold or one released because payment never
-  // completed (the cron / failed checkout cancels those). coalesce keeps NULL reasons counted.
+  // A booked call = any booking except a live unpaid hold, or a cancelled one that was never paid for: released
+  // because payment never completed (cron, failed checkout, "choose a different time"), or a paid session's hold
+  // cancelled before payment by the invitee or an admin. coalesce keeps NULL reasons counted.
   const booked = and(
     ne(b.status, "pending_payment"),
-    sql`not (${b.status} = 'cancelled' and coalesce(${b.cancelReason}, '') in (${HOLD_EXPIRED_REASON}, ${CHECKOUT_FAILED_REASON}))`,
+    sql`not (${b.status} = 'cancelled' and (
+      coalesce(${b.cancelReason}, '') in (${HOLD_EXPIRED_REASON}, ${CHECKOUT_FAILED_REASON}, ${CHANGED_BEFORE_PAYING_REASON})
+      or (exists (select 1 from meeting_types bmt where bmt.id = ${b.meetingTypeId} and bmt.price_cents > 0)
+        and not exists (select 1 from orders bo where bo.booking_id = ${b.id} and bo.status in ('paid', 'refunded')))
+    ))`,
   );
   const paid = eq(o.status, "paid");
 

@@ -145,7 +145,8 @@ export function EmailComposer({
           />
           {preview && (
             <div className="min-h-52 rounded-xl border border-zinc-200 bg-white p-4">
-              {body.trim() ? <Markdown className="prose-sm">{body}</Markdown> : <p className="text-sm text-zinc-400">Nothing to preview yet.</p>}
+              {/* Drafts can echo visitor-typed text (and Claude's take on it): show off-site link targets in full. */}
+              {body.trim() ? <Markdown untrusted className="prose-sm">{body}</Markdown> : <p className="text-sm text-zinc-400">Nothing to preview yet.</p>}
             </div>
           )}
           {state.fieldErrors?.body && (

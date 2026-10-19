@@ -1,9 +1,11 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { csvCell, parseDollarsToCents, safeWebsiteUrl, scoreBreakdown, toCsv } from "@/components/admin/crm-utils";
 import { getDb, schema } from "@/db";
+import type { BookingStatus } from "@/db/schema";
 import { seedDemoData } from "@/db/seed-demo";
 import { parseEmailDraft, ruleBasedSummary } from "@/lib/ai-crm";
+import { CHECKOUT_FAILED_REASON, HOLD_EXPIRED_REASON } from "@/lib/booking-service";
 import { advanceStage, logActivity, recomputeScore, setStage, upsertContact } from "@/lib/crm";
 import {
   contactFacets,
@@ -209,5 +211,44 @@ describe("demo seed + CRM queries", () => {
     expect(c360?.eventSummary?.total).toBeGreaterThanOrEqual(0);
     const brief = ruleBasedSummary(c360!);
     expect(brief).toContain("**Next best action**");
+  });
+
+  it("counts booked calls without unpaid or abandoned payment holds", async () => {
+    const db = await getDb();
+    const [meetingType] = await db.select({ id: schema.meetingTypes.id }).from(schema.meetingTypes).limit(1);
+    const [contact] = await db.select({ id: schema.contacts.id }).from(schema.contacts).limit(1);
+    const before = await getDashboard(7);
+    const start = new Date(Date.now() + 3 * 86_400_000);
+    const end = new Date(start.getTime() + 30 * 60_000);
+    const row = (status: BookingStatus, cancelReason: string | null = null) => ({
+      meetingTypeId: meetingType.id,
+      contactId: contact.id,
+      startAt: start,
+      endAt: end,
+      timezone: "UTC",
+      status,
+      cancelReason,
+      cancelledAt: status === "cancelled" ? new Date() : null,
+    });
+    const inserted = await db
+      .insert(schema.bookings)
+      .values([
+        row("confirmed"),
+        row("cancelled"), // cancelled by the invitee / admin with no reason → still a booked call
+        row("cancelled", "Schedule conflict"),
+        row("pending_payment"),
+        row("cancelled", HOLD_EXPIRED_REASON),
+        row("cancelled", CHECKOUT_FAILED_REASON),
+      ])
+      .returning({ id: schema.bookings.id });
+    try {
+      const after = await getDashboard(7);
+      expect(after.kpis.calls.value - before.kpis.calls.value).toBe(3);
+      const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+      expect(sum(after.kpis.calls.spark) - sum(before.kpis.calls.spark)).toBe(3);
+      expect(after.kpis.calls.prev).toBe(before.kpis.calls.prev);
+    } finally {
+      await db.delete(schema.bookings).where(inArray(schema.bookings.id, inserted.map((r) => r.id)));
+    }
   });
 });

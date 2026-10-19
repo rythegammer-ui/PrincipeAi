@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gt, gte, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
-import { CalendarCheck2, CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, ExternalLink, List, UserX, Video } from "lucide-react";
+import { CalendarCheck2, CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, ExternalLink, List, Mail, UserX, Video } from "lucide-react";
 import { DateTime } from "luxon";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -297,6 +297,15 @@ function BookingRow({ row, tab, timezone, now }: { row: Row; tab: Tab; timezone:
         {meetingLink && tab === "upcoming" && (
           <a href={meetingLink} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "secondary", size: "sm", className: "h-9 sm:h-8" })}>
             <Video aria-hidden /> Meeting link
+          </a>
+        )}
+        {!meetingLink && tab === "upcoming" && booking.status === "confirmed" && (
+          // No link on the booking or its type: the invitee was told "we'll email your meeting link".
+          <a
+            href={`mailto:${contact.email}?subject=${encodeURIComponent(`Your meeting link: ${meetingType.name}, ${biz.shortDateLabel}`)}`}
+            className={buttonVariants({ variant: "outline", size: "sm", className: "h-9 border-amber-300 text-amber-800 hover:bg-amber-50 sm:h-8" })}
+          >
+            <Mail aria-hidden /> Email meeting link
           </a>
         )}
         <a

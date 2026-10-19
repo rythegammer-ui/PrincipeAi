@@ -8,14 +8,17 @@ import { meetingColor } from "./meeting-colors";
 
 type Props = { meetingType: Pick<MeetingType, "slug" | "name" | "description" | "durationMin" | "priceCents" | "locationLabel" | "color">; className?: string };
 
-/** Card on /book. The whole card is one link (the title is the accessible name). */
+/**
+ * Card on /book. The whole card is one link (the title is the accessible name). The focus ring sits
+ * on the card itself: an outline on the stretched link would be clipped by overflow-hidden.
+ */
 export function MeetingTypeCard({ meetingType: mt, className }: Props) {
   const color = meetingColor(mt.color);
   const free = mt.priceCents === 0;
   return (
     <article
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift focus-within:shadow-lift",
+        "group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift focus-within:shadow-lift focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2",
         className,
       )}
     >
@@ -23,7 +26,7 @@ export function MeetingTypeCard({ meetingType: mt, className }: Props) {
       <div className="flex flex-1 flex-col p-6">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg leading-snug font-semibold tracking-tight text-zinc-900">
-            <Link href={`/book/${mt.slug}`} className="outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-brand-500">
+            <Link href={`/book/${mt.slug}`} className="outline-none after:absolute after:inset-0 after:rounded-2xl">
               {mt.name}
             </Link>
           </h2>

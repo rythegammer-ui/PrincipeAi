@@ -85,10 +85,15 @@ export async function requireAdmin(): Promise<SessionPayload> {
   return session;
 }
 
-/** Use at the top of EVERY admin server action / admin API route: throws when not signed in. */
+/**
+ * Use at the top of EVERY admin server action / admin API route. When not signed in (expired
+ * session, signed out in another tab) it redirects to the login page: inside a server action
+ * that becomes a client-side navigation instead of an error screen. Route handlers that want a
+ * 401 instead wrap it in try/catch (`redirect()` throws).
+ */
 export async function assertAdmin(): Promise<SessionPayload> {
   const session = await getAdminSession();
-  if (!session) throw new Error("Unauthorized");
+  if (!session) redirect("/admin/login");
   return session;
 }
 

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PageHeader } from "@/components/ui/misc";
 import { getDb, schema } from "@/db";
 import { isUuid } from "@/lib/booking-service";
+import { isBuiltInMeetingSlug } from "@/lib/scheduling";
 
 export const metadata: Metadata = { title: "Edit meeting type" };
 
@@ -36,6 +37,7 @@ export default async function EditMeetingTypePage({ params }: { params: Promise<
         }
       />
       <MeetingTypeForm
+        slugLocked={isBuiltInMeetingSlug(mt.slug)}
         initial={{
           id: mt.id,
           name: mt.name,

@@ -127,7 +127,7 @@ export default async function AdminCoursesPage({ searchParams }: { searchParams:
                   </TD>
                   <TD className="whitespace-nowrap tabular-nums">
                     {course.priceCents > 0 ? formatMoney(course.priceCents) : "Free"}
-                    {course.compareAtCents ? <span className="ml-1.5 text-xs text-zinc-400 line-through">{formatMoney(course.compareAtCents)}</span> : null}
+                    {course.compareAtCents ? <span className="ml-1.5 text-xs text-zinc-500 line-through">{formatMoney(course.compareAtCents)}</span> : null}
                   </TD>
                   <TD>
                     <form action={toggleCoursePublishedAction}>
@@ -137,7 +137,8 @@ export default async function AdminCoursesPage({ searchParams }: { searchParams:
                         size="sm"
                         className="-ml-2 gap-1.5 px-2"
                         title={course.published ? "Click to unpublish" : "Click to publish"}
-                        aria-label={`${course.published ? "Unpublish" : "Publish"} ${course.title}`}
+                        // Name starts with the visible text so voice control ("click Published") finds it.
+                        aria-label={`${course.published ? "Published" : "Draft"} – click to ${course.published ? "unpublish" : "publish"} ${course.title}`}
                       >
                         <span className={`size-2 rounded-full ${course.published ? "bg-emerald-500" : "bg-zinc-300"}`} aria-hidden />
                         {course.published ? "Published" : "Draft"}
@@ -148,7 +149,7 @@ export default async function AdminCoursesPage({ searchParams }: { searchParams:
                   <TD className="text-right tabular-nums">{students}</TD>
                   <TD className="text-right whitespace-nowrap tabular-nums">
                     {formatMoney(revenue)}
-                    {testRevenue > 0 && <span className="block text-xs text-zinc-400">+{formatMoney(testRevenue)} test</span>}
+                    {testRevenue > 0 && <span className="block text-xs text-zinc-500">+{formatMoney(testRevenue)} test</span>}
                   </TD>
                   <TD>
                     <div className="flex justify-end gap-1">

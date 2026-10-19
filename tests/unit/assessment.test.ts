@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  answersSummary,
   type AssessmentAnswers,
   buildFallbackPlan,
   buildOwnerNotification,
@@ -23,6 +24,7 @@ import {
   recommend,
   resultFromStored,
   serializeAnswers,
+  shouldStorePlan,
   TIERS,
   tierForScore,
   TIME_DRAINS,
@@ -351,6 +353,35 @@ describe("fallback plan", () => {
   });
 });
 
+describe("storing the plan", () => {
+  const plan = buildFallbackPlan(base, computeAssessment(base));
+  const ai = { source: "ai", refused: false, interrupted: false } as const;
+  const fallback = { source: "fallback", refused: false, interrupted: false } as const;
+
+  it("stores a complete Claude-written plan", () => {
+    expect(shouldStorePlan(plan, ai, true)).toBe(true);
+  });
+
+  it("stores the deterministic plan when AI isn't configured", () => {
+    expect(shouldStorePlan(plan, fallback, false)).toBe(true);
+  });
+
+  it("doesn't store the fallback streamed because Claude failed, so the next visit retries", () => {
+    expect(shouldStorePlan(plan, fallback, true)).toBe(false);
+  });
+
+  it("stores the fallback when the model declined (a retry won't change that)", () => {
+    expect(shouldStorePlan(plan, { ...fallback, refused: true }, true)).toBe(true);
+  });
+
+  it("never stores interrupted, declined part-way or too-short plans", () => {
+    expect(shouldStorePlan(plan, { ...ai, interrupted: true }, true)).toBe(false);
+    expect(shouldStorePlan(plan, { ...fallback, interrupted: true }, false)).toBe(false);
+    expect(shouldStorePlan(plan, { ...ai, refused: true }, true)).toBe(false);
+    expect(shouldStorePlan("## Your AI snapshot\n\nToo short.", ai, true)).toBe(false);
+  });
+});
+
 describe("summaries", () => {
   it("describes the answers the visitor saw in order", () => {
     const rows = describeAnswers(base);
@@ -360,6 +391,14 @@ describe("summaries", () => {
     const life = describeAnswers(answers({ role: "individual", focus: "life", industry: undefined, teamSize: "solo" }));
     expect(life.map(([label]) => label)).not.toContain("Industry");
     expect(life.map(([label]) => label)).not.toContain("Team size");
+  });
+
+  it("summarizes the answers as plain text for the CRM", () => {
+    const summary = answersSummary(base);
+    const lines = summary.split("\n");
+    expect(lines).toHaveLength(describeAnswers(base).length);
+    expect(lines[0]).toBe("Role: Business owner or founder");
+    expect(summary).not.toMatch(/\*\*|^- /m);
   });
 
   it("strips Markdown and HTML from user-supplied text", () => {

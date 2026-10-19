@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { cancelBooking, getBookingDetails, rescheduleBooking } from "@/lib/booking-service";
+import { cancelBooking, getBookingDetails, isHoldExpired, prepareCheckoutRetry, rescheduleBooking } from "@/lib/booking-service";
+import { CheckoutError, createCheckout } from "@/lib/payments";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { isValidTimezone } from "@/lib/scheduling";
 
@@ -15,6 +16,8 @@ const CancelInput = z.object({
   token,
   reason: z.string().trim().max(1000, "Please keep the reason under 1,000 characters."),
 });
+
+const TokenInput = z.object({ token });
 
 const RescheduleInput = z.object({
   token,
@@ -62,4 +65,61 @@ export async function rescheduleBookingAction(_prev: ManageBookingState, formDat
 
   revalidatePath(`/booking/${parsed.data.token}`);
   redirect(`/booking/${parsed.data.token}?updated=rescheduled`);
+}
+
+const HOLD_LAPSED = "The hold on this time has expired, so it's been released. Please choose a new time.";
+
+/**
+ * Sends the invitee back to checkout for a booking whose payment hold is still live (they left
+ * Stripe Checkout or the test checkout without paying). Retires the earlier checkout first.
+ */
+export async function resumeCheckoutAction(_prev: ManageBookingState, formData: FormData): Promise<ManageBookingState> {
+  const parsed = TokenInput.safeParse({ token: str(formData, "token") });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Something went wrong." };
+  const limit = await rateLimitByIp("booking-checkout", 10, 10 * 60);
+  if (!limit.ok) return { error: "Too many attempts from your network. Please wait a few minutes and try again." };
+
+  const details = await getBookingDetails({ token: parsed.data.token });
+  if (!details) return { error: "We couldn't find that booking." };
+  const { booking, contact } = details;
+  if (booking.status === "confirmed") return { error: "This booking is already paid for and confirmed. Refresh the page to see the details." };
+  if (booking.status !== "pending_payment") return { error: "This booking is no longer awaiting payment. Refresh the page to see its status." };
+  if (isHoldExpired(booking) || !(await prepareCheckoutRetry(booking.id))) return { error: HOLD_LAPSED };
+
+  let url: string;
+  try {
+    ({ url } = await createCheckout({ itemType: "booking", bookingId: booking.id, email: contact.email, name: contact.name }));
+  } catch (err) {
+    if (err instanceof CheckoutError) return { error: err.message };
+    console.error("[booking] checkout could not be restarted", booking.id, err);
+    return { error: "We couldn't start the payment step just now. Please try again in a few minutes." };
+  }
+  redirect(url);
+}
+
+/**
+ * Releases the invitee's own unpaid hold and sends them back to the booking page, so the time they
+ * held is offered again and they don't end up holding two slots.
+ */
+export async function changeHeldTimeAction(_prev: ManageBookingState, formData: FormData): Promise<ManageBookingState> {
+  const parsed = TokenInput.safeParse({ token: str(formData, "token") });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Something went wrong." };
+  if (await limited()) return { error: "Too many changes from your network. Please wait a few minutes and try again." };
+
+  const details = await getBookingDetails({ token: parsed.data.token });
+  if (!details) return { error: "We couldn't find that booking." };
+  const { booking, meetingType } = details;
+  if (booking.status !== "pending_payment") return { error: "This booking is no longer awaiting payment. Refresh the page to see its status." };
+  if (!isHoldExpired(booking)) {
+    const result = await cancelBooking(booking.id, { reason: "Chose a different time before paying", by: "invitee" });
+    if (!result.ok) return { error: result.error };
+  }
+
+  revalidatePath(`/booking/${parsed.data.token}`);
+  redirect(meetingType.active ? `/book/${meetingType.slug}` : "/book");
+}
+
+/** The pending-payment form has two submit buttons: "Complete payment" (intent=pay) and "Choose a different time" (intent=change). */
+export async function pendingPaymentAction(prev: ManageBookingState, formData: FormData): Promise<ManageBookingState> {
+  return str(formData, "intent") === "change" ? changeHeldTimeAction(prev, formData) : resumeCheckoutAction(prev, formData);
 }

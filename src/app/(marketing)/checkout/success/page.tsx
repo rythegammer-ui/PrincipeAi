@@ -1,13 +1,14 @@
-import { ArrowRight, CalendarCheck, CheckCircle2, Clock, Mail, PartyPopper } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarCheck, CalendarX, CheckCircle2, Clock, Mail, PartyPopper } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { z } from "zod";
 import { ButtonLink } from "@/components/ui/button";
 import { getStudent } from "@/lib/auth";
+import { PAID_UNAVAILABLE_REASON } from "@/lib/booking-service";
 import { fulfillOrder, getOrderDetails, isStripeSessionId, withinClaimWindow, type OrderDetails } from "@/lib/payments";
 import { getStripe, paymentIntentId } from "@/lib/stripe";
 import { formatDateTime } from "@/lib/utils";
-import { ClaimAccessForm } from "../checkout-forms";
+import { AccessLinkForm } from "../checkout-forms";
 import { OrderSummary } from "../order-summary";
 
 export const metadata: Metadata = { title: "Thank you", robots: { index: false, follow: false } };
@@ -17,7 +18,8 @@ type Search = { order?: string; session_id?: string };
 /**
  * Stripe redirects here after payment. When the session id matches the order we trust the URL as
  * proof of purchase: we confirm payment with Stripe (fulfilling now if the webhook hasn't arrived yet,
- * e.g. in local dev) and let the buyer go straight into their course.
+ * e.g. in local dev) and show the order. It is NOT proof of identity — the buyer typed the email at
+ * checkout — so course access always goes through the magic link emailed to that address.
  */
 async function resolve(search: Search): Promise<{ details: OrderDetails | null; proof: boolean; processing: boolean }> {
   const orderId = search.order;
@@ -36,7 +38,11 @@ async function resolve(search: Search): Promise<{ details: OrderDetails | null; 
         const session = await stripe.checkout.sessions.retrieve(sessionId);
         const sameOrder = (session.metadata?.orderId ?? session.client_reference_id) === details.order.id;
         if (sameOrder && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
-          await fulfillOrder(details.order.id, { stripePaymentIntentId: paymentIntentId(session.payment_intent) });
+          await fulfillOrder(details.order.id, {
+            stripePaymentIntentId: paymentIntentId(session.payment_intent),
+            isTest: session.livemode === false,
+            amountPaidCents: session.amount_total,
+          });
           details = (await getOrderDetails(orderId)) ?? details;
         } else if (sameOrder && session.status === "complete") {
           processing = true; // delayed payment method (e.g. bank debit) still clearing
@@ -103,8 +109,29 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
     );
   }
 
-  if (order.status !== "paid") {
+  // A paid session whose booking is still awaiting payment is mid-confirmation: show the same "confirming" view.
+  if (order.status !== "paid" || (order.itemType === "booking" && booking?.status === "pending_payment")) {
     if (!trusted) return <CheckEmail loginHref={loginHref} />;
+    if ((order.status === "failed" || order.status === "expired") && !processing) {
+      const retryHref = course ? `/courses/${course.slug}` : "/book";
+      return (
+        <Shell icon={<AlertTriangle className="size-6" aria-hidden />} title="Your payment didn't go through">
+          <p className="mx-auto mt-3 max-w-md text-zinc-600">
+            We weren&apos;t able to collect the payment for this order, so it wasn&apos;t completed. You can start again and choose a different
+            payment method.
+          </p>
+          <div className="mt-6 text-left">
+            <OrderSummary details={details} showBuyer={false} />
+          </div>
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <ButtonLink href={retryHref}>{course ? "Try again" : "Pick a time again"}</ButtonLink>
+            <ButtonLink href="/contact" variant="outline">
+              Contact us
+            </ButtonLink>
+          </div>
+        </Shell>
+      );
+    }
     return (
       <Shell icon={<Clock className="size-6" aria-hidden />} title={processing ? "Your payment is processing" : "Confirming your payment…"}>
         <p className="mx-auto mt-3 max-w-md text-zinc-600">
@@ -124,13 +151,15 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
 
   if (order.itemType === "course" && course) {
     if (!trusted) return <CheckEmail loginHref={loginHref} />;
-    const canClaim = !isBuyer && proof && withinClaimWindow(order);
+    // The URL proves the purchase, not the email address: the buyer signs in through the emailed link.
+    const canResend = !isBuyer && proof && withinClaimWindow(order);
     return (
       <Shell icon={<PartyPopper className="size-6" aria-hidden />} title="You're in! Welcome aboard.">
         <p className="mx-auto mt-3 max-w-md text-zinc-600">
           Your purchase of <strong className="text-zinc-900">{course.title}</strong> is complete
-          {order.isTest ? " (test mode — no real payment was taken)" : ""}. We&apos;ve emailed your receipt and a sign-in link to{" "}
-          <strong className="text-zinc-900">{order.email}</strong>.
+          {order.isTest ? " (test mode — no real payment was taken)" : ""}. We&apos;ve emailed your receipt and a one-click sign-in link to{" "}
+          <strong className="text-zinc-900">{order.email}</strong>
+          {isBuyer ? "." : " — open it to start learning."}
         </p>
         <div className="mt-6 text-left">
           <OrderSummary details={details} showBuyer={false} />
@@ -140,8 +169,8 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
             <ButtonLink href={learnHref} size="lg" className="w-full sm:w-auto">
               Start learning <ArrowRight aria-hidden />
             </ButtonLink>
-          ) : canClaim && search.session_id ? (
-            <ClaimAccessForm orderId={order.id} sessionId={search.session_id} loginHref={loginHref} />
+          ) : canResend && search.session_id ? (
+            <AccessLinkForm orderId={order.id} sessionId={search.session_id} loginHref={loginHref} />
           ) : (
             <ButtonLink href={loginHref} size="lg" className="w-full sm:w-auto">
               Sign in to start learning <ArrowRight aria-hidden />
@@ -155,6 +184,29 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
 
   if (order.itemType === "booking" && booking) {
     if (!proof) return <CheckEmail />;
+    if (booking.status === "cancelled") {
+      // Paid after the hold lapsed and someone else took the time — or the booking was cancelled since.
+      const lostSlot = Boolean(booking.cancelReason?.startsWith(PAID_UNAVAILABLE_REASON));
+      return (
+        <Shell icon={<CalendarX className="size-6" aria-hidden />} title={lostSlot ? "Payment received — but this time is no longer available" : "This session was cancelled"}>
+          <p className="mx-auto mt-3 max-w-md text-zinc-600">
+            {lostSlot
+              ? "Your payment arrived after the time you picked had been released, and it's no longer available. We'll contact you shortly to find a new time or refund you in full."
+              : "This booking has been cancelled. If you have any questions about it or your payment, we're happy to help."}
+            {order.isTest ? " (Test mode — no real payment was taken.)" : ""}
+          </p>
+          <div className="mt-6 text-left">
+            <OrderSummary details={details} showBuyer={false} />
+          </div>
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <ButtonLink href="/contact">Contact us</ButtonLink>
+            <ButtonLink href={`/booking/${booking.manageToken}`} variant="outline">
+              View your booking
+            </ButtonLink>
+          </div>
+        </Shell>
+      );
+    }
     return (
       <Shell icon={<CalendarCheck className="size-6" aria-hidden />} title="Your session is confirmed">
         <p className="mx-auto mt-3 max-w-md text-zinc-600">

@@ -3,12 +3,14 @@ import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { LocalDate } from "@/components/learn/local-date";
 import { PrintButton } from "@/components/learn/print-button";
 import { Logo } from "@/components/ui/misc";
 import { site } from "@/config/site";
 import { getDb, schema } from "@/db";
 import { requireStudent } from "@/lib/auth";
 import { courseProgress, getCourseWithCurriculum, isEnrolled } from "@/lib/courses";
+import { getBusinessTimezone } from "@/lib/scheduling";
 import { formatDate } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Certificate of completion" };
@@ -30,6 +32,8 @@ export default async function CertificatePage({ params }: { params: Promise<{ co
     .innerJoin(schema.lessons, eq(schema.lessons.id, schema.lessonProgress.lessonId))
     .where(and(eq(schema.lessonProgress.userId, student.id), eq(schema.lessons.courseId, course.id)));
   const recipient = student.name?.trim() || student.email;
+  const completedOn = completedAt ?? new Date();
+  const tz = await getBusinessTimezone();
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12 print:max-w-none print:p-0">
@@ -57,7 +61,7 @@ export default async function CertificatePage({ params }: { params: Promise<{ co
             <h1 className="mx-auto mt-3 max-w-2xl text-2xl font-semibold tracking-tight text-balance text-brand-800 sm:text-3xl">{course.title}</h1>
             <div className="mx-auto mt-12 grid grid-cols-1 max-w-lg gap-8 text-sm sm:grid-cols-2">
               <div>
-                <p className="border-t border-zinc-300 pt-2 font-medium text-zinc-900">{formatDate(completedAt ?? new Date(), { dateStyle: "long" })}</p>
+                <p className="border-t border-zinc-300 pt-2 font-medium text-zinc-900"><LocalDate iso={completedOn.toISOString()} fallback={formatDate(completedOn, { dateStyle: "long" }, tz)} /></p>
                 <p className="text-xs text-zinc-500">Date completed</p>
               </div>
               <div>

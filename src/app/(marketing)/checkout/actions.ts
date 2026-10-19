@@ -4,19 +4,22 @@ import { and, eq, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
-import { startStudentSession, upsertStudent } from "@/lib/auth";
-import { isEnrolled } from "@/lib/courses";
-import { logActivity } from "@/lib/crm";
+import { emailHasCourse, sendCourseAccessEmail } from "@/lib/courses";
 import { testCheckoutAllowed } from "@/lib/integrations";
 import { bookingHoldExpired, fulfillOrder, getOrderDetails, newTestSessionId, withinClaimWindow } from "@/lib/payments";
-import { rateLimitByIp } from "@/lib/rate-limit";
+import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
+import { isDemoMode } from "@/lib/runtime-mode";
 
 export type CheckoutActionState = { error?: string };
+export type AccessLinkState = { error?: string; sent?: boolean; email?: string; devLink?: string };
 
 const orderSchema = z.object({ orderId: z.uuid() });
 const claimSchema = z.object({ orderId: z.uuid(), sessionId: z.string().min(8).max(255) });
 
-/** Built-in test checkout (no Stripe keys): marks the order paid, delivers it and signs the buyer in. */
+/**
+ * Built-in test checkout (no Stripe keys): marks the order paid and delivers it. The buyer gets in through the
+ * emailed magic link like everyone else — whoever completes a checkout only chose the email, they don't own it.
+ */
 export async function completeTestPurchaseAction(_prev: CheckoutActionState, formData: FormData): Promise<CheckoutActionState> {
   if (!testCheckoutAllowed()) return { error: "Test checkout is turned off on this site." };
   const parsed = orderSchema.safeParse({ orderId: formData.get("orderId") });
@@ -52,16 +55,15 @@ export async function completeTestPurchaseAction(_prev: CheckoutActionState, for
     return { error: "We couldn't complete this purchase. Please try again." };
   }
 
-  // Same browser just paid → sign them straight in to their new course.
-  if (order.itemType === "course") {
-    const user = await upsertStudent(order.email, order.name);
-    await startStudentSession(user);
-  }
   redirect(`/checkout/success?order=${order.id}&session_id=${encodeURIComponent(sessionId)}`);
 }
 
-/** "Start learning" on the success page: the checkout session id in the URL proves the purchase. */
-export async function claimCourseAccessAction(_prev: CheckoutActionState, formData: FormData): Promise<CheckoutActionState> {
+/**
+ * "Email me a sign-in link" on the success page. The checkout session id in the URL proves that a purchase
+ * happened — not that this browser owns the email address typed at checkout — so this never signs anyone in.
+ * It emails a fresh one-time link to the order's address, exactly like the one enrollment already sent.
+ */
+export async function emailCourseAccessAction(_prev: AccessLinkState, formData: FormData): Promise<AccessLinkState> {
   const parsed = claimSchema.safeParse({ orderId: formData.get("orderId"), sessionId: formData.get("sessionId") });
   if (!parsed.success) return { error: "This link is invalid. Please sign in with your email instead." };
   const limit = await rateLimitByIp("claim-access", 20, 10 * 60);
@@ -79,11 +81,14 @@ export async function claimCourseAccessAction(_prev: CheckoutActionState, formDa
     withinClaimWindow(order);
   if (!valid) return { error: "For your security this link has expired. Sign in with your email and we'll send you a fresh link." };
 
-  const user = await upsertStudent(order.email, order.name);
-  if (!(await isEnrolled(user.id, course.id))) {
+  const emailLimit = await rateLimit(`claim-access:${order.email}`, 3, 15 * 60);
+  if (!emailLimit.ok) return { error: "We've just sent you a link — please check your inbox and spam folder, or try again in a few minutes." };
+  if (!(await emailHasCourse(order.email, course.id))) {
     return { error: "We couldn't find access for this order. Please contact us and we'll sort it out right away." };
   }
-  await startStudentSession(user);
-  if (user.contactId) await logActivity(user.contactId, "login", "Signed in to the student portal after purchase").catch(() => {});
-  redirect(`/learn/${course.slug}`);
+
+  const link = await sendCourseAccessEmail({ email: order.email, name: order.name, course, contactId: order.contactId });
+  // Same rule as /login: without an email provider (local dev or the demo), show the link so the flow can be tried.
+  const showDevLink = !process.env.RESEND_API_KEY && (process.env.NODE_ENV !== "production" || isDemoMode());
+  return { sent: true, email: order.email, devLink: showDevLink ? link : undefined };
 }

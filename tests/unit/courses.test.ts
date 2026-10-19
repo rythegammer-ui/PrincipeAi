@@ -4,7 +4,9 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { getDb, schema } from "@/db";
 import { formatDuration, savingsPercent } from "@/components/courses/course-utils";
 import { emailHasCourse, firstIncomplete, getCourseWithCurriculum } from "@/lib/courses";
-import { checkoutMode, createCheckout, fulfillOrder, refundOrder, withinClaimWindow } from "@/lib/payments";
+import { HOLD_EXPIRED_REASON, PAID_UNAVAILABLE_REASON } from "@/lib/booking-service";
+import { upsertContact } from "@/lib/crm";
+import { checkoutMode, createCheckout, formatWithZone, fulfillOrder, refundOrder, withinClaimWindow } from "@/lib/payments";
 import { parseVideoUrl, toEmbedUrl } from "@/lib/video";
 
 describe("video URLs", () => {
@@ -77,7 +79,8 @@ describe("checkout + fulfilment", () => {
     if (!data) throw new Error("seed course missing");
     courseId = data.course.id;
     priceCents = data.course.priceCents;
-  });
+    // The first query boots the embedded database (migrate + seed), which can be slow while other suites run.
+  }, 60_000);
 
   async function pendingOrder(email: string) {
     const db = await getDb();
@@ -173,5 +176,128 @@ describe("checkout + fulfilment", () => {
     // A refunded order can't be fulfilled again.
     await fulfillOrder(order.id, { isTest: true });
     expect(await emailHasCourse(email, courseId)).toBe(false);
+  });
+});
+
+describe("purchase notifications and paid-session receipts", () => {
+  let meetingTypeId: string;
+  let sessionPrice: number;
+
+  beforeAll(async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const db = await getDb();
+    const [mt] = await db.select().from(schema.meetingTypes).where(eq(schema.meetingTypes.slug, "ai-coaching-session"));
+    meetingTypeId = mt.id;
+    sessionPrice = mt.priceCents;
+  });
+
+  it("labels session times with their zone", () => {
+    const at = new Date("2026-10-20T18:30:00Z");
+    expect(formatWithZone(at, "Asia/Kolkata")).toMatch(/^Oct 21, 2026, 12:00\sAM GMT\+5:30$/);
+    expect(formatWithZone(at, "America/New_York")).toMatch(/^Oct 20, 2026, 2:30\sPM EDT$/);
+  });
+
+  it("escapes buyer-supplied text in the owner's purchase alert", async () => {
+    const data = await getCourseWithCurriculum("ai-essentials");
+    if (!data) throw new Error("seed course missing");
+    const db = await getDb();
+    const email = `phish-${randomUUID()}@example.com`;
+    const [order] = await db
+      .insert(schema.orders)
+      .values({
+        email,
+        name: "Buck [Verify payment](https://evil.example.com/pay) https://evil.example.com",
+        itemType: "course",
+        courseId: data.course.id,
+        description: data.course.title,
+        amountCents: data.course.priceCents,
+      })
+      .returning();
+    await fulfillOrder(order.id, { isTest: true });
+    const alerts = (await db.select().from(schema.emailLog).where(eq(schema.emailLog.kind, "notification"))).filter((e) => e.html.includes(order.id));
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].html).not.toContain("evil.example.com/pay\"");
+    expect(alerts[0].html).not.toMatch(/<a [^>]*evil\.example\.com/);
+    expect(alerts[0].html).toContain("Verify payment");
+  });
+
+  async function paidSessionOrder(opts: { startAt: Date; status: "pending_payment" | "cancelled"; cancelReason?: string; timezone?: string }) {
+    const db = await getDb();
+    const email = `session-${randomUUID()}@example.com`;
+    const { contact } = await upsertContact({ email, name: "Session Buyer", source: "booking" });
+    const [booking] = await db
+      .insert(schema.bookings)
+      .values({
+        meetingTypeId,
+        contactId: contact.id,
+        startAt: opts.startAt,
+        endAt: new Date(opts.startAt.getTime() + 60 * 60_000),
+        timezone: opts.timezone ?? "America/New_York",
+        status: opts.status,
+        cancelReason: opts.cancelReason ?? null,
+        cancelledAt: opts.status === "cancelled" ? new Date() : null,
+        holdExpiresAt: opts.status === "pending_payment" ? new Date(Date.now() + 30 * 60_000) : null,
+      })
+      .returning();
+    return { email, contact, booking };
+  }
+
+  it("confirms a paid session in the receipt and shows the owner the time in business hours", async () => {
+    const startAt = new Date(Date.now() + 40 * 86_400_000);
+    startAt.setUTCHours(15, 0, 0, 0);
+    const { email, contact, booking } = await paidSessionOrder({ startAt, status: "pending_payment", timezone: "Asia/Kolkata" });
+
+    // createCheckout (test mode) stores a zone-labelled description, since the owner reads it too.
+    const { orderId } = await createCheckout({ itemType: "booking", bookingId: booking.id, email, name: "Session Buyer" });
+    const db = await getDb();
+    const [order] = await db.select().from(schema.orders).where(eq(schema.orders.id, orderId));
+    expect(order.description).toContain(formatWithZone(startAt, "Asia/Kolkata"));
+    expect(order.contactId).toBe(contact.id);
+
+    await fulfillOrder(orderId, { isTest: true });
+    const [after] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, booking.id));
+    expect(after.status).toBe("confirmed");
+    const [receipt] = (await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, email))).filter((e) => e.kind === "receipt");
+    expect(receipt.html).toContain("Your session is confirmed");
+    const [alert] = (await db.select().from(schema.emailLog).where(eq(schema.emailLog.kind, "notification"))).filter((e) => e.html.includes(orderId));
+    expect(alert.html).toContain("Session:");
+  });
+
+  it("doesn't tell the buyer a session is confirmed when the time was taken before payment arrived", async () => {
+    const startAt = new Date(Date.now() + 50 * 86_400_000);
+    startAt.setUTCHours(15, 0, 0, 0);
+    // The hold lapsed (released) and someone else booked the same time.
+    const lapsed = await paidSessionOrder({ startAt, status: "cancelled", cancelReason: HOLD_EXPIRED_REASON });
+    const taker = await paidSessionOrder({ startAt, status: "pending_payment" });
+    const db = await getDb();
+    await db.update(schema.bookings).set({ status: "confirmed", holdExpiresAt: null }).where(eq(schema.bookings.id, taker.booking.id));
+
+    const [order] = await db
+      .insert(schema.orders)
+      .values({
+        email: lapsed.email,
+        name: "Session Buyer",
+        contactId: lapsed.contact.id,
+        itemType: "booking",
+        bookingId: lapsed.booking.id,
+        description: "1:1 AI Coaching Session",
+        amountCents: sessionPrice,
+        status: "expired",
+      })
+      .returning();
+    await fulfillOrder(order.id, { isTest: true });
+
+    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, lapsed.booking.id));
+    expect(booking.status).toBe("cancelled");
+    expect(booking.cancelReason?.startsWith(PAID_UNAVAILABLE_REASON)).toBe(true);
+    const [receipt] = (await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, lapsed.email))).filter((e) => e.kind === "receipt");
+    expect(receipt.html).not.toContain("Your session is confirmed");
+    expect(receipt.html).toContain("isn&#39;t booked yet");
+
+    // A duplicate delivery doesn't re-process it (no second owner alert, no second receipt).
+    await fulfillOrder(order.id, { isTest: true });
+    const receipts = (await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, lapsed.email))).filter((e) => e.kind === "receipt");
+    expect(receipts).toHaveLength(1);
   });
 });

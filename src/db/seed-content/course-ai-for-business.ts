@@ -2175,7 +2175,6 @@ Everything is tool-agnostic. It works with Claude, ChatGPT, Gemini or Microsoft 
   audience: "business",
   level: "Intermediate",
   priceCents: 29700,
-  compareAtCents: 49700,
   coverEmoji: "🚀",
   featured: true,
   outcomes: [

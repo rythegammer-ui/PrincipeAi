@@ -26,6 +26,15 @@ export function markdownToEmailHtml(markdown: string): string {
   return safeMarked.parse(markdown, { async: false }) as string;
 }
 
+/**
+ * Escapes visitor-supplied text before it is interpolated into Markdown that will be emailed:
+ * Markdown/HTML control characters, plus `.`, `:` and `@` so bare URLs, `www.` hosts and email
+ * addresses can't become GFM autolinks. Renders as the same visible text.
+ */
+export function escapeMarkdown(text: string): string {
+  return text.replace(/([\\`*_{}[\]()<>#+!|~.:@])/g, "\\$1").replace(/\n{3,}/g, "\n\n");
+}
+
 export type TemplateVars = Record<string, string | number | null | undefined>;
 
 /** Replaces {{placeholders}}. Unknown placeholders are removed. Values are HTML-escaped when `escape` is true. */
@@ -100,8 +109,10 @@ export type SendEmailInput = {
  */
 export async function sendEmail(input: SendEmailInput): Promise<{ status: EmailStatus; id?: string }> {
   const isMarketing = MARKETING_KINDS.has(input.kind);
-  const unsubscribeUrl =
-    input.unsubscribeToken && isMarketing ? absoluteUrl(`/unsubscribe/${input.unsubscribeToken}`) : undefined;
+  const token = input.unsubscribeToken && isMarketing ? encodeURIComponent(input.unsubscribeToken) : undefined;
+  // Footer link → confirmation page. Header → RFC 8058 one-click endpoint (Gmail/Yahoo "Unsubscribe" button).
+  const unsubscribeUrl = token ? absoluteUrl(`/unsubscribe/${token}`) : undefined;
+  const oneClickUrl = token ? absoluteUrl(`/api/unsubscribe/${token}`) : undefined;
   const inner = input.markdown !== undefined ? markdownToEmailHtml(input.markdown) : (input.html ?? "");
   const html = emailLayout(inner, { preheader: input.preheader, unsubscribeUrl });
 
@@ -122,7 +133,9 @@ export async function sendEmail(input: SendEmailInput): Promise<{ status: EmailS
           subject: input.subject,
           html,
           reply_to: input.replyTo ?? site.contactEmail,
-          headers: unsubscribeUrl ? { "List-Unsubscribe": `<${unsubscribeUrl}>` } : undefined,
+          headers: oneClickUrl
+            ? { "List-Unsubscribe": `<${oneClickUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
+            : undefined,
           attachments: input.attachments?.map((a) => ({ filename: a.filename, content: a.content, content_type: a.contentType })),
         }),
         signal: AbortSignal.timeout(15_000),

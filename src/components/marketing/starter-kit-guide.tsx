@@ -204,7 +204,7 @@ export function StarterKitGuide({
               <DayCard day={firstDay} />
             </div>
           )}
-          <div id="unlock" className="mt-10 grid scroll-mt-24 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div id="unlock" className="mt-10 grid scroll-mt-24 grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-zinc-900">Unlock everything else</h2>
               <p className="mt-2 text-zinc-600">

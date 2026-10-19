@@ -4,7 +4,7 @@ import { getDb, schema } from "@/db";
 import type { ActivityType, Contact, SequenceTrigger, Stage } from "@/db/schema";
 import { STAGES } from "@/db/schema";
 import { SCORE_RULES } from "@/components/admin/crm-utils";
-import { triggerAutomations } from "@/lib/automations";
+import { stopAutomations, triggerAutomations } from "@/lib/automations";
 import { notifyOwner } from "@/lib/email";
 import { getSettings } from "@/lib/settings";
 import { getVisitorContext, linkVisitorToContact, trackEvent, type FunnelEventName, type VisitorContext } from "@/lib/tracking";
@@ -246,4 +246,33 @@ export async function contactForVisitor(visitorId: string | null): Promise<Conta
   const db = await getDb();
   const [c] = await db.select().from(schema.contacts).where(eq(schema.contacts.visitorId, visitorId)).limit(1);
   return c ?? null;
+}
+
+/** Format of `contacts.unsubscribe_token` links (validate before querying). */
+export const UNSUBSCRIBE_TOKEN_RE = /^[A-Za-z0-9_-]{16,128}$/;
+
+/**
+ * Sets the marketing-email subscription of the contact behind an unsubscribe token. On a change it
+ * stops running automations (when unsubscribing), logs a timeline note and re-scores.
+ * Returns null for an unknown token.
+ */
+export async function setMarketingSubscription(
+  token: string,
+  subscribed: boolean,
+  via: "unsubscribe_link" | "one_click",
+): Promise<{ contactId: string; changed: boolean } | null> {
+  if (!UNSUBSCRIBE_TOKEN_RE.test(token)) return null;
+  const db = await getDb();
+  const c = schema.contacts;
+  const [contact] = await db.select({ id: c.id, unsubscribed: c.unsubscribed }).from(c).where(eq(c.unsubscribeToken, token)).limit(1);
+  if (!contact) return null;
+  const unsubscribe = !subscribed;
+  if (contact.unsubscribed === unsubscribe) return { contactId: contact.id, changed: false };
+  await db.update(c).set({ unsubscribed: unsubscribe }).where(eq(c.id, contact.id));
+  if (unsubscribe) await stopAutomations(contact.id);
+  await logActivity(contact.id, "note", unsubscribe ? "Unsubscribed from marketing emails" : "Resubscribed to marketing emails", {
+    meta: { via, unsubscribed: unsubscribe },
+  });
+  await recomputeScore(contact.id);
+  return { contactId: contact.id, changed: true };
 }

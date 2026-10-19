@@ -1,11 +1,20 @@
 import "server-only";
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { SequenceTrigger } from "@/db/schema";
-import { defaultTemplateVars, fillTemplate, sendEmail } from "@/lib/email";
+import { defaultTemplateVars, escapeMarkdown, fillTemplate, sendEmail, type TemplateVars } from "@/lib/email";
 import { firstName } from "@/lib/utils";
 
 const HOUR = 3_600_000;
+
+/**
+ * Triggers that fire on every occurrence (each message, booking or purchase), so a finished or
+ * stopped enrollment is restarted. One-time funnels (guide, quiz, manual) enroll a contact once.
+ */
+const RETRIGGERABLE = new Set<SequenceTrigger>(["contact_form", "call_booked", "purchase"]);
+
+/** Failed sends of one step before the enrollment is stopped (retries back off 1h, 2h, 4h…). */
+const MAX_SEND_ATTEMPTS = 4;
 
 /**
  * Enrolls a contact in every active email sequence with the given trigger.
@@ -26,17 +35,19 @@ export async function triggerAutomations(trigger: SequenceTrigger, contactId: st
         .orderBy(asc(schema.sequenceSteps.position))
         .limit(1);
       if (!first) continue;
-      const [enrollment] = await db
+      const nextRunAt = new Date(Date.now() + first.delayHours * HOUR);
+      const insert = db
         .insert(schema.sequenceEnrollments)
-        .values({
-          sequenceId: seq.id,
-          contactId,
-          nextStep: 0,
-          nextRunAt: new Date(Date.now() + first.delayHours * HOUR),
-          status: "active",
-        })
-        .onConflictDoNothing()
-        .returning();
+        .values({ sequenceId: seq.id, contactId, nextStep: 0, nextRunAt, status: "active" });
+      const [enrollment] = await (RETRIGGERABLE.has(trigger)
+        ? // Restart a completed/stopped enrollment, but never interrupt one that is still running.
+          insert.onConflictDoUpdate({
+            target: [schema.sequenceEnrollments.sequenceId, schema.sequenceEnrollments.contactId],
+            set: { status: "active", nextStep: 0, nextRunAt, updatedAt: new Date() },
+            setWhere: sql`${schema.sequenceEnrollments.status} <> 'active'`,
+          })
+        : insert.onConflictDoNothing()
+      ).returning();
       if (enrollment && first.delayHours === 0) {
         await processEnrollment(enrollment.id);
       }
@@ -66,7 +77,9 @@ export async function stopAutomations(contactId: string, trigger?: SequenceTrigg
  * Sends the next step of one enrollment if it is due. Claims the row first
  * (pushes next_run_at forward) so concurrent runners never double-send.
  */
-export async function processEnrollment(enrollmentId: string): Promise<"sent" | "completed" | "skipped" | "not_due"> {
+export async function processEnrollment(
+  enrollmentId: string,
+): Promise<"sent" | "completed" | "skipped" | "failed" | "not_due"> {
   const db = await getDb();
   const [claimed] = await db
     .update(schema.sequenceEnrollments)
@@ -98,20 +111,63 @@ export async function processEnrollment(enrollmentId: string): Promise<"sent" | 
     return step ? "skipped" : "completed";
   }
 
-  const vars = { ...defaultTemplateVars(), firstName: firstName(contact.name, contact.email), name: contact.name ?? "", email: contact.email };
-  await sendEmail({
+  // Visitor-supplied fields: plain text for the subject, Markdown-escaped for the body.
+  const fullName = (contact.name ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  const subjectVars: TemplateVars = {
+    ...defaultTemplateVars(),
+    firstName: firstName(contact.name, contact.email),
+    name: fullName,
+    email: contact.email,
+  };
+  const bodyVars: TemplateVars = { ...subjectVars, name: escapeMarkdown(fullName), email: escapeMarkdown(contact.email) };
+  const subject = fillTemplate(step.subject, subjectVars).replace(/\s+/g, " ").trim();
+  const result = await sendEmail({
     to: contact.email,
-    subject: fillTemplate(step.subject, vars),
-    markdown: fillTemplate(step.body, vars),
+    subject,
+    markdown: fillTemplate(step.body, bodyVars),
     kind: "sequence",
     contactId: contact.id,
     unsubscribeToken: contact.unsubscribeToken,
     unsubscribed: contact.unsubscribed,
   });
+
+  if (result.status === "skipped") {
+    // Unsubscribed between the check above and the send.
+    await db
+      .update(schema.sequenceEnrollments)
+      .set({ status: "stopped", nextRunAt: null })
+      .where(eq(schema.sequenceEnrollments.id, claimed.id));
+    return "skipped";
+  }
+  if (result.status === "failed") {
+    // Don't advance: retry this step later with backoff, and give up on a persistently bad address.
+    const [{ attempts }] = await db
+      .select({ attempts: count() })
+      .from(schema.emailLog)
+      .where(
+        and(
+          eq(schema.emailLog.contactId, contact.id),
+          eq(schema.emailLog.subject, subject),
+          eq(schema.emailLog.kind, "sequence"),
+          eq(schema.emailLog.status, "failed"),
+          gte(schema.emailLog.createdAt, new Date(Date.now() - 14 * 24 * HOUR)),
+        ),
+      );
+    await db
+      .update(schema.sequenceEnrollments)
+      .set(
+        attempts >= MAX_SEND_ATTEMPTS
+          ? { status: "stopped", nextRunAt: null }
+          : { nextRunAt: new Date(Date.now() + HOUR * 2 ** Math.max(0, attempts - 1)) },
+      )
+      .where(eq(schema.sequenceEnrollments.id, claimed.id));
+    return "failed";
+  }
+
   await db.insert(schema.activities).values({
     contactId: contact.id,
     type: "email_sent",
-    title: `Email sent: ${fillTemplate(step.subject, vars)}`,
+    title: `Email sent: ${subject}`,
     meta: { sequenceId: sequence.id, sequence: sequence.name, step: claimed.nextStep },
   });
 

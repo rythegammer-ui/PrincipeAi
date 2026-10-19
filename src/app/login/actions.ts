@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createLoginToken, consumeLoginToken, endStudentSession, startStudentSession } from "@/lib/auth";
-import { logActivity } from "@/lib/crm";
+import { logActivity, recomputeScore } from "@/lib/crm";
 import { sendEmail } from "@/lib/email";
 import { isDemoMode } from "@/lib/runtime-mode";
 import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
@@ -43,6 +43,8 @@ export async function verifyMagicLinkAction(_prev: VerifyState, formData: FormDa
   await startStudentSession(result.user);
   if (result.user.contactId) {
     await logActivity(result.user.contactId, "login", "Signed in to the student portal").catch(() => {});
+    // Logins count toward the lead score: keep the stored score in step with the timeline.
+    await recomputeScore(result.user.contactId).catch(() => {});
   }
   redirect(safeRedirectPath(result.redirectTo, "/learn"));
 }

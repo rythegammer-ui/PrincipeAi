@@ -214,7 +214,7 @@ export function SlotPicker({
             ))}
           </div>
           {weeks.map((week, wi) => (
-            <div role="row" key={wi} className="grid grid-cols-7 gap-1 py-0.5">
+            <div role="row" key={wi} className="grid grid-cols-7 gap-0.5 py-0.5 sm:gap-1">
               {week.map((key, di) => {
                 if (!key) return <div role="gridcell" key={`pad-${di}`} aria-hidden />;
                 const count = byDate.get(key)?.length ?? 0;
@@ -233,7 +233,8 @@ export function SlotPicker({
                       onKeyDown={(e) => onDayKeyDown(e, key)}
                       onFocus={() => setActiveKey(key)}
                       className={cn(
-                        "relative flex aspect-square w-full max-w-12 items-center justify-center rounded-xl text-sm tabular-nums transition-colors",
+                        // 44px tall on phones (cells are narrower than 44px at 360px); square from sm up.
+                        "relative flex h-11 w-full max-w-12 items-center justify-center rounded-xl text-sm tabular-nums transition-colors sm:aspect-square sm:h-auto",
                         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
                         selected
                           ? "bg-brand-600 font-semibold text-white shadow-sm shadow-brand-900/20"

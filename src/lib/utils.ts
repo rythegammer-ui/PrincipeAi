@@ -14,11 +14,26 @@ export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
 }
 
+/** Anything a greeting name may not contain (it keeps letters, combining marks, apostrophes and hyphens). */
+const NOT_NAME_CHAR = /[^\p{L}\p{M}'’-]+/u;
+const MAX_FIRST_NAME = 40;
+
+/** First run of name characters that contains a letter, capped in length. */
+function nameRun(text: string): string | undefined {
+  const run = text.split(NOT_NAME_CHAR).find((part) => /\p{L}/u.test(part));
+  return run ? Array.from(run).slice(0, MAX_FIRST_NAME).join("") : undefined;
+}
+
+/**
+ * Display first name for greetings ("Hi Ada,"). Names are visitor-supplied, so only plain
+ * name characters survive: no Markdown, URL or HTML can reach an email or page through it
+ * ("[Reset](https://evil…)" → "Reset", "J.R." → "JR"). Falls back to the email's local
+ * part ("sam.smith@…" → "sam"), then "there".
+ */
 export function firstName(name?: string | null, email?: string | null): string {
-  const n = name?.trim().split(/\s+/)[0];
+  const n = nameRun(name?.trim().split(/\s+/)[0]?.replace(/\./g, "") ?? "");
   if (n) return n.charAt(0).toUpperCase() + n.slice(1);
-  if (email) return email.split("@")[0];
-  return "there";
+  return nameRun(email?.split("@")[0] ?? "") ?? "there";
 }
 
 export function initials(name?: string | null, email?: string | null): string {

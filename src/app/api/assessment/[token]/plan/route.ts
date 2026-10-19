@@ -2,17 +2,14 @@ import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb, schema } from "@/db";
 import { getSubmissionByToken, loadOffer, loadStrategyCall, withPrefill } from "@/app/(marketing)/assessment/data";
-import { aiStream, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
-import { buildFallbackPlan, buildPlanPrompt, parseAnswers, PLAN_SYSTEM_PROMPT, resultFromStored } from "@/lib/assessment";
+import { aiEnabled, aiStream, textStreamResponse } from "@/lib/ai";
+import { buildFallbackPlan, buildPlanPrompt, parseAnswers, PLAN_SYSTEM_PROMPT, resultFromStored, shouldStorePlan } from "@/lib/assessment";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { absoluteUrl } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 // Plan generation streams for well under a minute; stay within every Vercel plan's limit.
 export const maxDuration = 60;
-
-/** Marker aiStream appends when a stream breaks part-way — never persist those plans. */
-const INTERRUPTED_MARKER = "the connection was interrupted";
 
 function streamText(text: string): ReadableStream<Uint8Array> {
   const bytes = new TextEncoder().encode(text);
@@ -28,6 +25,7 @@ function streamText(text: string): ReadableStream<Uint8Array> {
  * Streams the personalized AI action plan for a results token.
  * Returns the stored plan instantly when it exists; otherwise generates it with Claude
  * (or the deterministic fallback when AI isn't configured) and stores the first complete one.
+ * A fallback streamed because Claude was briefly unavailable is not stored, so the next visit retries.
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -69,9 +67,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
       offerUrl: withPrefill(offer.href, person),
       strategyCallUrl: withPrefill(call.href, person),
     }),
-    onComplete: async (text) => {
+    onComplete: async (text, info) => {
+      if (!shouldStorePlan(text, info, aiEnabled())) return;
       const plan = text.trim();
-      if (plan.length < 400 || plan.includes(INTERRUPTED_MARKER) || plan.includes(REFUSAL_MESSAGE)) return;
       const db = await getDb();
       await db
         .update(schema.quizSubmissions)

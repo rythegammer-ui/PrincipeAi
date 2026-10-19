@@ -1893,7 +1893,6 @@ Every lesson includes copy-paste prompts, a hands-on "Try it now" exercise and a
   audience: "life",
   level: "Beginner",
   priceCents: 4700,
-  compareAtCents: 9700,
   coverEmoji: "🌱",
   outcomes: [
     "Understand what AI is, how it works and why it sometimes makes things up",

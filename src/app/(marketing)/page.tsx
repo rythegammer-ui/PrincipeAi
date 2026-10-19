@@ -174,7 +174,7 @@ export default async function HomePage() {
               AI education &amp; implementation
             </p>
             <h1 className="mt-6 text-[2.5rem] leading-[1.05] font-semibold tracking-tight text-balance text-zinc-900 sm:text-[3.5rem] lg:text-[3.6rem] xl:text-[3.85rem]">
-              Make AI work <Accent tone="gradient" className="whitespace-nowrap">for you</Accent> — in your life and your business.
+              Make AI work <Accent>for you</Accent> — in your life and your business.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-pretty text-zinc-600">
               Practical, plain-English AI education for everyday people and business owners — plus hands-on coaching and done-with-you

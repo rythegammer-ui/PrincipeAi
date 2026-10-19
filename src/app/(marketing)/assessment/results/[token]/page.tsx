@@ -9,6 +9,7 @@ import { QuickWinCard } from "@/components/assessment/quick-win-card";
 import { ScoreRing } from "@/components/assessment/score-ring";
 import { TierScale } from "@/components/assessment/tier-scale";
 import { ButtonLink } from "@/components/ui/button";
+import { aiEnabled } from "@/lib/ai";
 import {
   articleFor,
   type AssessmentResult,
@@ -66,6 +67,8 @@ export default async function AssessmentResultsPage({ params }: { params: Promis
   const first = displayFirstName(contact.name);
   const offerHref = withPrefill(offer.href, person);
   const callHref = withPrefill(call.href, person);
+  // Without an Anthropic key the plan is rule-based, so don't present it as AI-written.
+  const aiOn = aiEnabled();
 
   return (
     <>
@@ -192,7 +195,7 @@ export default async function AssessmentResultsPage({ params }: { params: Promis
             )}
           </article>
           <p className="mt-4 text-center text-xs leading-relaxed text-zinc-500">
-            Generated from your answers. AI can make mistakes — use your judgement and double-check anything important.
+            Generated from your answers.{aiOn ? " AI can make mistakes — use your judgement and double-check anything important." : ""}
           </p>
         </div>
       </section>

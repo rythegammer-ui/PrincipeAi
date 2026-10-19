@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { logActivity } from "@/lib/crm";
-import { fulfillOrder, refundOrder } from "@/lib/payments";
+import { fulfillOrder, refundOrder, sendPaymentFailedEmail } from "@/lib/payments";
 import { getStripe, paymentIntentId, type Stripe } from "@/lib/stripe";
 
 /**
@@ -20,12 +20,15 @@ function orderIdFrom(session: Stripe.Checkout.Session): string | null {
   return id && UUID.test(id) ? id : null;
 }
 
+/** Moves a still-pending order to `status`; returns the order when it changed (null for duplicates/late events). */
 async function setPendingOrderStatus(orderId: string, status: "expired" | "failed") {
   const db = await getDb();
-  await db
+  const [order] = await db
     .update(schema.orders)
     .set({ status })
-    .where(and(eq(schema.orders.id, orderId), eq(schema.orders.status, "pending")));
+    .where(and(eq(schema.orders.id, orderId), eq(schema.orders.status, "pending")))
+    .returning();
+  return order ?? null;
 }
 
 async function handleRefund(charge: Stripe.Charge) {
@@ -71,13 +74,21 @@ export async function POST(request: Request) {
         const orderId = orderIdFrom(session);
         // Delayed payment methods complete the session as "unpaid" first; fulfil on async_payment_succeeded.
         if (orderId && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
-          await fulfillOrder(orderId, { stripePaymentIntentId: paymentIntentId(session.payment_intent) });
+          await fulfillOrder(orderId, {
+            stripePaymentIntentId: paymentIntentId(session.payment_intent),
+            // Test-mode payments aren't real money: keep them out of revenue and lifetime value.
+            isTest: event.livemode === false,
+            // What was actually charged, after any promotion code.
+            amountPaidCents: session.amount_total,
+          });
         }
         break;
       }
       case "checkout.session.async_payment_failed": {
         const orderId = orderIdFrom(event.data.object);
-        if (orderId) await setPendingOrderStatus(orderId, "failed");
+        const failed = orderId ? await setPendingOrderStatus(orderId, "failed") : null;
+        // Best effort: the status change is what matters; don't make Stripe retry over an email.
+        if (failed) await sendPaymentFailedEmail(failed).catch((err) => console.error("[stripe] payment-failed email failed", failed.id, err));
         break;
       }
       case "checkout.session.expired": {

@@ -9,7 +9,8 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
 import type { OrderStatus } from "@/db/schema";
 import { checkoutMode } from "@/lib/payments";
-import { stripeDashboardUrl } from "@/lib/stripe";
+import { getBusinessTimezone } from "@/lib/scheduling";
+import { stripeDashboardUrl, stripeTestMode } from "@/lib/stripe";
 import { cn, formatDateTime, formatMoney, pluralize } from "@/lib/utils";
 import { RefundOrderForm } from "./refund-form";
 
@@ -65,7 +66,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
   if (type !== "all") where.push(eq(schema.orders.itemType, type));
 
   const abandonedCutoff = hoursAgo(1);
-  const [orders, [kpi], [abandoned]] = await Promise.all([
+  const [orders, [kpi], [abandoned], tz] = await Promise.all([
     db
       .select()
       .from(schema.orders)
@@ -86,6 +87,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       .select({ n: sql<number>`count(*)`.mapWith(Number) })
       .from(schema.orders)
       .where(or(eq(schema.orders.status, "expired"), and(eq(schema.orders.status, "pending"), lt(schema.orders.createdAt, abandonedCutoff)))),
+    getBusinessTimezone(),
   ]);
 
   const contactIds = [...new Set(orders.map((o) => o.contactId).filter((id): id is string => Boolean(id)))];
@@ -94,6 +96,8 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
     : [];
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
   const mode = checkoutMode();
+  // Stripe test-mode payments are flagged isTest; with test keys configured, every payment lives in test mode.
+  const testKeys = stripeTestMode();
 
   return (
     <>
@@ -186,8 +190,8 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
                 return (
                   <TR key={o.id}>
                     <TD className="whitespace-nowrap text-zinc-500">
-                      {formatDateTime(o.createdAt)}
-                      {o.paidAt && o.status === "paid" && <span className="block text-xs">Paid {formatDateTime(o.paidAt)}</span>}
+                      {formatDateTime(o.createdAt, tz)}
+                      {o.paidAt && o.status === "paid" && <span className="block text-xs">Paid {formatDateTime(o.paidAt, tz)}</span>}
                     </TD>
                     <TD>
                       {o.contactId ? (
@@ -208,9 +212,9 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Badge tone={STATUS_TONES[o.status]}>{STATUS_LABELS[o.status]}</Badge>
                         {o.isTest && <Badge tone="amber">Test</Badge>}
-                        {!o.isTest && o.stripePaymentIntentId && (
+                        {o.stripePaymentIntentId && (
                           <a
-                            href={stripeDashboardUrl(o.stripePaymentIntentId)}
+                            href={stripeDashboardUrl(o.stripePaymentIntentId, o.isTest || testKeys)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-0.5 text-xs font-medium text-brand-700 hover:underline"

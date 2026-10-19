@@ -14,6 +14,8 @@ export const dynamic = "force-dynamic";
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireAdmin();
   const status = integrations();
+  // /api/cron refuses every call in production without CRON_SECRET (see authorizeCron), so say so loudly.
+  const cronBlocked = process.env.NODE_ENV === "production" && !status.cron && !status.demoMode;
 
   return (
     <div className="flex min-h-screen bg-zinc-50">
@@ -38,9 +40,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-zinc-200 bg-white/90 px-4 backdrop-blur lg:hidden">
-          <AdminMobileNav />
-          <Logo />
+          <AdminMobileNav email={session.email} />
+          <Link href="/admin" aria-label="Admin dashboard">
+            <Logo />
+          </Link>
         </header>
+        {cronBlocked && (
+          <div role="status" className="border-b border-red-200 bg-red-50 px-4 py-2 text-center text-xs font-medium text-red-900 sm:text-sm">
+            Scheduled jobs are not running: <code className="font-mono">CRON_SECRET</code> isn&apos;t set, so Vercel Cron calls are rejected and
+            follow-up automation emails and booking reminders are paused. Add it in Vercel and redeploy.{" "}
+            <Link href="/admin/settings#integrations" className="underline">
+              How to fix
+            </Link>
+          </div>
+        )}
         {status.demoMode && (
           <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-900 sm:text-sm">
             Demo mode: no database is connected, so data resets periodically. Add a Postgres database (DATABASE_URL) in Vercel to go live.{" "}

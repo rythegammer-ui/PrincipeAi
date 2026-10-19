@@ -52,12 +52,12 @@ Reset the local database with `npm run db:reset-local`.
    | `AUTH_SECRET` | yes | Signs login sessions: `openssl rand -base64 32` |
    | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | yes | Your admin dashboard login |
    | `NEXT_PUBLIC_SITE_URL` | yes | e.g. `https://principe.ai` (used in emails, Stripe redirects, invites) |
+   | `CRON_SECRET` | yes (scheduled jobs) | Any random string (`openssl rand -base64 32`). Vercel Cron sends it to `/api/cron`; **without it every cron run is refused in production**, so follow-up automation emails, booking reminders and hold/checkout cleanup never run |
    | `ANTHROPIC_API_KEY` | for AI | From [console.anthropic.com](https://console.anthropic.com) |
    | `ANTHROPIC_MODEL` | optional | Defaults to `claude-opus-5-5`; set `claude-sonnet-5-5` or `claude-haiku-5-5` to lower cost |
    | `STRIPE_SECRET_KEY` | for payments | Stripe secret key |
    | `STRIPE_WEBHOOK_SECRET` | for payments | From the webhook endpoint below |
    | `RESEND_API_KEY`, `EMAIL_FROM` | for email | Resend key and a verified sender, e.g. `Principe AI <hello@yourdomain.com>` |
-   | `CRON_SECRET` | recommended | Protects `/api/cron` (Vercel sends it automatically) |
    | `BUSINESS_TIMEZONE` | optional | Default `America/New_York` (also editable in Admin → Settings) |
 
 4. **Stripe webhook**: in the Stripe dashboard, add an endpoint `https://YOUR-DOMAIN/api/stripe/webhook` with events
@@ -69,7 +69,9 @@ Reset the local database with `npm run db:reset-local`.
 ### Cron
 
 `vercel.json` runs `/api/cron` once a day (the Hobby plan limit). It sends due automation emails, booking reminders,
-and releases unpaid booking holds. On Vercel Pro you can change the schedule to hourly (`0 * * * *`) for faster
+and releases unpaid booking holds. **Set `CRON_SECRET`** in the project's environment variables: Vercel then sends it
+with each cron call, and in production `/api/cron` rejects every call without it (the admin dashboard shows a
+warning until it is set). On Vercel Pro you can change the schedule to hourly (`0 * * * *`) for faster
 reminders. You can also trigger it manually from Admin → Settings → *Run automations now*.
 
 ## Customize

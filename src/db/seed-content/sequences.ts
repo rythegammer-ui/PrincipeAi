@@ -320,8 +320,6 @@ Every lesson has a built-in AI tutor. Ask it to explain something another way, g
 
 If anything isn't working, just reply to this email and we'll sort it out.
 
-*Booked a paid coaching session rather than a course? Your booking confirmation has everything you need, so feel free to skip this one.*
-
 ${SIGN_OFF}`,
       },
       {

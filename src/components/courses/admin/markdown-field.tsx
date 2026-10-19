@@ -80,7 +80,7 @@ export function MarkdownField({
             aria-label={`${label} preview`}
             role="region"
           >
-            {value.trim() ? <Markdown>{value}</Markdown> : <p className="text-sm text-zinc-400">Nothing to preview yet.</p>}
+            {value.trim() ? <Markdown>{value}</Markdown> : <p className="text-sm text-zinc-500">Nothing to preview yet.</p>}
           </div>
         )}
       </div>

@@ -19,7 +19,7 @@ export const TRIGGER_META: Record<SequenceTrigger, { label: string; description:
   lead_magnet: { label: "Downloads the free guide", description: "Starts when someone opts in for the AI Starter Kit." },
   quiz_completed: { label: "Completes the AI assessment", description: "Starts when someone finishes the AI readiness assessment." },
   call_booked: { label: "Books a call", description: "Starts when someone books any call on your calendar." },
-  purchase: { label: "Makes a purchase", description: "Starts after a successful course or session payment." },
+  purchase: { label: "Makes a purchase", description: "Starts after a successful course purchase (paid sessions start “Books a call” instead)." },
   contact_form: { label: "Sends the contact form", description: "Starts when someone sends a message through the contact page." },
   manual: { label: "Added manually", description: "Only people you enroll by hand from this page." },
 };

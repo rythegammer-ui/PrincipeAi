@@ -29,13 +29,77 @@ import { isValidEmail, normalizeEmail } from "@/lib/utils";
 
 const EMAIL_PATTERN = /[a-z0-9][a-z0-9._%+-]*@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi;
 
-/** Returns the first valid email address in `text` (normalized), or null. */
-export function extractEmail(text: string): string | null {
+type EmailMatch = { email: string; start: number; end: number };
+
+function emailMatches(text: string): EmailMatch[] {
+  const out: EmailMatch[] = [];
   for (const match of text.matchAll(EMAIL_PATTERN)) {
     const candidate = normalizeEmail(match[0]);
-    if (candidate.length <= 254 && !candidate.includes("..") && isValidEmail(candidate)) return candidate;
+    if (candidate.length <= 254 && !candidate.includes("..") && isValidEmail(candidate)) {
+      out.push({ email: candidate, start: match.index, end: match.index + match[0].length });
+    }
   }
-  return null;
+  return out;
+}
+
+/** Returns the first valid email address in `text` (normalized), or null. */
+export function extractEmail(text: string): string | null {
+  return emailMatches(text)[0]?.email ?? null;
+}
+
+/** First-person phrasing right before an address: "my email is", "reach me at", "follow up with me by email:" … */
+const OWN_EMAIL_NOUN_CUES = [
+  String.raw`\b(?:my|our)\s+(?:(?:work|personal|business|contact|best|own)\s+)?(?:e-?mail|mail|address|contact\s+(?:details|info))(?:\s+address)?(?:\s+(?:is|are))?`,
+  String.raw`\b(?:here'?s|this\s+is|that'?s)\s+(?:my|our)(?:\s+e-?mail)?(?:\s+address)?`,
+];
+const OWN_EMAIL_VERB_CUES = [
+  String.raw`\b(?:reach|contact|email|e-mail|mail|message|ping|write\s+to|get\s+back\s+to|get\s+in\s+touch\s+with|follow[- ]?up\s+with|send\s+(?:it|them|that|this|those|everything|the\s+\w+)\s+to)\s+(?:me|us)(?:\s+(?:by|via)\s+e-?mail)?(?:\s+(?:at|on|via|through|using))?`,
+  String.raw`\bto\s+(?:me|us)\s+(?:at|on|via)`,
+  String.raw`\b(?:i'?m|i\s+am|we'?re|we\s+are|you\s+can\s+find\s+(?:me|us))\s+at`,
+  String.raw`\b(?:i'?d|i\s+would|we'?d|we\s+would)\s+(?:like|love|appreciate)\s+(?:a\s+)?(?:follow[- ]?up|call\s*back|reply|response)(?:\s+(?:by|via)\s+e-?mail)?(?:\s+(?:at|on|to))?`,
+];
+// "my email: jo@…" but not "Can you proofread my email? jane@…"; "Please contact me. jo@…" is fine.
+const OWN_EMAIL_BEFORE = new RegExp(
+  `(?:(?:${OWN_EMAIL_NOUN_CUES.join("|")})\\s*[:=\\-–—,]?|(?:${OWN_EMAIL_VERB_CUES.join("|")})\\s*[:=\\-–—,.?!]{0,2})\\s*$`,
+  "i",
+);
+
+/** …or right after it: "jo@example.com is my email". */
+const OWN_EMAIL_AFTER = /^\s*[,)\-–—]?\s*(?:is|=|that'?s|it'?s)\s+(?:my|our)\s+(?:(?:work|personal|business|best)\s+)?(?:e-?mail|address|contact\s+(?:details|info))\b/i;
+
+/** Words that can surround a visitor's own address without changing who it belongs to ("Sure, it's …, thanks!"). */
+const FILLER_WORDS = new Set(
+  (
+    "sure ok okay yes yeah yep yup absolutely definitely certainly of course here here's heres it it's its is this that's thats " +
+    "my mine email e-mail mail address thanks thank you thx ty cheers please pls hi hello hey great cool perfect fine awesome " +
+    "sounds good go and the"
+  ).split(" "),
+);
+
+/**
+ * The address the visitor offers as their *own* contact email, or null. Visitors often paste other people's
+ * addresses ("write a reminder to my client jane@acme.com"), so an address only counts when it comes with
+ * first-person phrasing ("my email is …", "reach me at …", "follow up with me by email: …" — the follow-up form's
+ * wording) or when the message is just the address plus a few filler words ("Sure, it's jo@example.com").
+ */
+export function extractOwnEmail(text: string): string | null {
+  const matches = emailMatches(text);
+  if (!matches.length) return null;
+
+  const normalized = text.replace(/[’‘]/g, "'");
+  for (const m of matches) {
+    const before = normalized.slice(Math.max(0, m.start - 80), m.start).replace(/\s+/g, " ");
+    if (OWN_EMAIL_BEFORE.test(before) || OWN_EMAIL_AFTER.test(normalized.slice(m.end, m.end + 60))) return m.email;
+  }
+
+  if (new Set(matches.map((m) => m.email)).size !== 1) return null;
+  const rest = normalized
+    .replace(EMAIL_PATTERN, " ")
+    .toLowerCase()
+    .split(/[^a-z'-]+/)
+    .map((w) => w.replace(/^['-]+|['-]+$/g, ""))
+    .filter(Boolean);
+  return rest.every((w) => FILLER_WORDS.has(w)) ? matches[0].email : null;
 }
 
 /* ------------------------------------------------------------------ */

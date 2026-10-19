@@ -3,14 +3,25 @@ import {
   buildAssistantSystemPrompt,
   buildInsightsDigest,
   buildTutorSystemPrompt,
+  chatEmailNote,
   clip,
   primaryCallHref,
   redactEmails,
   toModelMessages,
+  withNoteOnLastUserMessage,
   type PromptCourse,
   type PromptMeetingType,
 } from "@/lib/ai-prompts";
-import { buildChatFallback, buildInsightsFallback, buildTutorFallback, detectIntents, extractEmail, lessonKeyPoints, plainText } from "@/lib/chat-fallback";
+import {
+  buildChatFallback,
+  buildInsightsFallback,
+  buildTutorFallback,
+  detectIntents,
+  extractEmail,
+  extractOwnEmail,
+  lessonKeyPoints,
+  plainText,
+} from "@/lib/chat-fallback";
 import type { ChatMessage } from "@/db/schema";
 
 const courses: PromptCourse[] = [
@@ -102,6 +113,48 @@ describe("extractEmail", () => {
   });
   it("returns the first valid address", () => {
     expect(extractEmail("a@b.com or c@d.com")).toBe("a@b.com");
+  });
+});
+
+describe("extractOwnEmail", () => {
+  it("accepts an address sent on its own or with a few filler words", () => {
+    expect(extractOwnEmail("jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("  Jo@Example.com. ")).toBe("jo@example.com");
+    expect(extractOwnEmail("Sure, it's Jane.Doe+ai@Example.COM — thanks!")).toBe("jane.doe+ai@example.com");
+    expect(extractOwnEmail("Here you go: jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("Email: jo@example.com")).toBe("jo@example.com");
+  });
+
+  it("accepts first-person phrasing around the address", () => {
+    expect(extractOwnEmail("My email is jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("Great course list! My work email address: jo@acme.co, and I'd love a call.")).toBe("jo@acme.co");
+    expect(extractOwnEmail("You can reach me at sam@acme.co if that's easier.")).toBe("sam@acme.co");
+    expect(extractOwnEmail("(reach me: lee@studio.io)")).toBe("lee@studio.io");
+    expect(extractOwnEmail("Please contact me. lee@studio.io")).toBe("lee@studio.io");
+    expect(extractOwnEmail("I’m at lee@studio.io")).toBe("lee@studio.io");
+    expect(extractOwnEmail("lee@studio.io is my email, thanks")).toBe("lee@studio.io");
+  });
+
+  it("accepts the follow-up form's message", () => {
+    expect(extractOwnEmail("Please have someone follow up with me by email: jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("Please follow up with me at jo@example.com")).toBe("jo@example.com");
+  });
+
+  it("ignores other people's addresses", () => {
+    const reminder = "Can you write me a polite payment reminder email to my client jane.doe@clientco.com? Her invoice is 30 days late.";
+    expect(extractEmail(reminder)).toBe("jane.doe@clientco.com");
+    expect(extractOwnEmail(reminder)).toBeNull();
+    expect(extractOwnEmail("Write an email to my client jane@acme.com about the delay")).toBeNull();
+    expect(extractOwnEmail("Draft a reply to my contact jane@acme.com")).toBeNull();
+    expect(extractOwnEmail("Can you proofread my email? jane@acme.com wrote to ask about pricing.")).toBeNull();
+    expect(extractOwnEmail("Can you email me a template I can send to jane@acme.com?")).toBeNull();
+    expect(extractOwnEmail("jane@acme.com keeps ignoring my invoices")).toBeNull();
+    expect(extractOwnEmail("How can AI help my business?")).toBeNull();
+  });
+
+  it("picks the visitor's own address when several are mentioned", () => {
+    expect(extractOwnEmail("Draft a note to jane@acme.com, then email me at jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("jo@example.com or jane@acme.com")).toBeNull();
   });
 });
 
@@ -266,6 +319,37 @@ describe("toModelMessages", () => {
       { role: "user", content: "a\n\nb" },
       { role: "assistant", content: "c" },
     ]);
+  });
+});
+
+describe("chat email note", () => {
+  const msg = (role: ChatMessage["role"], content: string): ChatMessage => ({ role, content, at: "2026-01-01T00:00:00.000Z" });
+
+  it("says whether an address was passed to the team", () => {
+    expect(chatEmailNote({ emailInMessage: false, emailCaptured: false })).toBeNull();
+    expect(chatEmailNote({ emailInMessage: true, emailCaptured: true })).toMatch(/was passed to the team/);
+    expect(chatEmailNote({ emailInMessage: true, emailCaptured: false })).toMatch(/not passed to the team, so do not promise a follow-up/);
+  });
+
+  it("appends the note to the last user message only, without touching stored history", () => {
+    const history = [msg("user", "hi"), msg("assistant", "Hello!"), msg("user", "my email is jo@example.com")];
+    const messages = toModelMessages(history);
+    const out = withNoteOnLastUserMessage(messages, "[System note: x]");
+    expect(out).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "Hello!" },
+      { role: "user", content: "my email is jo@example.com\n\n[System note: x]" },
+    ]);
+    expect(messages[2].content).toBe("my email is jo@example.com");
+    expect(history[2].content).toBe("my email is jo@example.com");
+    expect(withNoteOnLastUserMessage(messages, null)).toBe(messages);
+  });
+
+  it("keeps the system prompt free of capture claims", () => {
+    const prompt = buildAssistantSystemPrompt({ settings, courses, meetingTypes });
+    expect(prompt).not.toMatch(/passed to the team automatically/);
+    expect(prompt).toMatch(/Only when the note says it was/);
+    expect(prompt).toContain("Get a human follow-up");
   });
 });
 

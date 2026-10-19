@@ -8,7 +8,7 @@ import { z } from "zod";
 import { MEETING_COLOR_NAMES } from "@/components/booking/meeting-colors";
 import { getDb, schema } from "@/db";
 import { assertAdmin } from "@/lib/auth";
-import { getBusinessTimezone } from "@/lib/scheduling";
+import { getBusinessTimezone, isBuiltInMeetingSlug, MAX_BUFFER_MIN } from "@/lib/scheduling";
 import { slugify } from "@/lib/utils";
 
 export type SchedulingFormState = { error?: string; fieldErrors?: Record<string, string>; message?: string };
@@ -69,7 +69,7 @@ const MeetingTypeInput = z.object({
     .trim()
     .max(500)
     .refine((v) => !v || /^https:\/\/[^\s]+$/i.test(v), "Use a full https:// link, or leave blank."),
-  bufferMin: intField("Buffer", 0, 240),
+  bufferMin: intField("Buffer", 0, MAX_BUFFER_MIN),
   minNoticeHours: intField("Minimum notice", 0, 720),
   maxDaysAhead: intField("Booking window", 1, 365),
   color: z.enum(MEETING_COLOR_NAMES),
@@ -122,6 +122,17 @@ export async function saveMeetingTypeAction(_prev: SchedulingFormState, formData
   if (!slug) return { error: "Please fix the highlighted fields.", fieldErrors: { slug: "Add a URL slug." } };
 
   const db = await getDb();
+  let prev: { slug: string } | undefined;
+  if (input.id) {
+    [prev] = await db.select({ slug: schema.meetingTypes.slug }).from(schema.meetingTypes).where(eq(schema.meetingTypes.id, input.id)).limit(1);
+    if (!prev) return { error: "This meeting type no longer exists." };
+    if (prev.slug !== slug && isBuiltInMeetingSlug(prev.slug)) {
+      return {
+        error: "Please fix the highlighted fields.",
+        fieldErrors: { slug: `The site's funnels (home page, consulting, assessment) link to /book/${prev.slug}, so this URL can't be changed.` },
+      };
+    }
+  }
   const [clash] = await db
     .select({ id: schema.meetingTypes.id })
     .from(schema.meetingTypes)
@@ -146,9 +157,7 @@ export async function saveMeetingTypeAction(_prev: SchedulingFormState, formData
     sortOrder: input.sortOrder,
   };
 
-  if (input.id) {
-    const [prev] = await db.select({ slug: schema.meetingTypes.slug }).from(schema.meetingTypes).where(eq(schema.meetingTypes.id, input.id)).limit(1);
-    if (!prev) return { error: "This meeting type no longer exists." };
+  if (input.id && prev) {
     await db.update(schema.meetingTypes).set(values).where(eq(schema.meetingTypes.id, input.id));
     revalidateScheduling(prev.slug);
   } else {

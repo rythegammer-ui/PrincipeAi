@@ -2,6 +2,7 @@ import { ArrowDown, Clock, Compass, FileText, Gauge, Gift, Layers, ShieldCheck }
 import type { Metadata } from "next";
 import { AssessmentQuiz } from "@/components/assessment/assessment-quiz";
 import { ButtonLink } from "@/components/ui/button";
+import { aiEnabled } from "@/lib/ai";
 import { TIERS } from "@/lib/assessment";
 
 export const metadata: Metadata = {
@@ -39,26 +40,32 @@ const WHAT_YOU_GET = [
   },
 ];
 
-const FAQS = [
-  {
-    q: "Who is the assessment for?",
-    a: "Anyone who wants to get more from AI: business owners, team leaders, professionals, and people who simply want AI to make everyday life easier. You don't need any technical background.",
-  },
-  {
-    q: "Is it really free?",
-    a: "Yes. The assessment, your score and your action plan are free. If a course or a call would help, we'll suggest one — there's no obligation to take it.",
-  },
-  {
-    q: "How is my plan created?",
-    a: "Your score is calculated from your answers. Your action plan is generated from those same answers — using Claude, Anthropic's AI assistant — so it reflects your goals, tools and time drains. As with anything AI writes, use your judgement and double-check anything important.",
-  },
-  {
-    q: "What happens to my information?",
-    a: "We use your answers to personalize your results and recommendations, and we email you a private link so you can come back to them. We don't sell your information, and you can unsubscribe from our emails at any time.",
-  },
-];
+/** The FAQ only credits Claude when AI is configured; without a key the plan is rule-based. */
+function getFaqs(aiOn: boolean) {
+  return [
+    {
+      q: "Who is the assessment for?",
+      a: "Anyone who wants to get more from AI: business owners, team leaders, professionals, and people who simply want AI to make everyday life easier. You don't need any technical background.",
+    },
+    {
+      q: "Is it really free?",
+      a: "Yes. The assessment, your score and your action plan are free. If a course or a call would help, we'll suggest one — there's no obligation to take it.",
+    },
+    {
+      q: "How is my plan created?",
+      a: aiOn
+        ? "Your score is calculated from your answers. Your action plan is generated from those same answers — using Claude, Anthropic's AI assistant — so it reflects your goals, tools and time drains. As with anything AI writes, use your judgement and double-check anything important."
+        : "Your score is calculated from your answers. Your plan is built from your answers using our AI readiness framework, so it reflects your goals, tools and time drains.",
+    },
+    {
+      q: "What happens to my information?",
+      a: "We use your answers to personalize your results and recommendations, and we email you a private link so you can come back to them. We don't sell your information, and you can unsubscribe from our emails at any time.",
+    },
+  ];
+}
 
 export default function AssessmentPage() {
+  const faqs = getFaqs(aiEnabled());
   return (
     <>
       <section className="relative overflow-hidden bg-ink text-white">
@@ -166,7 +173,7 @@ export default function AssessmentPage() {
             Questions, answered
           </h2>
           <div className="mt-10 divide-y divide-zinc-200 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-soft">
-            {FAQS.map((faq) => (
+            {faqs.map((faq) => (
               <details key={faq.q} className="group">
                 <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-medium text-zinc-900 hover:bg-zinc-50 sm:px-6 [&::-webkit-details-marker]:hidden">
                   {faq.q}

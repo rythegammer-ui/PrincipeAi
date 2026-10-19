@@ -311,13 +311,13 @@ export async function enrollInCourse(input: {
   return { enrolled: true, userId: user.id };
 }
 
-/** Emails a one-time sign-in link that lands the student straight in the course. */
+/** Emails a one-time sign-in link that lands the student straight in the course. Returns the link. */
 export async function sendCourseAccessEmail(input: {
   email: string;
   name?: string | null;
   course: Pick<Course, "slug" | "title">;
   contactId?: string | null;
-}): Promise<void> {
+}): Promise<string> {
   const token = await createLoginToken(input.email, `/learn/${input.course.slug}`);
   const link = absoluteUrl(`/auth/verify?token=${encodeURIComponent(token)}`);
   const loginUrl = absoluteUrl("/login");
@@ -336,4 +336,5 @@ export async function sendCourseAccessEmail(input: {
       `Glad to have you with us,  \nThe Principe AI team`,
     ].join("\n\n"),
   });
+  return link;
 }

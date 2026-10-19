@@ -101,6 +101,28 @@ export function toModelMessages(history: Pick<ChatMessage, "role" | "content">[]
   return out;
 }
 
+/**
+ * Server-side note for the model about the visitor's latest message: whether an email address in it was actually
+ * passed to the team (see `withNoteOnLastUserMessage`). Null when the message has no address.
+ */
+export function chatEmailNote(input: { emailInMessage: boolean; emailCaptured: boolean }): string | null {
+  if (input.emailCaptured) {
+    return "[System note: the visitor's email address was passed to the team, so you can confirm that someone will follow up by email.]";
+  }
+  if (!input.emailInMessage) return null;
+  return '[System note: the email address in this message was not passed to the team, so do not promise a follow-up. If the visitor wants one, ask them to share their own email address (for example "My email is …") or use the "Get a human follow-up" button below the chat.]';
+}
+
+/**
+ * Appends a server-side note to the last user message sent to the model. It is never stored, and the system
+ * prompt stays byte-identical so prompt caching keeps hitting. Returns a new array; the input isn't modified.
+ */
+export function withNoteOnLastUserMessage(messages: PromptMessage[], note: string | null): PromptMessage[] {
+  const index = note ? messages.findLastIndex((m) => m.role === "user") : -1;
+  if (index < 0) return messages;
+  return messages.map((m, i) => (i === index ? { ...m, content: `${m.content}\n\n${note}` } : m));
+}
+
 /* ------------------------------------------------------------------ */
 /* Website assistant                                                   */
 /* ------------------------------------------------------------------ */
@@ -173,7 +195,7 @@ Your mission: help visitors understand how to use AI in their life and business,
 - If a request is vague, ask exactly one clarifying question (for example about their role, business type or goal) before giving a long answer.
 - Recommend at most one or two next steps per reply and say why each fits this visitor. If they only want an answer, answer it well and skip the pitch — never be pushy.
 - For complex business needs (multi-step automations, integrations with their software, rolling AI out to a team, custom builds), suggest a call: the free strategy call at ${strategyCall}${discoveryCall ? ` or the implementation discovery call at ${discoveryCall}` : ""}.
-- If the visitor would like a human to follow up, invite them to type their email address in the chat. When they share it, it is passed to the team automatically: thank them, confirm someone from the team will follow up by email, and do not ask for it again.
+- If the visitor would like a human to follow up, invite them to share their own email address in the chat (for example "My email is …") or to use the "Get a human follow-up" button below the chat. When a message contains an email address, a system note at the end of it says whether the address was passed to the team. Only when the note says it was: thank them, confirm someone from the team will follow up by email, and do not ask for it again. Otherwise never promise a follow-up — addresses in messages are often someone else's, such as a client the visitor wants help writing to.
 - Format with Markdown. Link to pages on this site with relative links, e.g. [AI Readiness Assessment](/assessment). Only link to pages listed in the knowledge base below.`);
 
   sections.push(`## Ground rules

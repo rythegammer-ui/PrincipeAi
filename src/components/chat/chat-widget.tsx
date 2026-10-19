@@ -76,6 +76,11 @@ export function ChatWidget({ assistantName, greeting }: { assistantName: string;
 
   return (
     <>
+      {/*
+        `visibility` is only transitioned while hiding (so the launcher still fades out when the chat opens). When the
+        chat closes it must flip back to visible at once: closeChat() focuses the launcher on the next frame, and the
+        browser ignores focus() on an element that is still visibility:hidden (focus would fall back to <body>).
+      */}
       <button
         ref={launcherRef}
         type="button"
@@ -84,9 +89,9 @@ export function ChatWidget({ assistantName, greeting }: { assistantName: string;
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         className={cn(
-          "group fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 inline-flex h-12 items-center gap-2 rounded-full bg-ink py-1.5 pr-4 pl-1.5 text-sm font-semibold text-white shadow-lift ring-1 ring-white/15 transition-all duration-200 print:hidden",
+          "group fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 inline-flex h-12 items-center gap-2 rounded-full bg-ink py-1.5 pr-4 pl-1.5 text-sm font-semibold text-white shadow-lift ring-1 ring-white/15 transition-[translate,scale,opacity,background-color] duration-200 print:hidden",
           "hover:-translate-y-0.5 hover:bg-ink-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 active:scale-[0.97]",
-          open && "invisible translate-y-2 opacity-0",
+          open && "invisible translate-y-2 opacity-0 transition-[translate,scale,opacity,background-color,visibility]",
         )}
       >
         <span aria-hidden className="relative inline-flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700">

@@ -22,8 +22,13 @@ export type SeedCourse = {
   audience: "life" | "business" | "both";
   level: string;
   priceCents: number;
+  /**
+   * Optional "was" price, shown struck through with a "Save NN%" badge. Only set a price the course has
+   * genuinely sold at; the default catalog leaves it unset so a new site makes no former-price claim.
+   */
   compareAtCents?: number;
   coverEmoji: string;
+  /** Highlights this course in the catalog and offer ladder (one recommended option). */
   featured?: boolean;
   outcomes: string[];
   includes: string[];

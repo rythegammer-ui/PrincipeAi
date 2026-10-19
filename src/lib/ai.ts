@@ -50,8 +50,8 @@ export type AiTextOptions = {
 };
 
 /**
- * One-shot completion. Returns the response text, or null when AI isn't configured
- * or the request failed (callers must provide a non-AI fallback).
+ * One-shot completion. Returns the response text, or null when AI isn't configured, the
+ * request failed or the model declined (callers must provide a non-AI fallback).
  */
 export async function aiText(opts: AiTextOptions): Promise<string | null> {
   if (!aiEnabled()) return null;
@@ -66,7 +66,11 @@ export async function aiText(opts: AiTextOptions): Promise<string | null> {
       fallbacks: "default",
     });
     const message = await stream.finalMessage();
-    if (message.stop_reason === "refusal") return REFUSAL_MESSAGE;
+    if (message.stop_reason === "refusal") {
+      // Never hand the visitor-facing refusal sentence to callers as if it were the answer.
+      console.warn("[ai] request declined (refusal); using the non-AI fallback");
+      return null;
+    }
     const text = message.content
       .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
       .map((b) => b.text)
@@ -78,25 +82,65 @@ export async function aiText(opts: AiTextOptions): Promise<string | null> {
   }
 }
 
+/** How a streamed reply ended (second argument of `aiStream`'s `onComplete`). */
+export type AiStreamInfo = {
+  /** "ai" = model output; "fallback" = `fallbackText` / `refusalText` was streamed instead. */
+  source: "ai" | "fallback";
+  /** The model declined. `fullText` is then only the refusal/fallback text (a declined partial is dropped). */
+  refused: boolean;
+  /** The reply didn't finish: the client disconnected / pressed Stop, or the API failed mid-reply. */
+  interrupted: boolean;
+};
+
+export type AiStreamOptions = AiTextOptions & {
+  /** Streamed when AI isn't configured, or the request fails before any text arrived. */
+  fallbackText: string;
+  /** Streamed when the model declines. Defaults to `fallbackText` before any output, `REFUSAL_MESSAGE` after. */
+  refusalText?: string;
+  /**
+   * Also call `onComplete` (with `interrupted: true`) when the client disconnects or presses Stop,
+   * so a chat keeps the part of the reply the visitor already saw. Off by default, so callers that
+   * store only finished output (e.g. plans) never persist a fragment.
+   */
+  completeOnCancel?: boolean;
+  /** Receives the text the client was sent once streaming ends (persist transcripts here). */
+  onComplete?: (fullText: string, info: AiStreamInfo) => Promise<void> | void;
+};
+
 /**
  * Streams plain-text deltas as a web ReadableStream (for Route Handlers).
  * - If AI isn't configured, streams `fallbackText` instead.
+ * - On a refusal, streams `refusalText` (see `AiStreamOptions`).
+ * - If the client goes away, the upstream request is aborted (no tokens are wasted).
  * - `onComplete` receives the full text once streaming finishes (persist transcripts here).
  */
-export function aiStream(
-  opts: AiTextOptions & { fallbackText: string; onComplete?: (fullText: string) => Promise<void> | void },
-): ReadableStream<Uint8Array> {
+export function aiStream(opts: AiStreamOptions): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
+  // Shared by start() and cancel(): a client disconnect / Stop cancels this stream.
+  let cancelled = false;
+  let sdkStream: { abort(): void } | null = null;
+
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       let full = "";
+      let completeText: string | null = null; // overrides `full` for onComplete (refusals)
+      const info: AiStreamInfo = { source: "ai", refused: false, interrupted: false };
+      // `full` is what the client was actually sent.
       const push = (t: string) => {
-        full += t;
-        controller.enqueue(encoder.encode(t));
+        if (cancelled) return;
+        try {
+          controller.enqueue(encoder.encode(t));
+          full += t;
+        } catch {
+          cancelled = true; // the consumer is gone
+        }
       };
+
       if (!aiEnabled()) {
+        info.source = "fallback";
         // Simulate streaming so the UI behaves the same with or without an API key.
         for (const chunk of opts.fallbackText.match(/.{1,24}(\s|$)|.+/gs) ?? [opts.fallbackText]) {
+          if (cancelled) break;
           push(chunk);
           await new Promise((r) => setTimeout(r, 15));
         }
@@ -111,24 +155,62 @@ export function aiStream(
             betas: [FALLBACK_BETA],
             fallbacks: "default",
           });
+          sdkStream = stream;
+          if (cancelled) stream.abort();
           for await (const event of stream) {
+            if (cancelled) break;
             if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
               push(event.delta.text);
             }
           }
-          const final = await stream.finalMessage();
-          if (final.stop_reason === "refusal") push(full ? `\n\n${REFUSAL_MESSAGE}` : REFUSAL_MESSAGE);
+          if (!cancelled) {
+            const final = await stream.finalMessage();
+            if (final.stop_reason === "refusal") {
+              info.refused = true;
+              if (full) {
+                // Show the notice after what the visitor already saw, but don't keep the declined partial.
+                completeText = opts.refusalText ?? REFUSAL_MESSAGE;
+                push(`\n\n${completeText}`);
+              } else {
+                info.source = "fallback";
+                completeText = opts.refusalText ?? opts.fallbackText;
+                push(completeText);
+              }
+            }
+          }
         } catch (err) {
-          logAiError(err);
-          push(full ? "\n\n(Sorry — the connection was interrupted. Please try again.)" : opts.fallbackText);
+          if (!cancelled && !(err instanceof Anthropic.APIUserAbortError)) {
+            logAiError(err);
+            if (full) {
+              info.interrupted = true;
+              push("\n\n(Sorry — the connection was interrupted. Please try again.)");
+            } else {
+              info.source = "fallback";
+              push(opts.fallbackText);
+            }
+          }
         }
       }
-      try {
-        await opts.onComplete?.(full);
-      } catch (err) {
-        console.error("[ai] onComplete failed", err);
+
+      if (cancelled) info.interrupted = true;
+      if (!cancelled || opts.completeOnCancel) {
+        try {
+          await opts.onComplete?.(completeText ?? full, info);
+        } catch (err) {
+          console.error("[ai] onComplete failed", err);
+        }
       }
-      controller.close();
+      if (!cancelled) {
+        try {
+          controller.close();
+        } catch {
+          // already closed by a disconnect
+        }
+      }
+    },
+    cancel() {
+      cancelled = true;
+      sdkStream?.abort();
     },
   });
 }

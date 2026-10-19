@@ -31,7 +31,8 @@ import { Avatar, EmptyState, PageHeader } from "@/components/ui/misc";
 import { DASHBOARD_RANGES, getDashboard, parseRange } from "@/lib/crm-queries";
 import { cn, formatMoney, timeAgo } from "@/lib/utils";
 
-export const metadata: Metadata = { title: "Dashboard" };
+// title.template from admin/(panel)/layout.tsx only applies to child segments, not this same-segment page.
+export const metadata: Metadata = { title: { absolute: "Dashboard · Admin" } };
 
 function SectionHeader({ title, description, href, linkLabel }: { title: string; description?: string; href?: string; linkLabel?: string }) {
   return (

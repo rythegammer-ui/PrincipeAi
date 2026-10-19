@@ -11,6 +11,10 @@ import { SubmitButton } from "@/components/ui/submit-button";
 export function GrantAccessForm({ courseId }: { courseId: string }) {
   const [state, action] = useActionState<FormState, FormData>(grantAccessAction, {});
   const fe = state.fieldErrors ?? {};
+  // React resets uncontrolled fields after every action; on an error the action echoes what was typed
+  // (and after a success the fields clear, ready for the next person).
+  const v = state.values;
+  const sendEmail = v ? v.sendEmail === "on" : true;
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="courseId" value={courseId} />
@@ -18,14 +22,22 @@ export function GrantAccessForm({ courseId }: { courseId: string }) {
       {state.ok && state.message && <Alert tone="success">{state.message}</Alert>}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Email" htmlFor="grant-email" error={fe.email} required>
-          <Input id="grant-email" name="email" type="email" autoComplete="off" placeholder="student@example.com" aria-invalid={fe.email ? true : undefined} />
+          <Input
+            id="grant-email"
+            name="email"
+            type="email"
+            autoComplete="off"
+            placeholder="student@example.com"
+            defaultValue={v?.email}
+            aria-invalid={fe.email ? true : undefined}
+          />
         </Field>
         <Field label="Name" htmlFor="grant-name" error={fe.name}>
-          <Input id="grant-name" name="name" autoComplete="off" placeholder="Optional" maxLength={120} />
+          <Input id="grant-name" name="name" autoComplete="off" placeholder="Optional" maxLength={120} defaultValue={v?.name} />
         </Field>
       </div>
       <label className="flex items-center gap-2.5 text-sm text-zinc-700">
-        <Checkbox name="sendEmail" defaultChecked />
+        <Checkbox key={String(sendEmail)} name="sendEmail" defaultChecked={sendEmail} />
         Email them a one-click sign-in link
       </label>
       <div>

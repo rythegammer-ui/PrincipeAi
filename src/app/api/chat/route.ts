@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { aiStream, textStreamResponse } from "@/lib/ai";
-import { buildAssistantSystemPrompt, toModelMessages } from "@/lib/ai-prompts";
-import { buildChatFallback, extractEmail } from "@/lib/chat-fallback";
+import { buildAssistantSystemPrompt, chatEmailNote, toModelMessages, withNoteOnLastUserMessage } from "@/lib/ai-prompts";
+import { buildChatFallback, extractEmail, extractOwnEmail } from "@/lib/chat-fallback";
 import { captureLead, contactForVisitor, logActivity, recomputeScore } from "@/lib/crm";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
@@ -87,8 +87,9 @@ export async function POST(request: NextRequest) {
   }
   const conversationId = conversation.id;
 
-  // Lead capture: the visitor typed an email address.
-  const email = extractEmail(message);
+  // Lead capture: only an address the visitor offers as their own ("my email is …", the follow-up form, or just the
+  // address). Others — e.g. "write a reminder to my client jane@acme.com" — must never become leads or notifications.
+  const email = extractOwnEmail(message);
   let emailCaptured: string | null = null;
   if (email) {
     const db = await getDb();
@@ -137,7 +138,12 @@ export async function POST(request: NextRequest) {
 
   const stream = aiStream({
     system: buildAssistantSystemPrompt({ settings, courses, meetingTypes }),
-    messages: toModelMessages(history, CONTEXT_MESSAGES),
+    // Tell the model whether an address really reached the team (only the visitor's own, and not when rate limited
+    // or capture failed) so it never promises a follow-up that isn't coming. The cached system prompt stays unchanged.
+    messages: withNoteOnLastUserMessage(
+      toModelMessages(history, CONTEXT_MESSAGES),
+      chatEmailNote({ emailInMessage: extractEmail(message) !== null, emailCaptured: emailCaptured !== null }),
+    ),
     effort: "low",
     maxTokens: 4000,
     fallbackText: buildChatFallback({ message, courses, meetingTypes, emailCaptured }),

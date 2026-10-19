@@ -14,6 +14,7 @@ import { Markdown } from "@/components/ui/markdown";
 import { getAdminSession, getStudent } from "@/lib/auth";
 import { getCourseWithCurriculum, isEnrolled } from "@/lib/courses";
 import { checkoutMode } from "@/lib/payments";
+import { shareMetadata } from "@/lib/seo";
 import { pluralize, truncate } from "@/lib/utils";
 
 type Params = { slug: string };
@@ -28,8 +29,8 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     title: course.title,
     description,
     alternates: { canonical: `/courses/${course.slug}` },
-    openGraph: { title: course.title, description, type: "website", url: `/courses/${course.slug}` },
-    twitter: { title: course.title, description },
+    // Courses have no cover image of their own (just an emoji), so they share the site image.
+    ...shareMetadata({ title: course.title, description, url: `/courses/${course.slug}` }),
   };
 }
 

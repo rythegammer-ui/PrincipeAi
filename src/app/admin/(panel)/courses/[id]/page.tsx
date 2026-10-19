@@ -18,6 +18,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
 import type { Course } from "@/db/schema";
 import { getCurriculum, type CurriculumModule } from "@/lib/courses";
+import { getBusinessTimezone } from "@/lib/scheduling";
 import { cn, formatDate, pluralize } from "@/lib/utils";
 import {
   addModuleAction,
@@ -109,7 +110,7 @@ function CurriculumEditor({ course, modules }: { course: Course; modules: Curric
           <ol className="divide-y divide-zinc-100">
             {m.lessons.map((l, li) => (
               <li key={l.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 sm:flex-nowrap sm:px-5">
-                <span className="w-8 shrink-0 text-center text-xs text-zinc-400 tabular-nums">
+                <span className="w-8 shrink-0 text-center text-xs text-zinc-500 tabular-nums">
                   {mi + 1}.{li + 1}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -192,7 +193,7 @@ function CurriculumEditor({ course, modules }: { course: Course; modules: Curric
 
 async function StudentsPanel({ course, totalLessons }: { course: Course; totalLessons: number }) {
   const db = await getDb();
-  const [students, progressRows] = await Promise.all([
+  const [students, progressRows, tz] = await Promise.all([
     db
       .select({
         userId: schema.users.id,
@@ -214,6 +215,7 @@ async function StudentsPanel({ course, totalLessons }: { course: Course; totalLe
       .innerJoin(schema.lessons, eq(schema.lessons.id, schema.lessonProgress.lessonId))
       .where(eq(schema.lessons.courseId, course.id))
       .groupBy(schema.lessonProgress.userId),
+    getBusinessTimezone(),
   ]);
   const completedBy = new Map(progressRows.map((r) => [r.userId, r.n]));
 
@@ -270,7 +272,7 @@ async function StudentsPanel({ course, totalLessons }: { course: Course; totalLe
                     <TD>
                       <Badge tone={s.source === "purchase" ? "green" : "neutral"}>{s.source === "purchase" ? "Purchase" : "Manual"}</Badge>
                     </TD>
-                    <TD className="whitespace-nowrap">{formatDate(s.enrolledAt)}</TD>
+                    <TD className="whitespace-nowrap">{formatDate(s.enrolledAt, {}, tz)}</TD>
                     <TD>
                       <div className="flex items-center gap-3">
                         <Progress value={pct} className="w-28" />
@@ -279,7 +281,7 @@ async function StudentsPanel({ course, totalLessons }: { course: Course; totalLe
                         </span>
                       </div>
                     </TD>
-                    <TD className="whitespace-nowrap text-zinc-500">{s.lastLoginAt ? formatDate(s.lastLoginAt) : "Never"}</TD>
+                    <TD className="whitespace-nowrap text-zinc-500">{s.lastLoginAt ? formatDate(s.lastLoginAt, {}, tz) : "Never"}</TD>
                     <TD className="text-right">
                       <form action={revokeAccessAction}>
                         <input type="hidden" name="courseId" value={course.id} />
@@ -354,6 +356,12 @@ export default async function EditCoursePage({
           It has students or paid orders. Unpublish it instead to hide it from the catalog — existing students keep access.
         </Alert>
       )}
+      {sp.error === "open-checkouts" && (
+        <Alert tone="warning" title="Someone is mid-checkout for this course" className="mb-6">
+          Deleting it now would leave their payment with nothing to deliver. Unpublish it now to stop new checkouts, then delete it after 24
+          hours.
+        </Alert>
+      )}
 
       <nav aria-label="Course sections" className="mb-6 flex gap-1 overflow-x-auto border-b border-zinc-200">
         {TABS.map((t) => (
@@ -367,8 +375,8 @@ export default async function EditCoursePage({
             )}
           >
             {t.label}
-            {t.key === "curriculum" && <span className="ml-1.5 text-xs text-zinc-400">{lessons.length}</span>}
-            {t.key === "students" && <span className="ml-1.5 text-xs text-zinc-400">{studentCount}</span>}
+            {t.key === "curriculum" && <span className="ml-1.5 text-xs text-zinc-500">{lessons.length}</span>}
+            {t.key === "students" && <span className="ml-1.5 text-xs text-zinc-500">{studentCount}</span>}
           </Link>
         ))}
       </nav>

@@ -30,8 +30,11 @@ export type MeetingTypeFormValues = {
 
 type Question = { key: number; id?: string; label: string; required: boolean };
 
-/** Create / edit a meeting type. Inputs stay filled when the server returns validation errors. */
-export function MeetingTypeForm({ initial }: { initial: MeetingTypeFormValues }) {
+/**
+ * Create / edit a meeting type. Inputs stay filled when the server returns validation errors.
+ * `slugLocked`: the site's funnels link to this type's URL, so it can't be edited.
+ */
+export function MeetingTypeForm({ initial, slugLocked = false }: { initial: MeetingTypeFormValues; slugLocked?: boolean }) {
   const isNew = !initial.id;
   const [state, dispatch, pending] = useActionState<SchedulingFormState, FormData>(saveMeetingTypeAction, {});
   const [name, setName] = useState(initial.name);
@@ -41,7 +44,16 @@ export function MeetingTypeForm({ initial }: { initial: MeetingTypeFormValues })
   const [questions, setQuestions] = useState<Question[]>(() => initial.questions.map((q, i) => ({ ...q, key: i })));
   const [nextKey, setNextKey] = useState(initial.questions.length);
   const errors = state.fieldErrors ?? {};
-  const effectiveSlug = slugTouched ? slug : slugify(name);
+  const effectiveSlug = slugLocked ? initial.slug : slugTouched ? slug : slugify(name);
+  const slugHint = slugLocked ? (
+    `Booking link: /book/${initial.slug}. The site's funnels (home page, consulting, assessment) link here, so this URL can't be changed.`
+  ) : !isNew && effectiveSlug !== initial.slug ? (
+    <span className="font-medium text-amber-700">
+      New booking link: /book/{effectiveSlug || "…"}. Existing links to /book/{initial.slug} (emails, ads, shared posts) will stop working.
+    </span>
+  ) : (
+    `Booking link: /book/${effectiveSlug || "…"}`
+  );
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -75,7 +87,7 @@ export function MeetingTypeForm({ initial }: { initial: MeetingTypeFormValues })
           <Field label="Name" htmlFor="mt-name" required error={errors.name} className="sm:col-span-2">
             <Input id="mt-name" name="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required placeholder="Free AI Strategy Call" />
           </Field>
-          <Field label="URL" htmlFor="mt-slug" error={errors.slug} hint={`Booking link: /book/${effectiveSlug || "…"}`} className="sm:col-span-2">
+          <Field label="URL" htmlFor="mt-slug" error={errors.slug} hint={slugHint} className="sm:col-span-2">
             <Input
               id="mt-slug"
               name="slug"
@@ -84,6 +96,9 @@ export function MeetingTypeForm({ initial }: { initial: MeetingTypeFormValues })
                 setSlugTouched(true);
                 setSlug(e.target.value.toLowerCase());
               }}
+              readOnly={slugLocked}
+              aria-readonly={slugLocked || undefined}
+              className={slugLocked ? "bg-zinc-50 text-zinc-600" : undefined}
               maxLength={80}
               pattern="[a-z0-9]+(-[a-z0-9]+)*"
               placeholder="ai-strategy-call"

@@ -53,7 +53,7 @@ export function CurriculumAccordion({ courseSlug, modules }: { courseSlug: strin
                       <Link
                         href={`/courses/${courseSlug}/preview/${l.slug}`}
                         className="hidden shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 ring-1 ring-brand-200 ring-inset hover:bg-brand-100 sm:inline-flex"
-                        aria-label={`Preview “${l.title}” for free`}
+                        aria-label={`Free preview: ${l.title}`}
                       >
                         <Eye className="size-3" aria-hidden /> Free preview
                       </Link>

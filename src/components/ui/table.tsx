@@ -3,7 +3,9 @@ import { cn } from "@/lib/utils";
 
 export function Table({ className, ...props }: ComponentProps<"table">) {
   return (
-    <div className="w-full overflow-x-auto">
+    // `relative` makes the scroll box the containing block for absolutely positioned content in
+    // cells (e.g. sr-only header labels), which would otherwise widen the whole page on phones.
+    <div className="relative w-full overflow-x-auto">
       <table className={cn("w-full text-left text-sm", className)} {...props} />
     </div>
   );

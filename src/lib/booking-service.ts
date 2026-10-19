@@ -3,11 +3,22 @@ import { and, count, eq, gt, inArray, isNull, lt, lte, ne, notLike, or, sql } fr
 import { getDb, schema, type DB } from "@/db";
 import type { Booking, BookingStatus, Contact, MeetingType } from "@/db/schema";
 import { site } from "@/config/site";
+import { stopAutomations } from "@/lib/automations";
 import { captureLead, createTask, logActivity } from "@/lib/crm";
 import { notifyOwner, sendEmail } from "@/lib/email";
 import { buildIcs, formatIcsDate, type IcsMethod } from "@/lib/ics";
-import { describeTime, formatDuration, formatMeetingTime, getBusinessTimezone, isSlotAvailable, occupiesSlot } from "@/lib/scheduling";
+import {
+  bufferBetween,
+  describeTime,
+  formatDuration,
+  formatMeetingTime,
+  getBusinessTimezone,
+  isSlotAvailable,
+  MAX_BUFFER_MIN,
+  occupiesSlot,
+} from "@/lib/scheduling";
 import { getSettings } from "@/lib/settings";
+import { getStripe } from "@/lib/stripe";
 import { absoluteUrl, firstName, formatMoney } from "@/lib/utils";
 
 /**
@@ -26,6 +37,8 @@ const HOUR_MS = 60 * MINUTE_MS;
 export const BOOKING_LOCK_KEY = 7_204_311_118;
 /** How long an unpaid booking holds its slot while the invitee is at checkout. */
 export const PAYMENT_HOLD_MINUTES = 30;
+/** Retrying checkout refreshes the hold, but never past this long after the booking was made. */
+export const MAX_PAYMENT_HOLD_MINUTES = 2 * PAYMENT_HOLD_MINUTES;
 export const HOLD_EXPIRED_REASON = "Payment not completed";
 export const CHECKOUT_FAILED_REASON = "Checkout could not be started";
 /** Set when payment arrives for a booking whose time is gone (owner follows up with a new time or refund). */
@@ -79,16 +92,28 @@ async function withBookingLock<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   });
 }
 
+/**
+ * True when a booking that occupies its slot sits within the buffer of [start, end). The gap kept is
+ * the larger of the new meeting type's buffer and the existing booking's own type buffer.
+ */
 async function hasConflict(tx: Tx, start: Date, end: Date, bufferMin: number, excludeBookingId?: string): Promise<boolean> {
-  const buffer = Math.max(0, bufferMin) * MINUTE_MS;
+  // Candidates within the widest possible buffer; the exact per-booking gap is checked below.
+  const widest = bufferBetween(bufferMin, MAX_BUFFER_MIN) * MINUTE_MS;
   const conds = [
     occupiesSlot(),
-    lt(schema.bookings.startAt, new Date(end.getTime() + buffer)),
-    gt(schema.bookings.endAt, new Date(start.getTime() - buffer)),
+    lt(schema.bookings.startAt, new Date(end.getTime() + widest)),
+    gt(schema.bookings.endAt, new Date(start.getTime() - widest)),
   ];
   if (excludeBookingId) conds.push(ne(schema.bookings.id, excludeBookingId));
-  const rows = await tx.select({ id: schema.bookings.id }).from(schema.bookings).where(and(...conds)).limit(1);
-  return rows.length > 0;
+  const rows = await tx
+    .select({ startAt: schema.bookings.startAt, endAt: schema.bookings.endAt, bufferMin: schema.meetingTypes.bufferMin })
+    .from(schema.bookings)
+    .innerJoin(schema.meetingTypes, eq(schema.meetingTypes.id, schema.bookings.meetingTypeId))
+    .where(and(...conds));
+  return rows.some((row) => {
+    const gap = bufferBetween(bufferMin, row.bufferMin) * MINUTE_MS;
+    return row.startAt.getTime() < end.getTime() + gap && row.endAt.getTime() > start.getTime() - gap;
+  });
 }
 
 /**
@@ -106,6 +131,7 @@ export async function reserveSlot(input: {
 }): Promise<Booking | null> {
   const { meetingType } = input;
   const end = new Date(input.start.getTime() + meetingType.durationMin * MINUTE_MS);
+  const reminderHours = input.paid ? 0 : await reminderWindowHours();
   return withBookingLock(async (tx) => {
     if (await hasConflict(tx, input.start, end, meetingType.bufferMin)) return null;
     const [row] = await tx
@@ -121,6 +147,8 @@ export async function reserveSlot(input: {
         notes: input.notes?.trim() || null,
         meetingUrl: meetingType.locationUrl?.trim() || null,
         holdExpiresAt: input.paid ? new Date(Date.now() + PAYMENT_HOLD_MINUTES * MINUTE_MS) : null,
+        // Paid bookings get this when payment confirms them.
+        reminderSentAt: input.paid ? null : reminderSentAtFor(input.start, reminderHours),
       })
       .returning();
     return row ?? null;
@@ -134,6 +162,52 @@ export async function releaseHold(bookingId: string, reason: string = CHECKOUT_F
     .update(schema.bookings)
     .set({ status: "cancelled", cancelledAt: new Date(), cancelReason: reason, holdExpiresAt: null })
     .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.status, "pending_payment")));
+}
+
+/**
+ * Gets a still-held, unpaid booking ready for a fresh checkout (the invitee backed out of the first
+ * one): refreshes the hold so it covers the new checkout session (capped at MAX_PAYMENT_HOLD_MINUTES
+ * after booking), and retires the earlier unpaid checkouts so the same booking can't be paid twice.
+ * Returns false when the hold has lapsed or the booking is no longer awaiting payment.
+ */
+export async function prepareCheckoutRetry(bookingId: string): Promise<boolean> {
+  if (!isUuid(bookingId)) return false;
+  const now = new Date();
+  const refreshed = await withBookingLock(async (tx) => {
+    const [held] = await tx
+      .select({ holdExpiresAt: schema.bookings.holdExpiresAt, createdAt: schema.bookings.createdAt })
+      .from(schema.bookings)
+      .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.status, "pending_payment"), gt(schema.bookings.holdExpiresAt, now)))
+      .limit(1);
+    if (!held?.holdExpiresAt) return false;
+    // A live hold already blocks its slot, so stretching it can't collide with another booking.
+    const cap = held.createdAt.getTime() + MAX_PAYMENT_HOLD_MINUTES * MINUTE_MS;
+    const until = Math.max(held.holdExpiresAt.getTime(), Math.min(now.getTime() + PAYMENT_HOLD_MINUTES * MINUTE_MS, cap));
+    if (until > held.holdExpiresAt.getTime()) {
+      await tx.update(schema.bookings).set({ holdExpiresAt: new Date(until) }).where(eq(schema.bookings.id, bookingId));
+    }
+    return true;
+  });
+  if (!refreshed) return false;
+
+  const db = await getDb();
+  const stale = await db
+    .update(schema.orders)
+    .set({ status: "expired" })
+    .where(and(eq(schema.orders.bookingId, bookingId), eq(schema.orders.status, "pending")))
+    .returning({ stripeSessionId: schema.orders.stripeSessionId });
+  // Close the abandoned Stripe sessions too. If one was paid in the meantime, Stripe refuses to
+  // expire it and its webhook still fulfils the order (fulfilment accepts expired orders).
+  const stripe = getStripe();
+  if (stripe) {
+    await Promise.allSettled(
+      stale
+        .map((o) => o.stripeSessionId)
+        .filter((id): id is string => typeof id === "string" && id.startsWith("cs_"))
+        .map((id) => stripe.checkout.sessions.expire(id)),
+    );
+  }
+  return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -427,6 +501,12 @@ function ownerSummary(details: BookingDetails, businessTz: string, headline: str
   ].join("\n");
 }
 
+/** Reminder for the owner when invitees are told "we'll email your meeting link" (no link is set). */
+export function missingMeetingLinkNote(details: BookingDetails): string | null {
+  if (meetingLinkFor(details)) return null;
+  return `Action needed: no meeting link is set for ${details.meetingType.name}, so ${details.contact.email} was told you'll email one before the call. Send it, or add a Meeting link to this meeting type in Admin → Availability so it's included automatically.`;
+}
+
 /** Moves (or removes) the "Prepare for…" task that was created with a booking. */
 async function updatePrepTask(contactId: string, oldStart: Date, newStart: Date | null): Promise<void> {
   const db = await getDb();
@@ -451,6 +531,7 @@ export async function finalizeConfirmedBooking(details: BookingDetails, opts: { 
   const owner = describeTime(booking.startAt, booking.endAt, businessTz);
   const label = `${owner.shortDateLabel} at ${owner.startTimeLabel} ${owner.zoneAbbr}`;
   const name = contact.name ?? contact.email;
+  const linkNote = missingMeetingLinkNote(details);
 
   try {
     await captureLead({
@@ -474,7 +555,11 @@ export async function finalizeConfirmedBooking(details: BookingDetails, opts: { 
       notify: {
         kind: "booking",
         subject: `New booking: ${name} · ${meetingType.name} (${label})`,
-        markdown: ownerSummary(details, businessTz, `**${md(name)}** booked **${md(meetingType.name)}**${opts.paid ? " and paid online" : ""}.`),
+        markdown: ownerSummary(
+          details,
+          businessTz,
+          `**${md(name)}** booked **${md(meetingType.name)}**${opts.paid ? " and paid online" : ""}.${linkNote ? `\n\n**${md(linkNote)}**` : ""}`,
+        ),
       },
     });
   } catch (err) {
@@ -487,7 +572,7 @@ export async function finalizeConfirmedBooking(details: BookingDetails, opts: { 
       contactId: contact.id,
       dueAt: new Date(booking.startAt.getTime() - HOUR_MS),
       origin: "booking",
-      description: [formatMeetingTime(booking.startAt, booking.endAt, businessTz), answersPlainText(meetingType, booking.answers, booking.notes)]
+      description: [linkNote, formatMeetingTime(booking.startAt, booking.endAt, businessTz), answersPlainText(meetingType, booking.answers, booking.notes)]
         .filter(Boolean)
         .join("\n\n"),
     });
@@ -515,13 +600,20 @@ export async function confirmPaidBooking(bookingId: string): Promise<void> {
     booking.status === "pending_payment" ||
     ((booking.cancelReason === HOLD_EXPIRED_REASON || booking.cancelReason === CHECKOUT_FAILED_REASON) && booking.startAt.getTime() > Date.now());
 
+  const reminderHours = await reminderWindowHours();
   // Claim under the booking lock. If the hold lapsed before payment arrived, someone else may have
   // taken the time in the meantime, so re-check for overlaps before confirming.
   const outcome = await withBookingLock(async (tx): Promise<"confirmed" | "noop" | "unavailable"> => {
     if (revivable && !(await hasConflict(tx, booking.startAt, booking.endAt, meetingType.bufferMin, booking.id))) {
       const [row] = await tx
         .update(schema.bookings)
-        .set({ status: "confirmed", holdExpiresAt: null, cancelledAt: null, cancelReason: null })
+        .set({
+          status: "confirmed",
+          holdExpiresAt: null,
+          cancelledAt: null,
+          cancelReason: null,
+          reminderSentAt: reminderSentAtFor(booking.startAt, reminderHours),
+        })
         .where(and(eq(schema.bookings.id, booking.id), eq(schema.bookings.status, booking.status)))
         .returning({ id: schema.bookings.id });
       // No row → a concurrent call already handled it.
@@ -612,6 +704,7 @@ export async function cancelBooking(
       .set({ status: "expired" })
       .where(and(eq(schema.orders.bookingId, booking.id), eq(schema.orders.status, "pending"))),
     updatePrepTask(contact.id, booking.startAt, null),
+    wasConfirmed ? stopCallPrepUnlessBooked(contact.id, booking.id) : Promise.resolve(),
   ]);
 
   if (wasConfirmed && opts.notifyInvitee !== false) {
@@ -643,6 +736,27 @@ export async function cancelBooking(
   return { ok: true };
 }
 
+/**
+ * Stops the "call booked" email sequence (call prep) after a cancellation, unless the contact still
+ * has another upcoming confirmed booking. A new booking restarts it (call_booked is re-triggerable).
+ */
+async function stopCallPrepUnlessBooked(contactId: string, cancelledBookingId: string): Promise<void> {
+  const db = await getDb();
+  const [other] = await db
+    .select({ id: schema.bookings.id })
+    .from(schema.bookings)
+    .where(
+      and(
+        eq(schema.bookings.contactId, contactId),
+        eq(schema.bookings.status, "confirmed"),
+        gt(schema.bookings.startAt, new Date()),
+        ne(schema.bookings.id, cancelledBookingId),
+      ),
+    )
+    .limit(1);
+  if (!other) await stopAutomations(contactId, "call_booked");
+}
+
 /** Moves a confirmed upcoming booking to a new start time (same duration), re-checking availability under the lock. */
 export async function rescheduleBooking(
   bookingId: string,
@@ -661,11 +775,18 @@ export async function rescheduleBooking(
     return { ok: false, error: "Sorry, that time is no longer available. Please pick another.", slotTaken: true };
   }
   const newEnd = new Date(newStart.getTime() + meetingType.durationMin * MINUTE_MS);
+  const reminderHours = await reminderWindowHours();
   const updated = await withBookingLock(async (tx) => {
     if (await hasConflict(tx, newStart, newEnd, meetingType.bufferMin, booking.id)) return null;
     const [row] = await tx
       .update(schema.bookings)
-      .set({ startAt: newStart, endAt: newEnd, timezone: opts.timezone || booking.timezone, reminderSentAt: null })
+      .set({
+        startAt: newStart,
+        endAt: newEnd,
+        timezone: opts.timezone || booking.timezone,
+        // The "rescheduled" email covers a new time that's already inside the reminder window.
+        reminderSentAt: reminderSentAtFor(newStart, reminderHours),
+      })
       .where(and(eq(schema.bookings.id, booking.id), eq(schema.bookings.status, "confirmed"), gt(schema.bookings.startAt, new Date())))
       .returning();
     return row ?? null;
@@ -732,12 +853,40 @@ export async function setBookingOutcome(bookingId: string, outcome: "completed" 
 /* Cron jobs                                                           */
 /* ------------------------------------------------------------------ */
 
+/** How often the cron job runs, in hours: daily on Vercel Hobby. Set CRON_INTERVAL_HOURS=1 with an hourly schedule. */
+export function cronIntervalHours(value: string | undefined = process.env.CRON_INTERVAL_HOURS): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 24 * 14) : 24;
+}
+
+/**
+ * How many hours before a call its reminder may go out: the owner's setting (default 24), widened to
+ * the cron interval. A job that runs every N hours has to remind every call starting before its next
+ * run, otherwise calls in between would never get a reminder.
+ */
+export function effectiveReminderHours(settingHours: unknown, cronHours: number = cronIntervalHours()): number {
+  const hours = Number(settingHours);
+  const windowHours = Number.isFinite(hours) && hours > 0 ? Math.min(hours, 24 * 14) : 24;
+  return Math.max(windowHours, cronHours);
+}
+
+async function reminderWindowHours(): Promise<number> {
+  const settings = await getSettings().catch(() => null);
+  return effectiveReminderHours(settings?.bookingReminderHours);
+}
+
+/**
+ * `reminderSentAt` for a booking confirmed (or moved) right now. A call that already starts inside
+ * the reminder window gets no separate reminder: the confirmation email just sent covers it.
+ */
+export function reminderSentAtFor(startAt: Date, windowHours: number, now: Date = new Date()): Date | null {
+  return startAt.getTime() - now.getTime() <= windowHours * HOUR_MS ? now : null;
+}
+
 /** Called by the cron job: sends reminder emails for upcoming confirmed bookings. Returns how many were sent. */
 export async function sendDueBookingReminders(): Promise<number> {
   const db = await getDb();
-  const settings = await getSettings();
-  const hours = Number(settings.bookingReminderHours);
-  const windowHours = Number.isFinite(hours) && hours > 0 ? Math.min(hours, 24 * 14) : 24;
+  const windowHours = await reminderWindowHours();
   const now = new Date();
   const due = await db
     .select({ id: schema.bookings.id })

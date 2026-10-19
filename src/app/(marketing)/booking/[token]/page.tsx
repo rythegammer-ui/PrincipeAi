@@ -11,7 +11,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { site } from "@/config/site";
 import { bookingGoogleCalendarUrl, getBookingDetails, isChangeable, isHoldExpired, isManageToken, meetingLinkFor, PAID_UNAVAILABLE_REASON } from "@/lib/booking-service";
 import { bookingWindow, describeTime, getBusinessTimezone } from "@/lib/scheduling";
-import { firstName } from "@/lib/utils";
+import { firstName, formatMoney } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Manage your booking", robots: { index: false, follow: false } };
 
@@ -34,6 +34,9 @@ export default async function ManageBookingPage({
   const holdExpired = isHoldExpired(booking, now);
   const canReschedule = changeable && booking.status === "confirmed";
   const canCancel = changeable && !holdExpired;
+  // Back from checkout without paying (Stripe's cancel_url lands here): let them pay or pick another time.
+  const canPay = changeable && booking.status === "pending_payment" && !holdExpired;
+  const holdUntil = booking.holdExpiresAt ? describeTime(booking.holdExpiresAt, booking.holdExpiresAt, booking.timezone) : null;
   const isPast = booking.startAt.getTime() <= now.getTime();
 
   const timezone = await getBusinessTimezone();
@@ -85,13 +88,11 @@ export default async function ManageBookingPage({
             <Alert tone={holdExpired ? "warning" : "info"} title={holdExpired ? "This reserved time has expired" : "Waiting for payment"}>
               {holdExpired
                 ? "Payment wasn't completed in time, so this slot has been released. Please choose a new time."
-                : `This time is held until ${
-                    booking.holdExpiresAt ? describeTime(booking.holdExpiresAt, booking.holdExpiresAt, booking.timezone).startTimeLabel : "shortly"
-                  }. Your booking is confirmed once payment goes through.`}
+                : `This time is held for you until ${holdUntil ? `${holdUntil.startTimeLabel} ${holdUntil.zoneAbbr}` : "shortly"}. Complete your payment to confirm the booking, or choose a different time.`}
             </Alert>
           )}
 
-          {(canReschedule || canCancel) && (
+          {(canReschedule || canCancel || canPay) && (
             <ManageBooking
               token={booking.manageToken}
               meetingTypeSlug={meetingType.slug}
@@ -100,6 +101,8 @@ export default async function ManageBookingPage({
               currentStart={booking.startAt.toISOString()}
               canReschedule={canReschedule}
               canCancel={canCancel}
+              canPay={canPay}
+              priceLabel={meetingType.priceCents > 0 ? formatMoney(meetingType.priceCents) : undefined}
               initialMonth={initialMonth}
               minMonth={minMonth}
               maxMonth={maxMonth < initialMonth ? initialMonth : maxMonth}

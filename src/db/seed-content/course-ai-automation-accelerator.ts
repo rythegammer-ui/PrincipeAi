@@ -2073,7 +2073,6 @@ The final module covers what most courses skip: testing with golden test sets, m
   audience: "both",
   level: "Advanced",
   priceCents: 49700,
-  compareAtCents: 79700,
   coverEmoji: "⚡",
   outcomes: [
     "Design AI workflows with a clear trigger, context, model step, action and checks",

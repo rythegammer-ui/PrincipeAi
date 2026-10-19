@@ -26,13 +26,37 @@ export type WeeklyRule = {
   endMinute: number;
 };
 
-export type BusyInterval = { start: Date | string; end: Date | string };
+/**
+ * An existing commitment. `bufferMin` is the buffer of that booking's own meeting type: the gap kept
+ * around it is the larger of its buffer and the buffer of the type being booked.
+ */
+export type BusyInterval = { start: Date | string; end: Date | string; bufferMin?: number | null };
+
+/** Highest buffer an admin can set on a meeting type (minutes). Conflict checks look this far around a new booking. */
+export const MAX_BUFFER_MIN = 240;
+
+/**
+ * Meeting types the site's funnels link to by slug (home page offers, consulting application,
+ * assessment results, free-guide thank-you page, prep tips). Their URLs can't be changed in admin.
+ */
+export const BUILT_IN_MEETING_SLUGS = ["ai-strategy-call", "ai-coaching-session", "implementation-discovery"] as const;
+
+export function isBuiltInMeetingSlug(slug: string): boolean {
+  return (BUILT_IN_MEETING_SLUGS as readonly string[]).includes(slug);
+}
+
+/** Minutes kept free between two meetings: the larger of the two meeting types' buffers. */
+export function bufferBetween(aMin: number | null | undefined, bMin: number | null | undefined): number {
+  const a = Number(aMin);
+  const b = Number(bMin);
+  return Math.max(0, Number.isFinite(a) ? a : 0, Number.isFinite(b) ? b : 0);
+}
 
 export type ComputeSlotsInput = {
   rules: WeeklyRule[];
   /** "YYYY-MM-DD" dates (business timezone) with no availability at all. */
   blockedDates: string[];
-  /** Existing commitments. Each is expanded by `bufferMin` on both sides. */
+  /** Existing commitments. Each is expanded on both sides by the larger of `bufferMin` and its own `bufferMin`. */
   busy: BusyInterval[];
   durationMin: number;
   bufferMin: number;
@@ -77,7 +101,8 @@ function wallClock(day: DateTime, minuteOfDay: number): DateTime {
  * - starts on a `stepMin` boundary (wall-clock aligned) inside a weekly rule window and ends inside it,
  * - starts at least `minNoticeHours` from `now` and no later than the end of day `today + maxDaysAhead`,
  * - is not on a blocked date,
- * - does not overlap any busy interval widened by `bufferMin` on both sides.
+ * - does not overlap any busy interval widened on both sides by the larger of `bufferMin` and that
+ *   interval's own buffer (so a meeting type with a long buffer keeps it, whatever is booked next to it).
  *
  * Windows are walked in absolute time from their wall-clock start, so DST transitions inside a
  * window are handled correctly (no phantom slots in a spring-forward gap; the repeated hour on a
@@ -91,7 +116,6 @@ export function computeSlots(input: ComputeSlotsInput): string[] {
   const stepMin = input.stepMin && input.stepMin > 0 ? Math.floor(input.stepMin) : defaultStepMin(durationMin);
   const durationMs = durationMin * MINUTE_MS;
   const stepMs = stepMin * MINUTE_MS;
-  const bufferMs = Math.max(0, input.bufferMin || 0) * MINUTE_MS;
 
   const nowMs = toMillis(input.now);
   if (!Number.isFinite(nowMs)) return [];
@@ -109,7 +133,9 @@ export function computeSlots(input: ComputeSlotsInput): string[] {
   for (const b of input.busy) {
     const s = toMillis(b.start);
     const e = toMillis(b.end);
-    if (Number.isFinite(s) && Number.isFinite(e) && e > s) busy.push([s - bufferMs, e + bufferMs]);
+    if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) continue;
+    const pad = bufferBetween(input.bufferMin, b.bufferMin) * MINUTE_MS;
+    busy.push([s - pad, e + pad]);
   }
   const overlapsBusy = (s: number, e: number) => busy.some(([bs, be]) => s < be && e > bs);
 
@@ -232,7 +258,8 @@ export function occupiesSlot(now: Date = new Date()): SQL {
 
 async function loadBusy(fromMs: number, toMs: number, excludeBookingId?: string): Promise<BusyInterval[]> {
   const db = await getDb();
-  const pad = DAY_MINUTES * MINUTE_MS;
+  // One day either side covers the widest buffer (MAX_BUFFER_MIN) of any booking next to the range.
+  const pad = Math.max(DAY_MINUTES, MAX_BUFFER_MIN) * MINUTE_MS;
   const conds: SQL[] = [
     occupiesSlot(),
     lt(schema.bookings.startAt, new Date(toMs + pad)),
@@ -240,8 +267,9 @@ async function loadBusy(fromMs: number, toMs: number, excludeBookingId?: string)
   ];
   if (excludeBookingId) conds.push(ne(schema.bookings.id, excludeBookingId));
   return db
-    .select({ start: schema.bookings.startAt, end: schema.bookings.endAt })
+    .select({ start: schema.bookings.startAt, end: schema.bookings.endAt, bufferMin: schema.meetingTypes.bufferMin })
     .from(schema.bookings)
+    .innerJoin(schema.meetingTypes, eq(schema.meetingTypes.id, schema.bookings.meetingTypeId))
     .where(and(...conds));
 }
 

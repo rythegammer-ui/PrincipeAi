@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   PLACEHOLDERS,
   TRIGGERS,
+  TRIGGER_META,
   describeStepTiming,
   fallbackStepDraft,
   formatDelay,
@@ -71,6 +72,13 @@ describe("automation helpers", () => {
     expect(triggerLabel("lead_magnet")).toBe("Downloads the free guide");
     expect(triggerLabel("unknown")).toBe("unknown");
     expect(humanizeKind("booking_confirmation")).toBe("Booking confirmation");
+  });
+
+  it("says the purchase trigger covers course purchases only (paid sessions start the booking automation)", () => {
+    // recordPurchase enrolls course buyers in "purchase"; paid sessions were already enrolled in "call_booked".
+    expect(TRIGGER_META.purchase.description).toMatch(/course purchase/i);
+    expect(TRIGGER_META.purchase.description).toContain(TRIGGER_META.call_booked.label);
+    expect(TRIGGER_META.purchase.description).not.toMatch(/session payment/i);
   });
 
   it("masks emails without revealing their length", () => {

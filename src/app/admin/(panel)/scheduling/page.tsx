@@ -114,6 +114,9 @@ export default async function SchedulingPage({ searchParams }: { searchParams: P
                                   {t.questions.length > 0 && ` · ${t.questions.length} question${t.questions.length === 1 ? "" : "s"}`}
                                 </span>
                               </p>
+                              {t.active && !t.locationUrl?.trim() && (
+                                <p className="mt-1 text-xs text-amber-700">No meeting link: invitees are told you&apos;ll email one before each call.</p>
+                              )}
                             </div>
                           </div>
                         </TD>

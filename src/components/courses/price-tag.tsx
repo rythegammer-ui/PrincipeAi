@@ -33,7 +33,7 @@ export function PriceTag({
       </span>
       {saving !== null && compareAtCents ? (
         <>
-          <span className={cn("tabular-nums line-through", tone === "dark" ? "text-zinc-400" : "text-zinc-400", size === "lg" ? "text-lg" : "text-sm")}>
+          <span className={cn("tabular-nums line-through", tone === "dark" ? "text-zinc-400" : "text-zinc-500", size === "lg" ? "text-lg" : "text-sm")}>
             <span className="sr-only">Regular price </span>
             {formatMoney(compareAtCents)}
           </span>

@@ -6,7 +6,8 @@ import { authSecret } from "@/lib/runtime-mode";
  * Runs before every page request:
  * 1. Assigns an anonymous visitor id + captures first-touch attribution (UTM, referrer, landing page)
  *    into cookies, so funnel analytics and CRM attribution work without client JS.
- * 2. Optimistic auth gate for /admin and /learn (the real checks happen again in layouts + actions).
+ * 2. Optimistic auth gate for /admin and /learn page loads (the real checks happen again in layouts +
+ *    actions; server action POSTs pass straight through to those checks).
  */
 
 const YEAR = 60 * 60 * 24 * 365;
@@ -24,6 +25,13 @@ async function hasValidSession(token: string | undefined, role: "admin" | "stude
 
 export async function proxy(request: NextRequest) {
   const { pathname, search, searchParams } = request.nextUrl;
+
+  // Server Function (action) calls POST to the page URL. A 307 to a login page would hand the
+  // action client HTML instead of an RSC payload and crash the page, losing the user's input.
+  // Every server function re-checks auth itself (assertAdmin / getStudent → redirect), which
+  // the client turns into a proper navigation to the login page.
+  const isServerAction = request.method === "POST" && request.headers.has("next-action");
+  if (isServerAction && (pathname.startsWith("/admin") || pathname.startsWith("/learn"))) return NextResponse.next();
 
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     if (!(await hasValidSession(request.cookies.get("pa_admin")?.value, "admin"))) {

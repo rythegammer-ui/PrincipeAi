@@ -5,16 +5,18 @@ import { CourseCard } from "@/components/courses/course-card";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
 import { listPublishedCourses } from "@/lib/courses";
+import { shareMetadata } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "AI Courses",
   description:
     "Practical, plain-English AI courses for everyday life and for business. Short lessons, real examples, and an AI tutor inside every lesson.",
-  openGraph: {
+  ...shareMetadata({
     title: "AI Courses · Principe AI",
     description: "Practical, plain-English AI courses for everyday life and for business.",
-  },
+    url: "/courses",
+  }),
 };
 
 const FILTERS = [

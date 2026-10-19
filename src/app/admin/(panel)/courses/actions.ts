@@ -1,12 +1,13 @@
 "use server";
 
-import { and, asc, count, eq, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { assertAdmin } from "@/lib/auth";
 import { enrollInCourse } from "@/lib/courses";
+import { PENDING_ORDER_TTL_MS } from "@/lib/jobs";
 import { parseVideoUrl } from "@/lib/video";
 import { slugify } from "@/lib/utils";
 
@@ -14,7 +15,14 @@ import { slugify } from "@/lib/utils";
 /* Shared helpers                                                      */
 /* ------------------------------------------------------------------ */
 
-export type FormState = { ok?: boolean; message?: string; error?: string; fieldErrors?: Record<string, string> };
+export type FormState = {
+  ok?: boolean;
+  message?: string;
+  error?: string;
+  fieldErrors?: Record<string, string>;
+  /** What was submitted, echoed back on validation errors so uncontrolled forms can restore it after React's reset. */
+  values?: Record<string, string>;
+};
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** Lesson slugs that would collide with student-portal routes. */
@@ -118,8 +126,9 @@ const createSchema = z.object({
 
 export async function createCourseAction(_prev: FormState, formData: FormData): Promise<FormState> {
   await assertAdmin();
-  const parsed = createSchema.safeParse({ title: str(formData, "title"), price: str(formData, "price"), audience: str(formData, "audience") || "both" });
-  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+  const raw = { title: str(formData, "title"), price: str(formData, "price"), audience: str(formData, "audience") || "both" };
+  const parsed = createSchema.safeParse(raw);
+  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error), values: raw };
   const { title, price, audience } = parsed.data;
 
   const base = slugify(title) || "course";
@@ -232,6 +241,18 @@ export async function deleteCourseAction(formData: FormData): Promise<void> {
     .from(schema.orders)
     .where(and(eq(schema.orders.courseId, id), eq(schema.orders.status, "paid")));
   if (students > 0 || paid > 0) redirect(`/admin/courses/${id}?error=has-students`);
+  // Deleting would orphan an open Stripe checkout (orders.course_id is set null), leaving a payment undeliverable.
+  const [{ value: open }] = await db
+    .select({ value: count() })
+    .from(schema.orders)
+    .where(
+      and(
+        eq(schema.orders.courseId, id),
+        eq(schema.orders.status, "pending"),
+        gt(schema.orders.createdAt, new Date(Date.now() - PENDING_ORDER_TTL_MS)),
+      ),
+    );
+  if (open > 0) redirect(`/admin/courses/${id}?error=open-checkouts`);
   await db.delete(schema.courses).where(eq(schema.courses.id, id));
   revalidatePath("/admin/courses");
   revalidatePath("/courses");
@@ -455,13 +476,14 @@ const grantSchema = z.object({
 
 export async function grantAccessAction(_prev: FormState, formData: FormData): Promise<FormState> {
   await assertAdmin();
+  const raw = { email: str(formData, "email"), name: str(formData, "name"), sendEmail: formData.get("sendEmail") === "on" ? "on" : "" };
   const parsed = grantSchema.safeParse({
     courseId: str(formData, "courseId"),
-    email: str(formData, "email").trim().toLowerCase(),
-    name: str(formData, "name"),
-    sendEmail: formData.get("sendEmail") === "on",
+    email: raw.email.trim().toLowerCase(),
+    name: raw.name,
+    sendEmail: raw.sendEmail === "on",
   });
-  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error), values: raw };
   const { courseId, email, name, sendEmail } = parsed.data;
   try {
     const { enrolled } = await enrollInCourse({ email, name: name || null, courseId, source: "manual", sendAccessEmail: sendEmail });
@@ -470,7 +492,7 @@ export async function grantAccessAction(_prev: FormState, formData: FormData): P
     return { ok: true, message: sendEmail ? `Access granted — a sign-in link was emailed to ${email}.` : `Access granted to ${email}.` };
   } catch (err) {
     console.error("[admin] grant access failed", err);
-    return { error: "Couldn't grant access. Please try again." };
+    return { error: "Couldn't grant access. Please try again.", values: raw };
   }
 }
 

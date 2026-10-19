@@ -29,9 +29,9 @@ export function stripeTestMode(): boolean {
   return key.startsWith("sk_test_") || key.startsWith("rk_test_");
 }
 
-/** Link to a payment in the Stripe dashboard (test or live). */
-export function stripeDashboardUrl(paymentIntentId: string): string {
-  return `https://dashboard.stripe.com/${stripeTestMode() ? "test/" : ""}payments/${encodeURIComponent(paymentIntentId)}`;
+/** Link to a payment in the Stripe dashboard (test or live; defaults to the configured key's mode). */
+export function stripeDashboardUrl(paymentIntentId: string, test: boolean = stripeTestMode()): string {
+  return `https://dashboard.stripe.com/${test ? "test/" : ""}payments/${encodeURIComponent(paymentIntentId)}`;
 }
 
 /** Extracts the PaymentIntent id from an expandable Stripe field. */

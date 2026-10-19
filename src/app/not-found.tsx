@@ -9,10 +9,11 @@ export const metadata: Metadata = {
 };
 
 /**
- * Branded 404 for unknown URLs (rendered in the root layout only) and the fallback for any segment
- * without its own not-found file. When it ends up nested inside another layout's <main> (e.g. the
- * admin or student shells), the site header/footer hide themselves via the `[main_&]:hidden` variant
- * so that layout's own chrome isn't duplicated.
+ * Branded 404 for unknown URLs and for `notFound()` in any segment without a closer not-found file.
+ * It renders directly in the root layout (above the marketing/admin/learn layouts), so it brings its
+ * own header and footer. Shells that need their own chrome on a 404 add a not-found file of their
+ * own (e.g. `admin/(panel)/not-found.tsx`). The `[main_&]:hidden` wrappers are a safety net in case
+ * this component is ever rendered inside another layout's <main>.
  */
 export default function NotFound() {
   return (

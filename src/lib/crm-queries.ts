@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/db";
 import type { Stage } from "@/db/schema";
 import { SEGMENTS, STAGE_ORDER } from "@/components/admin/crm-utils";
+import { CHECKOUT_FAILED_REASON, HOLD_EXPIRED_REASON } from "@/lib/booking-service";
 import { getBusinessTimezone } from "@/lib/scheduling";
 
 /**
@@ -257,7 +258,12 @@ export async function getDashboard(range: DashboardRange) {
 
   const inPeriod = (col: AnyPgColumn) => gte(col, start);
   const inPrev = (col: AnyPgColumn) => and(gte(col, prevStart), lt(col, start));
-  const booked = ne(b.status, "pending_payment");
+  // A booked call = any booking except a live unpaid hold or one released because payment never
+  // completed (the cron / failed checkout cancels those). coalesce keeps NULL reasons counted.
+  const booked = and(
+    ne(b.status, "pending_payment"),
+    sql`not (${b.status} = 'cancelled' and coalesce(${b.cancelReason}, '') in (${HOLD_EXPIRED_REASON}, ${CHECKOUT_FAILED_REASON}))`,
+  );
   const paid = eq(o.status, "paid");
 
   const leadDay = dayOf(c.createdAt, tz);

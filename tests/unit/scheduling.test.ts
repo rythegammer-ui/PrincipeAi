@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { computeSlots, defaultStepMin, describeTime, formatDuration, isValidTimezone, type ComputeSlotsInput } from "@/lib/scheduling";
+import {
+  bufferBetween,
+  BUILT_IN_MEETING_SLUGS,
+  computeSlots,
+  defaultStepMin,
+  describeTime,
+  formatDuration,
+  isBuiltInMeetingSlug,
+  isValidTimezone,
+  type ComputeSlotsInput,
+} from "@/lib/scheduling";
 
 const NY = "America/New_York";
 const weekdays9to17 = [1, 2, 3, 4, 5].map((weekday) => ({ weekday, startMinute: 540, endMinute: 1020 }));
@@ -187,6 +197,31 @@ describe("computeSlots — blocked dates and busy time", () => {
     expect(day).toContain("2026-06-02T16:00:00.000Z");
   });
 
+  it("keeps an existing meeting's own (larger) buffer when booking a type with a smaller one", () => {
+    // 10:00–10:30 EDT, booked as a type with a 60-minute buffer → nothing between 9:00 and 11:30.
+    const busy = [{ start: "2026-06-02T14:00:00Z", end: "2026-06-02T14:30:00Z", bufferMin: 60 }];
+    const day = onDay("2026-06-02", "-04:00", { busy, bufferMin: 0 });
+    expect(day).not.toContain("2026-06-02T13:30:00.000Z"); // back-to-back before
+    expect(day).not.toContain("2026-06-02T14:30:00.000Z"); // back-to-back after
+    expect(day).not.toContain("2026-06-02T15:00:00.000Z"); // only 30 min after
+    expect(day[0]).toBe("2026-06-02T15:30:00.000Z"); // 11:30, a full hour after it ends
+  });
+
+  it("uses the larger of the two buffers, whichever side it comes from", () => {
+    const busy = [{ start: "2026-06-02T15:00:00Z", end: "2026-06-02T15:30:00Z", bufferMin: 15 }]; // 11:00–11:30 EDT
+    const bigNew = onDay("2026-06-02", "-04:00", { busy, bufferMin: 60 });
+    const bigOld = onDay("2026-06-02", "-04:00", { busy: [{ ...busy[0], bufferMin: 60 }], bufferMin: 15 });
+    expect(bigNew).toEqual(bigOld);
+    expect(bigNew).toContain("2026-06-02T13:30:00.000Z"); // 9:30–10:00, an hour before
+    expect(bigNew).not.toContain("2026-06-02T14:00:00.000Z");
+    expect(bigNew).not.toContain("2026-06-02T16:00:00.000Z"); // 12:00, only 30 min after
+    expect(bigNew).toContain("2026-06-02T16:30:00.000Z");
+    // Without a per-booking buffer the type's own buffer applies as before.
+    const plain = onDay("2026-06-02", "-04:00", { busy: [{ start: busy[0].start, end: busy[0].end }], bufferMin: 15 });
+    expect(plain).toContain("2026-06-02T14:00:00.000Z");
+    expect(plain).toContain("2026-06-02T16:00:00.000Z");
+  });
+
   it("ignores malformed busy intervals", () => {
     const busy = [{ start: "nonsense", end: "2026-06-02T15:30:00Z" }, { start: "2026-06-02T16:00:00Z", end: "2026-06-02T15:00:00Z" }];
     expect(onDay("2026-06-02", "-04:00", { busy })).toHaveLength(16);
@@ -284,5 +319,21 @@ describe("formatting helpers", () => {
     expect(formatDuration(60)).toBe("1 hr");
     expect(formatDuration(90)).toBe("1 hr 30 min");
     expect(formatDuration(120)).toBe("2 hrs");
+  });
+});
+
+describe("buffers and built-in meeting types", () => {
+  it("keeps the larger of two buffers, treating missing or invalid values as 0", () => {
+    expect(bufferBetween(15, 60)).toBe(60);
+    expect(bufferBetween(60, 15)).toBe(60);
+    expect(bufferBetween(0, null)).toBe(0);
+    expect(bufferBetween(undefined, 30)).toBe(30);
+    expect(bufferBetween(-10, Number.NaN)).toBe(0);
+  });
+
+  it("recognises the meeting types the funnels link to", () => {
+    for (const slug of BUILT_IN_MEETING_SLUGS) expect(isBuiltInMeetingSlug(slug)).toBe(true);
+    expect(isBuiltInMeetingSlug("discovery-call")).toBe(false);
+    expect(isBuiltInMeetingSlug("")).toBe(false);
   });
 });

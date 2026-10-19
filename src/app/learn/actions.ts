@@ -35,7 +35,8 @@ export async function setLessonCompleteAction(formData: FormData): Promise<void>
     .innerJoin(schema.courses, eq(schema.courses.id, schema.lessons.courseId))
     .where(eq(schema.lessons.id, lessonId))
     .limit(1);
-  if (!row) throw new Error("Lesson not found");
+  // The lesson was deleted while the student had it open: send them back to their courses.
+  if (!row) redirect("/learn");
   const { lesson, courseSlug, courseTitle } = row;
   if (!(await isEnrolled(student.id, lesson.courseId))) redirect(`/courses/${courseSlug}`);
 

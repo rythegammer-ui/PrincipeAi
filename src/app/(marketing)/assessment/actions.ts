@@ -5,12 +5,12 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { getDb, schema } from "@/db";
 import {
+  answersSummary,
   type AssessmentResult,
   buildOwnerNotification,
   buildResultsEmail,
   computeAssessment,
   getContactSchema,
-  describeAnswers,
   isHotLead,
   OFFERS,
   parseAnswers,
@@ -83,9 +83,8 @@ export async function submitAssessmentAction(_prev: AssessmentFormState, formDat
   const resultToken = randomBytes(16).toString("hex");
   const resultsPath = `/assessment/results/${resultToken}`;
   const resultsUrl = absoluteUrl(resultsPath);
-  const summary = describeAnswers(answers)
-    .map(([label, value]) => `- **${label}:** ${value}`)
-    .join("\n");
+  // Plain text: the CRM timeline and task descriptions don't render Markdown.
+  const summary = answersSummary(answers);
 
   try {
     const { contact: lead } = await captureLead({

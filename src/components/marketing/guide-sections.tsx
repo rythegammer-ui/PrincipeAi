@@ -60,7 +60,8 @@ export function DayCard({ day }: { day: Day }) {
 export function LockedDays({ days }: { days: Day[] }) {
   if (!days.length) return null;
   return (
-    <ul className="grid gap-2.5">
+    // grid-cols-1 (minmax(0,1fr)) rather than an implicit auto track, so the nowrap titles truncate instead of widening the page.
+    <ul className="grid grid-cols-1 gap-2.5">
       {days.map((d) => (
         <li key={d.day} className="flex items-center gap-3 rounded-xl border border-dashed border-zinc-300 bg-white/70 px-4 py-3 text-sm">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 font-semibold text-zinc-500 tabular-nums">{d.day}</span>

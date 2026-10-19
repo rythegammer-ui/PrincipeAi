@@ -4,10 +4,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToCalendar } from "@/components/booking/add-to-calendar";
 import { BookingSummary } from "@/components/booking/booking-summary";
+import { PendingPaymentActions } from "@/components/booking/pending-payment-actions";
 import { ButtonLink } from "@/components/ui/button";
 import { bookingGoogleCalendarUrl, getBookingDetails, isHoldExpired, isManageToken, meetingLinkFor, PAID_UNAVAILABLE_REASON, prepTips } from "@/lib/booking-service";
 import { describeTime } from "@/lib/scheduling";
-import { firstName } from "@/lib/utils";
+import { firstName, formatMoney } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Booking confirmed", robots: { index: false, follow: false } };
 
@@ -66,16 +67,19 @@ export default async function BookingConfirmedPage({ params }: { params: Promise
           status={booking.status}
           showJoin={false}
         />
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <ButtonLink href={rebookHref} size="lg">
-            {expired ? "Choose a new time" : "Start checkout again"} <ArrowRight />
+        {expired ? (
+          <ButtonLink href={rebookHref} size="lg" className="mt-8">
+            Choose a new time <ArrowRight />
           </ButtonLink>
-          {!expired && (
-            <ButtonLink href={`/booking/${booking.manageToken}`} variant="outline" size="lg">
-              Cancel this hold
-            </ButtonLink>
-          )}
-        </div>
+        ) : (
+          <div className="mt-8">
+            <PendingPaymentActions token={booking.manageToken} priceLabel={meetingType.priceCents > 0 ? formatMoney(meetingType.priceCents) : undefined}>
+              <ButtonLink href={`/booking/${booking.manageToken}`} variant="ghost" size="lg">
+                Manage booking
+              </ButtonLink>
+            </PendingPaymentActions>
+          </div>
+        )}
       </Shell>
     );
   }

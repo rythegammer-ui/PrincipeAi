@@ -6,6 +6,7 @@ import { cancelBookingAction, rescheduleBookingAction, type ManageBookingState }
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/form";
+import { PendingPaymentActions } from "./pending-payment-actions";
 import { SlotPicker } from "./slot-picker";
 import { dateKeyInZone, describeTimezone, formatDateKey, formatTime } from "./time";
 import { useVisitorTimezone } from "./use-timezone";
@@ -18,6 +19,9 @@ type Props = {
   currentStart: string;
   canReschedule: boolean;
   canCancel: boolean;
+  /** Unpaid booking with a live hold: offer "Complete payment" and "Choose a different time". */
+  canPay?: boolean;
+  priceLabel?: string;
   initialMonth: string;
   minMonth: string;
   maxMonth: string;
@@ -31,12 +35,24 @@ function submitWith(dispatch: (fd: FormData) => void) {
   };
 }
 
-/** Reschedule / cancel controls on the public manage-booking page. */
+/** Pay / reschedule / cancel controls on the public manage-booking page. */
 export function ManageBooking(props: Props) {
   const [mode, setMode] = useState<"idle" | "reschedule" | "cancel">("idle");
 
   if (mode === "reschedule") return <Reschedule {...props} onClose={() => setMode("idle")} />;
   if (mode === "cancel") return <Cancel token={props.token} onClose={() => setMode("idle")} />;
+
+  if (props.canPay) {
+    return (
+      <PendingPaymentActions token={props.token} priceLabel={props.priceLabel}>
+        {props.canCancel && (
+          <Button size="lg" variant="ghost" onClick={() => setMode("cancel")}>
+            <CalendarX2 aria-hidden /> Cancel booking
+          </Button>
+        )}
+      </PendingPaymentActions>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row">

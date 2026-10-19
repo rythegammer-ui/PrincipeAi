@@ -178,15 +178,20 @@ async function kitEnrollmentIds(email: string): Promise<Set<string>> {
   return new Set(rows.map((r) => r.id));
 }
 
-/** Kit link emails one address can be sent per hour (the opt-in form is public, so it mustn't be usable to spam someone). */
-const GUIDE_LINK_EMAILS_PER_HOUR = 2;
+/**
+ * Kit link emails one address can be sent per day. The opt-in form is public and takes any address, so it mustn't be
+ * usable to flood someone's inbox; the visitor who opted in has the kit unlocked in their browser either way.
+ */
+const GUIDE_LINK_EMAILS_PER_DAY = 1;
 
 /**
  * Emails the Starter Kit link on its own (not a marketing email: the visitor just asked for it), for opt-ins the
- * welcome sequence won't email: a repeat opt-in, an unsubscribed contact, or the sequence paused. True when sent.
+ * welcome sequence won't email: a repeat opt-in or the sequence paused. Never to an unsubscribed contact (anyone can
+ * type their address into the form) and at most once a day per address. True when sent.
  */
 async function sendGuideLinkEmail(contact: Contact, name: string): Promise<boolean> {
-  const limit = await rateLimit(`guide-link:${contact.email}`, GUIDE_LINK_EMAILS_PER_HOUR, 60 * 60);
+  if (contact.unsubscribed) return false;
+  const limit = await rateLimit(`guide-link:${contact.email}`, GUIDE_LINK_EMAILS_PER_DAY, 24 * 60 * 60);
   if (!limit.ok) return false;
   const businessName = await emailBusinessName();
   const { status } = await sendEmail({
@@ -214,9 +219,9 @@ async function sendGuideLinkEmail(contact: Contact, name: string): Promise<boole
 
 /**
  * Starter Kit opt-in → contact (stage "new", tagged starter-kit) + welcome sequence + owner alert. The welcome
- * sequence's first email carries the kit link, but it only starts once per contact; when it doesn't start (or
- * won't email them), the link is emailed on its own. `emailed` says whether a link email went out or is queued,
- * so the confirmation can promise one only then.
+ * sequence's first email carries the kit link, but it only starts once per contact; when it doesn't start, the link
+ * is emailed on its own (see `sendGuideLinkEmail` for when it isn't). `emailed` says whether a link email went out or
+ * is queued, so the confirmation can promise one only then.
  */
 export async function captureGuideOptIn(input: OptInInput, path: string): Promise<{ contact: Contact; emailed: boolean }> {
   const interest = optionLabel(INTEREST_OPTIONS, input.interest);

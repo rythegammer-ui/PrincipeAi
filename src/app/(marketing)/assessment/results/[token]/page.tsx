@@ -56,8 +56,16 @@ function buildView(submission: { answers: unknown; score: number; tier: string; 
   };
 }
 
-export default async function AssessmentResultsPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
+export default async function AssessmentResultsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ sent?: string | string[] }>;
+}) {
+  const [{ token }, sp] = await Promise.all([params, searchParams]);
+  // The quiz adds ?sent=0 when no results email went out (several submissions for one address in a day).
+  const emailed = (Array.isArray(sp.sent) ? sp.sent[0] : sp.sent) !== "0";
   const row = await getSubmissionByToken(token);
   if (!row) notFound();
   const { submission, contact } = row;
@@ -224,7 +232,7 @@ export default async function AssessmentResultsPage({ params }: { params: Promis
           </div>
           <div className="mt-10 flex flex-col items-center justify-center gap-x-6 gap-y-2 text-sm text-zinc-400 sm:flex-row">
             <span className="inline-flex items-center gap-1.5">
-              <Mail className="size-4" aria-hidden /> We&apos;ve emailed you a link to this page.
+              <Mail className="size-4" aria-hidden /> {emailed ? "We've emailed you a link to this page." : "Bookmark this page to come back to your results."}
             </span>
             <Link href="/assessment#quiz" className="inline-flex min-h-11 items-center gap-1.5 font-medium text-zinc-200 underline-offset-4 hover:text-white hover:underline">
               <RotateCcw className="size-4" aria-hidden /> Retake the assessment

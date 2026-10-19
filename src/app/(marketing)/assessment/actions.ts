@@ -19,7 +19,7 @@ import {
 } from "@/lib/assessment";
 import { captureLead, createTask } from "@/lib/crm";
 import { emailBusinessName, sendEmail } from "@/lib/email";
-import { rateLimitByIp } from "@/lib/rate-limit";
+import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
 import { absoluteUrl } from "@/lib/utils";
 import { loadOffer, loadStrategyCall, withPrefill } from "./data";
 
@@ -29,6 +29,9 @@ export type AssessmentFormState = {
   /** The answers didn't validate (e.g. a stale tab) — the quiz offers to start again. */
   invalidAnswers?: boolean;
 };
+
+/** Results emails one address can be sent per day: anyone can take the quiz with anyone's address. */
+const RESULTS_EMAILS_PER_DAY = 3;
 
 const CONTACT_FIELDS = ["name", "email", "company"] as const;
 type ContactField = (typeof CONTACT_FIELDS)[number];
@@ -41,7 +44,8 @@ function text(formData: FormData, key: string): string {
 
 /**
  * Quiz submission: validates, scores, captures the lead in the CRM, stores the submission,
- * creates a follow-up task for hot leads, emails the results link and redirects to the results page.
+ * creates a follow-up task for hot leads, emails the results link and redirects to the results page (with `sent=0`
+ * when no email went out, so the page doesn't say one did).
  */
 export async function submitAssessmentAction(_prev: AssessmentFormState, formData: FormData): Promise<AssessmentFormState> {
   const contact = getContactSchema().safeParse({
@@ -86,6 +90,7 @@ export async function submitAssessmentAction(_prev: AssessmentFormState, formDat
   // Plain text: the CRM timeline and task descriptions don't render Markdown.
   const summary = answersSummary(answers);
 
+  let emailed = false;
   try {
     const { contact: lead } = await captureLead({
       email,
@@ -145,14 +150,21 @@ export async function submitAssessmentAction(_prev: AssessmentFormState, formDat
       }).catch((err) => console.error("[assessment] failed to create follow-up task", err));
     }
 
-    // Email the results link without holding up the redirect.
-    after(() => sendResultsEmail({ contactId: lead.id, name, email, result, resultsUrl }));
+    // Email the results link without holding up the redirect, a few times a day per address at most.
+    const perAddress = await rateLimit(`assessment-results:${email}`, RESULTS_EMAILS_PER_DAY, 24 * 60 * 60).catch((err) => {
+      console.error("[assessment] results email rate limit failed", err);
+      return { ok: false };
+    });
+    if (perAddress.ok) {
+      after(() => sendResultsEmail({ contactId: lead.id, name, email, result, resultsUrl }));
+      emailed = true;
+    }
   } catch (err) {
     console.error("[assessment] submission failed", err);
     return { error: "We couldn't save your results just now. Please try again in a moment." };
   }
 
-  redirect(resultsPath);
+  redirect(emailed ? resultsPath : `${resultsPath}?sent=0`);
 }
 
 async function sendResultsEmail(input: {

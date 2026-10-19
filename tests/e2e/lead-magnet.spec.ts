@@ -1,4 +1,33 @@
-import { expect, openContact, openLoggedEmail, pathOf, test, uniqueEmail } from "./helpers";
+import type { Browser, Page } from "@playwright/test";
+import { expect, openContact, openLoggedEmail, pathOf, randomClientIp, test, uniqueEmail } from "./helpers";
+
+const LINK_SUBJECT = "Here's your link to the AI Starter Kit";
+const INBOX_NOTE = /sending a link to your inbox/;
+
+/** Opts in to the Starter Kit from /free-guide as `email` and waits for the thank-you page. */
+async function optIn(page: Page, email: string, name = "Grace"): Promise<void> {
+  await page.goto("/free-guide");
+  const form = page.locator("form").filter({ has: page.getByRole("button", { name: /Send me the free kit/ }) }).first();
+  await form.getByLabel("First name").fill(name);
+  await form.getByLabel("Email").fill(email);
+  await form.getByText("My business", { exact: true }).click();
+  await form.getByRole("button", { name: /Send me the free kit/ }).click();
+  await expect(page.getByRole("heading", { level: 1, name: /Your kit is ready/ })).toBeVisible();
+}
+
+/** Opts in as `email` from a fresh browser on another network (anyone can type any address into the form). */
+async function optInElsewhere(browser: Browser, baseURL: string | undefined, email: string): Promise<{ url: string; promisesEmail: boolean }> {
+  const context = await browser.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": randomClientIp() } });
+  try {
+    const page = await context.newPage();
+    await optIn(page, email, "Someone Else");
+    // The kit is unlocked in this browser either way.
+    await expect(page.getByRole("link", { name: "Open the Starter Kit" })).toBeVisible();
+    return { url: pathOf(page.url()), promisesEmail: await page.getByText(INBOX_NOTE).isVisible() };
+  } finally {
+    await context.close();
+  }
+}
 
 test.describe("free guide funnel", () => {
   test("opt-in unlocks the guide, creates a lead_magnet contact and sends the welcome email", async ({ page, adminPage, browser, baseURL }) => {
@@ -63,5 +92,34 @@ test.describe("free guide funnel", () => {
     await expect(page).toHaveURL("/free-guide");
     // What was typed is kept.
     await expect(form.getByLabel("First name")).toHaveValue("Grace");
+  });
+
+  test("repeat opt-ins email the kit link at most once a day, and never once the person unsubscribed", async ({ page, adminPage, browser, baseURL }) => {
+    const email = uniqueEmail("guide-repeat");
+    await optIn(page, email);
+    await expect(page).toHaveURL("/free-guide/thank-you");
+    await expect(page.getByText(INBOX_NOTE)).toBeVisible();
+
+    // A repeat opt-in gets the link on its own once; after that, the same day, nothing (and no promise of an email).
+    expect(await optInElsewhere(browser, baseURL, email)).toEqual({ url: "/free-guide/thank-you", promisesEmail: true });
+    expect(await optInElsewhere(browser, baseURL, email)).toEqual({ url: "/free-guide/thank-you?sent=0", promisesEmail: false });
+    await openLoggedEmail(adminPage, email, LINK_SUBJECT);
+    await adminPage.goto(`/admin/emails?q=${encodeURIComponent(email)}`);
+    const log = adminPage.getByRole("table", { name: "Email log" });
+    await expect(log.getByRole("link", { name: LINK_SUBJECT })).toHaveCount(1);
+    await expect(log.getByRole("link", { name: /^Your AI Starter Kit is here/ })).toHaveCount(1);
+
+    // Someone who unsubscribed (from the link in the welcome email) gets no kit email when their address is used again.
+    const other = uniqueEmail("guide-unsub");
+    await optIn(page, other);
+    const welcome = await openLoggedEmail(adminPage, other, "Your AI Starter Kit is here, Grace");
+    const unsubscribe = await welcome.getByRole("link", { name: "Unsubscribe" }).getAttribute("href");
+    await page.goto(pathOf(unsubscribe!));
+    await page.getByRole("button", { name: "Unsubscribe" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: /You.re unsubscribed/ })).toBeVisible();
+    expect(await optInElsewhere(browser, baseURL, other)).toEqual({ url: "/free-guide/thank-you?sent=0", promisesEmail: false });
+    await adminPage.goto(`/admin/emails?q=${encodeURIComponent(other)}`);
+    await expect(log.getByRole("link", { name: /^Your AI Starter Kit is here/ })).toHaveCount(1);
+    await expect(log.getByRole("link", { name: LINK_SUBJECT })).toHaveCount(0);
   });
 });

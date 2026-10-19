@@ -24,6 +24,12 @@ test.describe("AI readiness assessment", () => {
     // Reloading shows the stored result (same score).
     await page.reload();
     await expect(page.getByRole("img", { name: `AI readiness score: ${scoreValue} out of 100` })).toBeVisible();
+    await expect(page.getByText("We've emailed you a link to this page.")).toBeVisible();
+    // When the submission wasn't emailed (the per-address daily cap), the page doesn't say it was.
+    const resultsPath = new URL(page.url()).pathname;
+    await page.goto(`${resultsPath}?sent=0`);
+    await expect(page.getByText("Bookmark this page to come back to your results.")).toBeVisible();
+    await expect(page.getByText("We've emailed you a link to this page.")).toHaveCount(0);
 
     // CRM: the assessment is on the contact.
     await openContact(adminPage, email);

@@ -32,7 +32,7 @@ type Search = { sent?: string | string[] };
 export default async function FreeGuideThankYouPage({ searchParams }: { searchParams: Promise<Search> }) {
   const [courses, strategyCall, sp] = await Promise.all([listPublishedCourses(), getActiveMeetingType("ai-strategy-call"), searchParams]);
   const course = pickTripwire(courses);
-  // The opt-in adds ?sent=0 when no link email went out (e.g. several requests for the same address in an hour).
+  // The opt-in adds ?sent=0 when no link email went out (e.g. a repeat request for the same address within a day).
   const emailed = (Array.isArray(sp.sent) ? sp.sent[0] : sp.sent) !== "0";
 
   return (

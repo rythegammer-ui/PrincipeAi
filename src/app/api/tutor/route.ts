@@ -13,6 +13,7 @@ import {
   jsonError,
   publicMessages,
 } from "@/app/api/chat/conversation-store";
+import { tutorEnrollment } from "@/app/api/tutor/enrollment";
 import { aiStream, claimAiReply, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
 import { buildTutorSystemPrompt, toModelMessages } from "@/lib/ai-prompts";
 import { getStudent } from "@/lib/auth";
@@ -37,24 +38,23 @@ const Body = z.object({
 /** Tutor conversations are owned by the student, not the anonymous visitor cookie. */
 const ownerId = (userId: string) => `user:${userId}`;
 
-/** Loads the course + lesson and checks the student is enrolled. Returns an error response otherwise. */
+/**
+ * Loads the course + lesson and checks the student is enrolled (plus which AI budget their replies use, see
+ * `tutorEnrollment`). Returns an error response otherwise.
+ */
 async function loadLessonForStudent(userId: string, courseSlug: string, lessonId: string) {
   const db = await getDb();
   const [course] = await db.select().from(schema.courses).where(eq(schema.courses.slug, courseSlug)).limit(1);
   if (!course) return { error: jsonError("Course not found.", 404) } as const;
-  const [enrolled] = await db
-    .select({ courseId: schema.enrollments.courseId })
-    .from(schema.enrollments)
-    .where(and(eq(schema.enrollments.userId, userId), eq(schema.enrollments.courseId, course.id)))
-    .limit(1);
-  if (!enrolled) return { error: jsonError("The AI tutor is available to students enrolled in this course.", 403) } as const;
+  const enrollment = await tutorEnrollment(userId, course.id);
+  if (!enrollment) return { error: jsonError("The AI tutor is available to students enrolled in this course.", 403) } as const;
   const [lesson] = await db
     .select()
     .from(schema.lessons)
     .where(and(eq(schema.lessons.id, lessonId), eq(schema.lessons.courseId, course.id)))
     .limit(1);
   if (!lesson) return { error: jsonError("Lesson not found.", 404) } as const;
-  return { course, lesson } as const;
+  return { course, lesson, budget: enrollment.budget } as const;
 }
 
 /** AI course tutor for enrolled students. Streams a Markdown reply; conversation id in X-Conversation-Id. */
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
 
   const loaded = await loadLessonForStudent(user.id, courseSlug, lessonId);
   if ("error" in loaded) return loaded.error;
-  const { course, lesson } = loaded;
+  const { course, lesson, budget } = loaded;
 
   const visitorId = ownerId(user.id);
   const path = `/learn/${course.slug}/${lesson.slug}`;
@@ -99,8 +99,9 @@ export async function POST(request: NextRequest) {
   }
   const conversationId = conversation.id;
 
-  // The tutor's own daily ceiling on AI spend (separate from the public chat's): past it, the reply is the non-AI fallback.
-  const useAi = await claimAiReply("tutor");
+  // A daily ceiling on AI spend: the tutor's own for paying students, the public chat's for free enrollments. Past it,
+  // the reply is the non-AI fallback.
+  const useAi = await claimAiReply(budget);
   const stream = aiStream({
     system: buildTutorSystemPrompt({ course, lesson }),
     messages: toModelMessages(history, CONTEXT_MESSAGES),

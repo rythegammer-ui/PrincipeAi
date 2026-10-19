@@ -29,13 +29,27 @@ describe("student names (certificates, portal greeting)", () => {
     expect(await userName("nameless-1@example.com")).toBe("Nora Student");
   });
 
-  it("takes the CRM contact's name when the student account has none", async () => {
+  it("never takes the CRM contact's name: anyone can set it by typing the address into a public form", async () => {
+    // An existing student without a name (e.g. granted access without one)...
     await upsertStudent("granted-1@example.com");
     expect(await userName("granted-1@example.com")).toBeNull();
-    await upsertContact({ email: "granted-1@example.com", name: "Gwen Granted", source: "manual" });
-    // e.g. the next magic-link sign-in
-    await upsertStudent("granted-1@example.com");
-    expect(await userName("granted-1@example.com")).toBe("Gwen Granted");
+    // ...a stranger opts in with their address and a name of their choosing...
+    await upsertContact({ email: "granted-1@example.com", name: "Someone Else", source: "lead_magnet" });
+    // ...and the student's next magic-link sign-in leaves their account nameless.
+    expect((await upsertStudent("granted-1@example.com")).name).toBeNull();
+    expect(await userName("granted-1@example.com")).toBeNull();
+    // A whitespace-only name doesn't count either.
+    await upsertStudent("granted-1@example.com", "   ");
+    expect(await userName("granted-1@example.com")).toBeNull();
+
+    // Same for a first sign-in: the new account doesn't inherit the contact's name.
+    await upsertContact({ email: "first-signin@example.com", name: "Someone Else", source: "lead_magnet" });
+    const fresh = await upsertStudent("first-signin@example.com");
+    expect(fresh.name).toBeNull();
+    expect(fresh.contactId).not.toBeNull();
+    // Their own name, given at checkout, is then used.
+    await upsertStudent("first-signin@example.com", "  Fiona First ");
+    expect(await userName("first-signin@example.com")).toBe("Fiona First");
   });
 
   it("follows a name corrected in the CRM", async () => {

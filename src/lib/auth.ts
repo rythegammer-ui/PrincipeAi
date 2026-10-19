@@ -140,18 +140,25 @@ export async function consumeLoginToken(raw: string): Promise<{ user: schema.Use
   return { user, redirectTo: token.redirectTo };
 }
 
-/** Finds or creates the student user for an email, linking it to the CRM contact when one exists. */
+/**
+ * Finds or creates the student user for an email, linking it to the CRM contact when one exists. The student's name
+ * (portal greeting, certificate) only comes from `name` (checkout, admin grant): never from the contact, whose name
+ * is whatever the first public form submitted with this address said, and a stranger can submit any address.
+ */
 export async function upsertStudent(email: string, name?: string | null): Promise<schema.User> {
   const db = await getDb();
   const normalized = normalizeEmail(email);
+  const given = name?.trim() || null;
   const [contact] = await db.select().from(schema.contacts).where(eq(schema.contacts.email, normalized)).limit(1);
   const [user] = await db
     .insert(schema.users)
-    .values({ email: normalized, name: name ?? contact?.name ?? null, contactId: contact?.id ?? null })
+    .values({ email: normalized, name: given, contactId: contact?.id ?? null })
     .onConflictDoUpdate({
       target: schema.users.email,
-      // Fill a missing name (e.g. a student granted access without one) but never overwrite one already set.
-      set: { updatedAt: new Date(), name: sql`coalesce(nullif(btrim(${schema.users.name}), ''), excluded.name)` },
+      // Fill a missing name with the one given (e.g. a later purchase) but never overwrite one already set.
+      set: given
+        ? { updatedAt: new Date(), name: sql`coalesce(nullif(btrim(${schema.users.name}), ''), excluded.name)` }
+        : { updatedAt: new Date() },
     })
     .returning();
   if (!user.contactId && contact) {

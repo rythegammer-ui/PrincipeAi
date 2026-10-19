@@ -26,7 +26,8 @@ export const DEFAULT_AI_DAILY_LIMIT = 2000;
 
 /**
  * Separate daily budgets, so cheap anonymous traffic on the website chat can't use up the replies of the paid
- * course tutor (which is also limited per student and open only to enrolled students).
+ * course tutor (which is also limited per student and open only to students who paid or were given access; free
+ * enrollments draw on "chat", see `tutorEnrollment` in app/api/tutor/enrollment.ts).
  */
 export type AiReplyBudget = "chat" | "tutor";
 

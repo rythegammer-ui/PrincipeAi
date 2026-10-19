@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { BUDGET_OPTIONS, INTEREST_OPTIONS, optionLabel, optionValues } from "@/components/marketing/lead-options";
 import { categoryAnchor, kitStats, kitSummary } from "@/components/marketing/starter-kit-utils";
@@ -225,16 +225,23 @@ describe("lead captures (PGlite)", () => {
     expect(own.map((e) => e.subject)).toEqual(["Your AI Starter Kit is here, Olivia"]);
   });
 
-  it("emails the kit link again on a repeat opt-in, at most twice an hour per address", async () => {
+  it("emails the kit link again on a repeat opt-in, at most once a day per address", async () => {
     const email = "nina.repeat@example.com";
     const optIn = () => captureGuideOptIn({ name: "Nina Name", email, interest: "life" }, "/free-guide");
     expect((await optIn()).emailed).toBe(true);
     expect((await optIn()).emailed).toBe(true);
-    expect((await optIn()).emailed).toBe(true);
-    // Third repeat inside the hour: no email, so the confirmation mustn't promise one.
+    // Second repeat the same day: no email, so the confirmation mustn't promise one.
+    expect((await optIn()).emailed).toBe(false);
     expect((await optIn()).emailed).toBe(false);
 
+    // The cap lasts a day, not an hour: still refused 23 hours on, allowed again after 24.
     const db = await getDb();
+    const key = eq(schema.rateLimits.key, `guide-link:${email}`);
+    await db.update(schema.rateLimits).set({ windowStart: sql`now() - interval '23 hours'` }).where(key);
+    expect((await optIn()).emailed).toBe(false);
+    await db.update(schema.rateLimits).set({ windowStart: sql`now() - interval '25 hours'` }).where(key);
+    expect((await optIn()).emailed).toBe(true);
+
     const sent = await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, email));
     expect(sent.filter((e) => e.kind === "sequence").map((e) => e.subject)).toEqual(["Your AI Starter Kit is here, Nina"]);
     const links = sent.filter((e) => e.kind === "guide_link");
@@ -247,16 +254,19 @@ describe("lead captures (PGlite)", () => {
     expect(alerts.some((e) => e.html.includes("the welcome sequence wasn"))).toBe(true);
   });
 
-  it("emails the kit link to an unsubscribed contact who asks for it again", async () => {
+  it("never emails the kit link to an unsubscribed contact (anyone can type their address)", async () => {
     const email = "dana.unsub@example.com";
     const first = await captureGuideOptIn({ name: "Dana Customer", email, interest: "business" }, "/free-guide");
     const db = await getDb();
     await db.update(schema.contacts).set({ unsubscribed: true }).where(eq(schema.contacts.id, first.contact.id));
     const again = await captureGuideOptIn({ name: "Dana Customer", email, interest: "business" }, "/guide");
-    expect(again.emailed).toBe(true);
+    // No email, so the confirmation doesn't promise one (the kit is still unlocked in the browser that asked).
+    expect(again.emailed).toBe(false);
     const links = await db.select().from(schema.emailLog).where(and(eq(schema.emailLog.to, email), eq(schema.emailLog.kind, "guide_link")));
-    expect(links).toHaveLength(1);
-    expect(links[0].status).toBe("simulated");
+    expect(links).toHaveLength(0);
+    // ...and the opt-in doesn't quietly resubscribe them.
+    const [fresh] = await db.select().from(schema.contacts).where(eq(schema.contacts.id, first.contact.id));
+    expect(fresh.unsubscribed).toBe(true);
   });
 
   it("emails the kit link when the welcome sequence is paused", async () => {

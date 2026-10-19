@@ -1,4 +1,4 @@
-import { expect, openContact, openLoggedEmail, openSignInLink, signInAsStudent, test, uniqueEmail } from "./helpers";
+import { expect, openContact, openLoggedEmail, openSignInLink, randomClientIp, signInAsStudent, test, uniqueEmail } from "./helpers";
 
 const COURSE = { slug: "ai-essentials", title: "AI Essentials" };
 
@@ -70,5 +70,37 @@ test.describe("course purchase", () => {
     await signInAsStudent(page, uniqueEmail("not-enrolled"), lessonUrl);
     await expect(page).toHaveURL(`/courses/${COURSE.slug}`);
     await expect(page.getByRole("heading", { level: 1, name: COURSE.title })).toBeVisible();
+  });
+
+  test("a stranger can't choose the name a student without one is greeted with", async ({ page, adminPage, browser, baseURL }) => {
+    const email = uniqueEmail("nameless");
+
+    // The owner gives someone access without a name.
+    await adminPage.goto("/admin/courses");
+    await adminPage.getByRole("link", { name: `Edit ${COURSE.title}` }).click();
+    await adminPage.getByRole("navigation", { name: "Course sections" }).getByRole("link", { name: /^Students/ }).click();
+    const grant = adminPage.locator("form").filter({ has: adminPage.getByRole("button", { name: "Grant access" }) });
+    await grant.getByRole("textbox", { name: /^Email/ }).fill(email);
+    await grant.getByLabel("Email them a one-click sign-in link").uncheck();
+    await grant.getByRole("button", { name: "Grant access" }).click();
+    await expect(grant.getByText(`Access granted to ${email}.`)).toBeVisible();
+
+    // Someone else opts in to the Starter Kit with that address and a name of their choosing.
+    const stranger = await browser.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": randomClientIp() } });
+    const strangerPage = await stranger.newPage();
+    await strangerPage.goto("/free-guide");
+    const form = strangerPage.locator("form").filter({ has: strangerPage.getByRole("button", { name: /Send me the free kit/ }) }).first();
+    await form.getByLabel("First name").fill("Mallory Prankster");
+    await form.getByLabel("Email").fill(email);
+    await form.getByText("My business", { exact: true }).click();
+    await form.getByRole("button", { name: /Send me the free kit/ }).click();
+    await expect(strangerPage.getByRole("heading", { level: 1, name: /Your kit is ready/ })).toBeVisible();
+    await stranger.close();
+
+    // The student signs in: their portal doesn't greet them with the stranger's name.
+    await signInAsStudent(page, email, "/learn");
+    await expect(page).toHaveURL("/learn");
+    await expect(page.getByRole("heading", { level: 1, name: /Welcome back/ })).toBeVisible();
+    await expect(page.getByText(/Mallory/)).toHaveCount(0);
   });
 });

@@ -338,7 +338,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
         </Card>
       </div>
 
-      <p className="mt-6 flex items-center gap-1.5 text-xs text-zinc-400">
+      <p className="mt-6 flex items-center gap-1.5 text-xs text-zinc-500">
         <CalendarDays className="size-3.5" aria-hidden /> Days are counted in {tz.replace(/_/g, " ")}.
       </p>
     </div>

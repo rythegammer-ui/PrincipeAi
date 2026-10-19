@@ -70,7 +70,7 @@ describe("form helpers", () => {
   });
 
   it("escapes markdown so visitor input can't inject links or formatting", () => {
-    expect(escapeMarkdown("[click](http://evil)")).toBe("\\[click\\]\\(http://evil\\)");
+    expect(escapeMarkdown("[click](http://evil)")).toBe("\\[click\\]\\(http\\://evil\\)");
     expect(escapeMarkdown("**bold** <b>")).toBe("\\*\\*bold\\*\\* \\<b\\>");
     expect(escapeMarkdown("a\n\n\n\nb")).toBe("a\n\nb");
   });

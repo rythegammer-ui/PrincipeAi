@@ -122,7 +122,7 @@ export default async function PreviewLessonPage({ params }: { params: Promise<Pa
         </aside>
 
         <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <Link href={`/courses/${course.slug}`} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline">
+          <Link href={`/courses/${course.slug}`} className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline">
             <ArrowLeft className="size-4" aria-hidden /> Back to course overview
           </Link>
           {otherPreviews.length > 0 && (

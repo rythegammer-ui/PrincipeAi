@@ -137,7 +137,7 @@ export function SettingsForm({ settings, timezones }: { settings: Settings; time
           label="Send reminders this many hours before a call"
           htmlFor="s-bookingReminderHours"
           error={fe.bookingReminderHours}
-          hint="24 is a good default. Reminders go out on the next background run inside this window."
+          hint="24 is a good default. With the once-a-day cron, reminders go out at the last run before each call (up to 24 hours ahead); for shorter windows switch vercel.json to hourly and set CRON_INTERVAL_HOURS=1."
           required
         >
           <Input

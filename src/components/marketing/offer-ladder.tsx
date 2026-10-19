@@ -65,7 +65,7 @@ function CourseTile({ course }: { course: CourseSummary }) {
           {course.coverEmoji || "✨"}
         </span>
         {course.featured && (
-          <span className="absolute top-2.5 left-2.5 rounded-full bg-gold-400 px-2 py-0.5 text-[0.6875rem] font-semibold text-ink shadow-sm">★ Most popular</span>
+          <span className="absolute top-2.5 left-2.5 rounded-full bg-gold-400 px-2 py-0.5 text-[0.6875rem] font-semibold text-ink shadow-sm">★ Recommended</span>
         )}
       </div>
       <div className="flex flex-1 flex-col p-5">

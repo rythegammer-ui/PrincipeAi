@@ -117,7 +117,7 @@ export function CourseForm({ course }: { course: CourseFormValues }) {
                 <Checkbox name="featured" defaultChecked={course.featured} className="mt-0.5" />
                 <span>
                   <span className="font-medium text-zinc-900">Featured</span>
-                  <span className="block text-xs text-zinc-500">Shows a “Most popular” ribbon.</span>
+                  <span className="block text-xs text-zinc-500">Shows a “Recommended” ribbon.</span>
                 </span>
               </label>
               <Field label="Catalog order" htmlFor="sortOrder" hint="Lower numbers appear first." error={fe.sortOrder}>
@@ -134,7 +134,7 @@ export function CourseForm({ course }: { course: CourseFormValues }) {
               <Field label="Price (USD)" htmlFor="price" error={fe.price} required hint="Use 0 for a free course.">
                 <Input id="price" name="price" inputMode="decimal" defaultValue={dollars(course.priceCents)} aria-invalid={fe.price ? true : undefined} />
               </Field>
-              <Field label="Compare-at price (USD)" htmlFor="compareAt" error={fe.compareAt} hint="Optional “was” price, shown struck through.">
+              <Field label="Compare-at price (USD)" htmlFor="compareAt" error={fe.compareAt} hint="Optional “was” price, shown struck through. Only use a price you have actually charged.">
                 <Input id="compareAt" name="compareAt" inputMode="decimal" defaultValue={dollars(course.compareAtCents)} aria-invalid={fe.compareAt ? true : undefined} />
               </Field>
             </CardContent>

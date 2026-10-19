@@ -254,11 +254,11 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                       <TD className="hidden max-w-md md:table-cell">
                         {preview ? (
                           <p className="line-clamp-2 text-sm text-zinc-600">
-                            <span className="font-medium text-zinc-400">{row.lastRole === "assistant" ? "AI: " : row.kind === "tutor" ? "Student: " : "Visitor: "}</span>
+                            <span className="font-medium text-zinc-500">{row.lastRole === "assistant" ? "AI: " : row.kind === "tutor" ? "Student: " : "Visitor: "}</span>
                             {preview}
                           </p>
                         ) : (
-                          <span className="text-sm text-zinc-400">No messages</span>
+                          <span className="text-sm text-zinc-500">No messages</span>
                         )}
                       </TD>
                       <TD className="hidden text-right tabular-nums sm:table-cell">

@@ -23,7 +23,7 @@ export function CourseCard({ course, className }: { course: CourseSummary; class
         </span>
         {course.featured && (
           <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-gold-400 px-2.5 py-1 text-xs font-semibold text-ink shadow-sm">
-            ★ Most popular
+            ★ Recommended
           </span>
         )}
       </CourseCover>

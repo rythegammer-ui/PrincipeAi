@@ -275,7 +275,7 @@ async function StudentsPanel({ course, totalLessons }: { course: Course; totalLe
                     <TD className="whitespace-nowrap">{formatDate(s.enrolledAt, {}, tz)}</TD>
                     <TD>
                       <div className="flex items-center gap-3">
-                        <Progress value={pct} className="w-28" />
+                        <Progress value={pct} className="w-28" label={`${s.name || s.email} progress`} />
                         <span className="text-xs whitespace-nowrap text-zinc-500 tabular-nums">
                           {done}/{totalLessons}
                         </span>

@@ -33,7 +33,7 @@ function TranscriptMessage({ message, tz, isTutor }: { message: ChatMessage; tz:
         <div className="max-w-[85%] rounded-2xl rounded-tr-md bg-brand-600 px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap text-white [overflow-wrap:anywhere]">
           {message.content}
         </div>
-        <p className="text-[11px] text-zinc-400">
+        <p className="text-[11px] text-zinc-500">
           {isTutor ? "Student" : "Visitor"}
           {time && (
             <>
@@ -52,11 +52,11 @@ function TranscriptMessage({ message, tz, isTutor }: { message: ChatMessage; tz:
       </span>
       <div className="min-w-0 max-w-[calc(100%-2.5rem)]">
         <div className="rounded-2xl rounded-tl-md bg-zinc-50 px-3.5 py-2.5 ring-1 ring-zinc-200/80 [overflow-wrap:anywhere]">
-          <Markdown className="prose-sm prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:my-2 prose-pre:text-xs [&_pre]:whitespace-pre-wrap [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-zinc-100 [&>:first-child]:mt-0 [&>:last-child]:mb-0">
+          <Markdown untrusted className="prose-sm prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:my-2 prose-pre:text-xs [&_pre]:whitespace-pre-wrap [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-zinc-100 [&>:first-child]:mt-0 [&>:last-child]:mb-0">
             {message.content}
           </Markdown>
         </div>
-        <p className="mt-1 text-[11px] text-zinc-400">
+        <p className="mt-1 text-[11px] text-zinc-500">
           {isTutor ? "AI tutor" : "AI assistant"}
           {time && (
             <>

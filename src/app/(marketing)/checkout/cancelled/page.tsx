@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { z } from "zod";
 import { ButtonLink } from "@/components/ui/button";
-import { getOrderDetails } from "@/lib/payments";
+import { bookingHoldExpired, getOrderDetails } from "@/lib/payments";
 
 export const metadata: Metadata = { title: "Checkout cancelled", robots: { index: false, follow: false } };
 
@@ -12,6 +12,8 @@ export default async function CheckoutCancelledPage({ searchParams }: { searchPa
   const details = orderId && z.uuid().safeParse(orderId).success ? await getOrderDetails(orderId) : null;
   const course = details?.course ?? null;
   const isBooking = details?.order.itemType === "booking";
+  // The visitor's own hold hides their time on /book, so send them back to the booking itself while it lasts.
+  const heldBooking = isBooking && details?.booking && !bookingHoldExpired(details.booking) ? details.booking : null;
 
   return (
     <section className="relative overflow-hidden bg-zinc-50 py-14 sm:py-24">
@@ -22,14 +24,20 @@ export default async function CheckoutCancelledPage({ searchParams }: { searchPa
           <p className="mx-auto mt-3 max-w-md text-zinc-600">
             {course
               ? `Your checkout for ${course.title} was cancelled. Whenever you're ready, you can pick up right where you left off.`
-              : isBooking
-                ? "Your payment was cancelled, so the session isn't confirmed yet. Time slots are held briefly — you can pick a time again whenever you're ready."
-                : "Your checkout was cancelled. Whenever you're ready, you can pick up right where you left off."}
+              : heldBooking
+                ? "Your payment was cancelled, so the session isn't confirmed yet. We're still holding your time for a few minutes — go back to your booking to complete payment or choose a different time."
+                : isBooking
+                  ? "Your payment was cancelled, so the session isn't confirmed yet. Time slots are held briefly — you can pick a time again whenever you're ready."
+                  : "Your checkout was cancelled. Whenever you're ready, you can pick up right where you left off."}
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             {course ? (
               <ButtonLink href={`/courses/${course.slug}`}>
                 <ArrowLeft aria-hidden /> Back to the course
+              </ButtonLink>
+            ) : heldBooking ? (
+              <ButtonLink href={`/booking/${heldBooking.manageToken}`}>
+                <ArrowLeft aria-hidden /> Back to your booking
               </ButtonLink>
             ) : isBooking ? (
               <ButtonLink href="/book">

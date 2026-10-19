@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 export function PlanMarkdown({ children, className }: { children: string; className?: string }) {
   return (
     <Markdown
+      untrusted
       className={cn(
         "prose-h2:mt-10 prose-h2:border-t prose-h2:border-zinc-100 prose-h2:pt-8 prose-h3:text-lg [&>h2:first-child]:mt-0 [&>h2:first-child]:border-0 [&>h2:first-child]:pt-0",
         "[&_pre]:rounded-xl [&_pre]:text-[13px] [&_pre]:leading-relaxed [&_pre]:whitespace-pre-wrap",

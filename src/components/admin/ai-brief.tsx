@@ -84,7 +84,7 @@ export function AiBrief({
           </div>
         ) : current ? (
           <div className={pending ? "opacity-60 transition-opacity" : undefined}>
-            <Markdown className="prose-sm prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5">{current.summary}</Markdown>
+            <Markdown untrusted className="prose-sm prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5">{current.summary}</Markdown>
           </div>
         ) : (
           <p className="text-sm text-zinc-600">

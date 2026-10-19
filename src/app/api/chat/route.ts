@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
-import { aiStream, textStreamResponse } from "@/lib/ai";
+import { aiStream, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
 import { buildAssistantSystemPrompt, chatEmailNote, toModelMessages, withNoteOnLastUserMessage } from "@/lib/ai-prompts";
 import { buildChatFallback, extractEmail, extractOwnEmail } from "@/lib/chat-fallback";
 import { captureLead, contactForVisitor, logActivity, recomputeScore } from "@/lib/crm";
@@ -147,6 +147,9 @@ export async function POST(request: NextRequest) {
     effort: "low",
     maxTokens: 4000,
     fallbackText: buildChatFallback({ message, courses, meetingTypes, emailCaptured }),
+    // A refusal shows the refusal sentence (not the non-AI fallback), and a reply the visitor stopped is still saved.
+    refusalText: REFUSAL_MESSAGE,
+    completeOnCancel: true,
     onComplete: async (fullText) => {
       const reply = fullText.trim();
       if (reply) await appendMessages(conversationId, [chatMessage("assistant", reply)]);

@@ -4,17 +4,18 @@ import { AssessmentQuiz } from "@/components/assessment/assessment-quiz";
 import { ButtonLink } from "@/components/ui/button";
 import { aiEnabled } from "@/lib/ai";
 import { TIERS } from "@/lib/assessment";
+import { shareMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Free AI Readiness Assessment",
   description:
     "How ready are you to put AI to work? Answer a few quick questions and get your AI readiness score, your tier and a personalized AI action plan — free, in about 3 minutes.",
   alternates: { canonical: "/assessment" },
-  openGraph: {
+  ...shareMetadata({
     title: "Free AI Readiness Assessment · Principe AI",
     description: "Get your AI readiness score and a personalized AI action plan in about 3 minutes.",
     url: "/assessment",
-  },
+  }),
 };
 
 const WHAT_YOU_GET = [

@@ -220,7 +220,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
                         </span>
                       ))}
                       {r.tags.length > 2 && (
-                        <span className="text-xs text-zinc-400" title={r.tags.slice(2).join(", ")}>
+                        <span className="text-xs text-zinc-500" title={r.tags.slice(2).join(", ")}>
                           +{r.tags.length - 2}
                         </span>
                       )}

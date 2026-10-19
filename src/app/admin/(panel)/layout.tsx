@@ -49,7 +49,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div role="status" className="border-b border-red-200 bg-red-50 px-4 py-2 text-center text-xs font-medium text-red-900 sm:text-sm">
             Scheduled jobs are not running: <code className="font-mono">CRON_SECRET</code> isn&apos;t set, so Vercel Cron calls are rejected and
             follow-up automation emails and booking reminders are paused. Add it in Vercel and redeploy.{" "}
-            <Link href="/admin/settings#integrations" className="underline">
+            <Link href="/admin/settings#integration-cron" className="underline">
               How to fix
             </Link>
           </div>

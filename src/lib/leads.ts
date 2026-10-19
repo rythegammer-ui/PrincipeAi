@@ -15,6 +15,7 @@ import {
 import { getDb, schema } from "@/db";
 import type { Contact } from "@/db/schema";
 import { captureLead, contactForVisitor, createTask } from "@/lib/crm";
+import { escapeMarkdown } from "@/lib/email";
 import { getVisitorContext } from "@/lib/tracking";
 
 /**
@@ -155,10 +156,8 @@ export function isSpam(formData: FormData): boolean {
   return typeof v === "string" && v.trim().length > 0;
 }
 
-/** Escapes Markdown control characters in visitor-supplied text before it goes into an email. */
-export function escapeMarkdown(text: string): string {
-  return text.replace(/([\\`*_{}[\]()<>#+!|~])/g, "\\$1").replace(/\n{3,}/g, "\n\n");
-}
+/** Escapes Markdown control characters (and `.` `:` `@`, so URLs and addresses can't autolink) in visitor text for emails. */
+export { escapeMarkdown };
 
 /* ------------------------------------------------------------------ */
 /* Captures                                                            */

@@ -342,7 +342,7 @@ export default async function ContactPage({ params }: Params) {
                 {quiz.plan && (
                   <details className="rounded-xl bg-zinc-50 p-3 text-sm">
                     <summary className="cursor-pointer font-medium text-zinc-800">Personalised AI plan</summary>
-                    <Markdown className="prose-sm mt-2">{quiz.plan}</Markdown>
+                    <Markdown untrusted className="prose-sm mt-2">{quiz.plan}</Markdown>
                   </details>
                 )}
                 {data.quizzes.length > 1 && <p className="text-xs text-zinc-500">{data.quizzes.length - 1} earlier submission(s).</p>}
@@ -440,7 +440,7 @@ export default async function ContactPage({ params }: Params) {
                         {chat.path && <li className="text-xs text-zinc-500">Started on {chat.path}</li>}
                         {chat.messages.map((m, i) => (
                           <li key={i} className={cn("max-w-[92%] rounded-xl px-3 py-2 text-sm", m.role === "user" ? "self-end bg-brand-600 text-white" : "self-start bg-zinc-100 text-zinc-800")}>
-                            {m.role === "user" ? <p className="break-words whitespace-pre-wrap">{m.content}</p> : <Markdown className="prose-sm">{m.content}</Markdown>}
+                            {m.role === "user" ? <p className="break-words whitespace-pre-wrap">{m.content}</p> : <Markdown untrusted className="prose-sm">{m.content}</Markdown>}
                           </li>
                         ))}
                       </ol>

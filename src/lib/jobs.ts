@@ -1,9 +1,11 @@
 import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { and, eq, lt } from "drizzle-orm";
+import { and, asc, eq, like, lt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { processDueEnrollments } from "@/lib/automations";
 import { releaseExpiredHolds, sendDueBookingReminders } from "@/lib/booking-service";
+import { fulfillOrder } from "@/lib/payments";
+import { getStripe, paymentIntentId } from "@/lib/stripe";
 import type { JobKey } from "@/components/funnels/automation-utils";
 
 /**
@@ -30,6 +32,47 @@ export type JobsSummary = {
 export const PENDING_ORDER_TTL_MS = DAY;
 export const RATE_LIMIT_RETENTION_MS = 2 * DAY;
 export const LOGIN_TOKEN_RETENTION_MS = 7 * DAY;
+/** Stripe checkouts still pending after this long are checked with Stripe in case the webhook never arrived. */
+export const STRIPE_RECONCILE_AFTER_MS = 10 * 60_000;
+/** Upper bound on Stripe lookups per run (keeps the cron well inside its time limit). */
+const STRIPE_RECONCILE_BATCH = 25;
+
+/**
+ * Safety net for a missed or misconfigured Stripe webhook: asks Stripe about pending Stripe-checkout orders
+ * and fulfils the ones that were paid. `fulfillOrder` is idempotent, so a webhook arriving later is harmless.
+ */
+async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: string }> {
+  const stripe = getStripe();
+  if (!stripe) return { count: 0, detail: "Stripe not configured" };
+  const db = await getDb();
+  const o = schema.orders;
+  const pending = await db
+    .select({ id: o.id, sessionId: o.stripeSessionId })
+    .from(o)
+    .where(and(eq(o.status, "pending"), like(o.stripeSessionId, "cs\\_%"), lt(o.createdAt, new Date(Date.now() - STRIPE_RECONCILE_AFTER_MS))))
+    .orderBy(asc(o.createdAt))
+    .limit(STRIPE_RECONCILE_BATCH);
+  let recovered = 0;
+  let failed = 0;
+  for (const order of pending) {
+    if (!order.sessionId) continue;
+    try {
+      const session = await stripe.checkout.sessions.retrieve(order.sessionId);
+      if (session.payment_status === "paid" || session.payment_status === "no_payment_required") {
+        await fulfillOrder(order.id, {
+          stripePaymentIntentId: paymentIntentId(session.payment_intent),
+          isTest: session.livemode === false,
+          amountPaidCents: session.amount_total,
+        });
+        recovered++;
+      }
+    } catch (err) {
+      failed++;
+      console.error("[jobs] Stripe reconcile failed for order", order.id, err);
+    }
+  }
+  return { count: recovered, detail: `${pending.length} checked${failed ? `, ${failed} failed` : ""}` };
+}
 
 const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = {
   async automations() {
@@ -39,6 +82,8 @@ const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = 
   async bookingReminders() {
     return { count: await sendDueBookingReminders() };
   },
+  // Before holds and stale orders are released, so a paid checkout whose webhook was missed is delivered instead.
+  stripeCheckouts: reconcileStripeCheckouts,
   async expiredHolds() {
     return { count: await releaseExpiredHolds() };
   },

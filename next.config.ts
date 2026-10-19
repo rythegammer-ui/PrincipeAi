@@ -29,6 +29,12 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
+      {
+        // Admin pages render AI output and visitor-written text. Second layer behind <Markdown untrusted>:
+        // no remote images (tracking pixels / data exfiltration) and no framing by other sites.
+        source: "/admin/:path*",
+        headers: [{ key: "Content-Security-Policy", value: "img-src 'self' data: blob:; frame-ancestors 'self'" }],
+      },
     ];
   },
 };

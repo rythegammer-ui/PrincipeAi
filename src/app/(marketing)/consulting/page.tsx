@@ -29,6 +29,7 @@ import { TrackedLink } from "@/components/marketing/tracked-link";
 import { buttonVariants } from "@/components/ui/button";
 import { site } from "@/config/site";
 import { getActiveMeetingType } from "@/lib/scheduling";
+import { shareMetadata } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -36,10 +37,11 @@ export const metadata: Metadata = {
   description:
     "Done-with-you AI implementation: AI assistants, workflow automations, content systems, sales follow-up and team training — scoped, built and supported for your business. Apply for a free discovery call.",
   alternates: { canonical: "/consulting" },
-  openGraph: {
+  ...shareMetadata({
     title: "Done-with-you AI implementation · Principe AI",
     description: "We design, build and hand over working AI systems for your business — with your team trained to run them.",
-  },
+    url: "/consulting",
+  }),
 };
 
 const PROBLEMS = [

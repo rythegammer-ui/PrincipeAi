@@ -59,6 +59,7 @@ Reset the local database with `npm run db:reset-local`.
    | `STRIPE_WEBHOOK_SECRET` | for payments | From the webhook endpoint below |
    | `RESEND_API_KEY`, `EMAIL_FROM` | for email | Resend key and a verified sender, e.g. `Principe AI <hello@yourdomain.com>` |
    | `BUSINESS_TIMEZONE` | optional | Default `America/New_York` (also editable in Admin → Settings) |
+   | `CRON_INTERVAL_HOURS` | optional | How often the cron runs, in hours (default `24`). Set `1` if you switch `vercel.json` to an hourly schedule |
 
 4. **Stripe webhook**: in the Stripe dashboard, add an endpoint `https://YOUR-DOMAIN/api/stripe/webhook` with events
    `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`,
@@ -66,13 +67,23 @@ Reset the local database with `npm run db:reset-local`.
 5. **Redeploy**, then sign in at `/admin` and visit **Settings**: it shows which integrations are connected and walks
    you through anything missing.
 
+### Upgrading an existing deployment
+
+The catalog is seeded only into an empty database, so a database created before an update keeps its old course data.
+After this update, open **Admin → Courses** and clear the **Compare-at price** of *AI Essentials*, *AI for Business*
+and *AI Automation Accelerator* (the old seed set $97 / $497 / $797 “was” prices that were never charged). Only show a
+compare-at price you have actually charged.
+
 ### Cron
 
 `vercel.json` runs `/api/cron` once a day (the Hobby plan limit). It sends due automation emails, booking reminders,
 and releases unpaid booking holds. **Set `CRON_SECRET`** in the project's environment variables: Vercel then sends it
 with each cron call, and in production `/api/cron` rejects every call without it (the admin dashboard shows a
 warning until it is set). On Vercel Pro you can change the schedule to hourly (`0 * * * *`) for faster
-reminders. You can also trigger it manually from Admin → Settings → *Run automations now*.
+reminders; then also set the optional `CRON_INTERVAL_HOURS=1` (default `24`) so short booking-reminder windows are
+honoured. Otherwise the reminder window is widened to the cron interval, so with the daily cron every reminder goes out
+at the last run before the call (up to 24 hours ahead). You can also trigger it manually from Admin → Settings →
+*Run automations now*.
 
 ## Customize
 

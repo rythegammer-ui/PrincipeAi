@@ -287,6 +287,7 @@ export async function summarizeContactAction(
   try {
     const result = await summarizeContact(id.data);
     if (!result) return { ok: false, error: "This contact no longer exists." };
+    if (result.kept) return { ok: false, error: "Claude couldn't write a new brief just now, so the previous one was kept. Please try again in a moment." };
     revalidateCrm();
     return { ok: true, summary: result.summary, at: result.at.toISOString(), source: result.source };
   } catch (err) {

@@ -77,7 +77,7 @@ export function ChatBubble({
       <div className="min-w-0 max-w-[calc(100%-2.5rem)]">
         <div className="rounded-2xl rounded-tl-md bg-white px-3.5 py-2.5 shadow-soft ring-1 ring-zinc-200/70 [overflow-wrap:anywhere]">
           <span className="sr-only">{assistantLabel}: </span>
-          <Markdown className={BUBBLE_MARKDOWN}>{message.content}</Markdown>
+          <Markdown untrusted className={BUBBLE_MARKDOWN}>{message.content}</Markdown>
         </div>
         {showCopy && !streaming && message.content.trim() && (
           <div className="mt-1 flex">

@@ -13,7 +13,7 @@ import {
   jsonError,
   publicMessages,
 } from "@/app/api/chat/conversation-store";
-import { aiStream, textStreamResponse } from "@/lib/ai";
+import { aiStream, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
 import { buildTutorSystemPrompt, toModelMessages } from "@/lib/ai-prompts";
 import { getStudent } from "@/lib/auth";
 import { buildTutorFallback } from "@/lib/chat-fallback";
@@ -105,6 +105,9 @@ export async function POST(request: NextRequest) {
     effort: "low",
     maxTokens: 4000,
     fallbackText: buildTutorFallback({ lessonTitle: lesson.title, lessonSummary: lesson.summary, lessonContent: lesson.content, message }),
+    // A refusal shows the refusal sentence (not the non-AI fallback), and a reply the visitor stopped is still saved.
+    refusalText: REFUSAL_MESSAGE,
+    completeOnCancel: true,
     onComplete: async (fullText) => {
       const reply = fullText.trim();
       if (reply) await appendMessages(conversationId, [chatMessage("assistant", reply)]);

@@ -42,7 +42,7 @@ function EnrolledCourse({ item }: { item: StudentCourse }) {
           {finished ? <Badge tone="green">Completed</Badge> : started ? <Badge tone="brand">In progress</Badge> : <Badge>Not started</Badge>}
         </div>
         <div>
-          <Progress value={progress.percent} />
+          <Progress value={progress.percent} label={`${course.title} progress`} />
           <p className="mt-2 text-xs text-zinc-500">
             {progress.completed} of {pluralize(progress.total, "lesson")} complete · {progress.percent}%
           </p>

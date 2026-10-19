@@ -79,8 +79,8 @@ export function TaskItem({ task, tz, bucket, showContact = true }: { task: TaskI
         </span>
       </button>
       <div className="min-w-0 flex-1">
-        <p className={cn("text-sm font-medium break-words text-zinc-900", done && "text-zinc-400 line-through")}>{task.title}</p>
-        {task.description && <p className={cn("mt-0.5 text-sm break-words whitespace-pre-wrap text-zinc-600", done && "text-zinc-400")}>{task.description}</p>}
+        <p className={cn("text-sm font-medium break-words text-zinc-900", done && "text-zinc-500 line-through")}>{task.title}</p>
+        {task.description && <p className={cn("mt-0.5 text-sm break-words whitespace-pre-wrap text-zinc-600", done && "text-zinc-500")}>{task.description}</p>}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
           {task.dueAt && (
             <span className={cn(overdue && "font-medium text-red-700")}>

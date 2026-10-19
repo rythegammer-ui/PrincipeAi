@@ -25,7 +25,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
       </a>
       <header className="sticky top-0 z-40 border-b border-zinc-200/80 bg-white/90 backdrop-blur-xl print:hidden">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 px-4 sm:gap-6 sm:px-6 lg:px-8">
-          <Link href="/learn" aria-label="My courses" className="shrink-0">
+          <Link href="/learn" className="shrink-0">
             <Logo />
           </Link>
           <nav aria-label="Student portal" className="flex items-center gap-1">

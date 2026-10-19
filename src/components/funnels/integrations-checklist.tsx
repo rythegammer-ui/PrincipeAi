@@ -54,7 +54,7 @@ export function IntegrationsChecklist({ items }: { items: IntegrationItem[] }) {
         {items.map((item) => {
           const s = STATUS[item.status];
           return (
-            <li key={item.id}>
+            <li key={item.id} id={`integration-${item.id}`} className="scroll-mt-20">
               <details
                 className="group rounded-2xl border border-zinc-200/80 bg-white shadow-soft open:shadow-lift"
                 open={item.status === "attention" || undefined}

@@ -105,10 +105,10 @@ export function AvailabilityEditor({ initialRules, timezone }: { initialRules: W
                   onChange={(e) => update(day, () => (e.target.checked ? [{ start: "09:00", end: "17:00" }] : []))}
                   aria-label={`Available on ${name}`}
                 />
-                <span className={cn("text-sm font-medium", on ? "text-zinc-900" : "text-zinc-400")}>{name}</span>
+                <span className={cn("text-sm font-medium", on ? "text-zinc-900" : "text-zinc-500")}>{name}</span>
               </label>
               <div className="flex flex-1 flex-col gap-2">
-                {!on && <p className="flex min-h-10 items-center text-sm text-zinc-400">Unavailable</p>}
+                {!on && <p className="flex min-h-10 items-center text-sm text-zinc-500">Unavailable</p>}
                 {ranges.map((r, i) => (
                   <div key={i} className="flex flex-wrap items-center gap-2">
                     <Input

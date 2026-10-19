@@ -76,7 +76,7 @@ export default async function CourseSalesPage({
                 {AUDIENCE_LABELS[audience]}
               </span>
               <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-zinc-200 ring-1 ring-white/15 ring-inset">{course.level}</span>
-              {course.featured && <span className="rounded-full bg-gold-400 px-3 py-1 text-xs font-semibold text-ink">★ Most popular</span>}
+              {course.featured && <span className="rounded-full bg-gold-400 px-3 py-1 text-xs font-semibold text-ink">★ Recommended</span>}
             </div>
             <h1 className="mt-5 text-3xl font-semibold tracking-tight text-balance sm:text-5xl">{course.title}</h1>
             {course.subtitle && <p className="mt-4 max-w-2xl text-lg leading-relaxed text-pretty text-zinc-300">{course.subtitle}</p>}
@@ -117,7 +117,7 @@ export default async function CourseSalesPage({
             {preview && !owned && (
               <Link
                 href={`/courses/${course.slug}/preview/${preview.slug}`}
-                className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-zinc-200 underline-offset-4 hover:text-white hover:underline"
+                className="mt-5 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-zinc-200 underline-offset-4 hover:text-white hover:underline"
               >
                 <PlayCircle className="size-4 text-gold-300" aria-hidden />
                 Try a free lesson first: {preview.title}

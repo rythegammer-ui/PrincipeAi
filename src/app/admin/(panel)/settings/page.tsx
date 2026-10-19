@@ -16,6 +16,8 @@ const VERCEL_ENV = "Vercel → your project → Settings → Environment Variabl
 
 function integrationItems(): IntegrationItem[] {
   const s = integrations();
+  // In production /api/cron refuses every call without CRON_SECRET (see authorizeCron).
+  const cronRequired = !s.cron && process.env.NODE_ENV === "production";
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   const webhookUrl = absoluteUrl("/api/stripe/webhook");
   const redeploy = (
@@ -151,11 +153,18 @@ function integrationItems(): IntegrationItem[] {
       title: "Scheduled jobs (Vercel Cron)",
       envVars: ["CRON_SECRET"],
       status: s.cron ? "ready" : "attention",
-      statusLabel: s.cron ? "Secured" : "Not secured",
+      statusLabel: s.cron ? "Secured" : cronRequired ? "Not running — required" : "Not secured",
       summary: (
         <>
           A background job at <Code>/api/cron</Code> sends due automation emails and booking reminders, releases unpaid booking holds and cleans up old data.
           Vercel runs it once a day on the Hobby plan (14:00 UTC by default).
+          {cronRequired && (
+            <>
+              {" "}
+              <strong>Without <Code>CRON_SECRET</Code>, Vercel Cron calls are rejected</strong>, so scheduled automation emails and booking reminders are
+              paused until you set it. <strong>Run automations now</strong> below still works by hand.
+            </>
+          )}
         </>
       ),
       steps: [

@@ -28,7 +28,7 @@ export function CurriculumSidebar({
         <Link href={`/learn/${courseSlug}`} className="mt-1 block leading-snug font-semibold text-zinc-900 hover:text-brand-700">
           {courseTitle}
         </Link>
-        <Progress value={progress.percent} className="mt-4" />
+        <Progress value={progress.percent} className="mt-4" label="Course progress" />
         <p className="mt-2 text-xs text-zinc-500">
           {progress.completed} of {pluralize(progress.total, "lesson")} complete · {progress.percent}%
         </p>

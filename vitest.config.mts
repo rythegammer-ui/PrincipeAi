@@ -13,5 +13,7 @@ export default defineConfig({
     environment: "node",
     env: { PGLITE_DIR: "memory://", SEED_DEMO_DATA: "0" },
     testTimeout: 30_000,
+    // The first DB query in each file boots and migrates the embedded PGlite, which can take a while under parallel load.
+    hookTimeout: 60_000,
   },
 });

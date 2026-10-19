@@ -87,7 +87,7 @@ export function InsightsCard({
           </div>
         ) : insights ? (
           <div className={pending ? "opacity-60 transition-opacity" : undefined}>
-            <Markdown className="prose-sm max-w-none prose-h2:mt-5 prose-h2:mb-2 prose-h2:text-sm prose-h2:font-semibold prose-h2:tracking-wide prose-h2:text-brand-800 prose-h2:uppercase prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 prose-table:my-2 prose-table:text-sm sm:columns-2 sm:gap-8 [&>:first-child]:mt-0 [&_h2]:break-after-avoid [&_table]:break-inside-avoid [&_ul]:break-inside-avoid">
+            <Markdown untrusted className="prose-sm max-w-none prose-h2:mt-5 prose-h2:mb-2 prose-h2:text-sm prose-h2:font-semibold prose-h2:tracking-wide prose-h2:text-brand-800 prose-h2:uppercase prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 prose-table:my-2 prose-table:text-sm sm:columns-2 sm:gap-8 [&>:first-child]:mt-0 [&_h2]:break-after-avoid [&_table]:break-inside-avoid [&_ul]:break-inside-avoid">
               {insights.markdown}
             </Markdown>
           </div>

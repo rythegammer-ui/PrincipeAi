@@ -1,26 +1,6 @@
-import type { Page } from "@playwright/test";
-import { expect, openContact, openLoggedEmail, pathOf, test, uniqueEmail } from "./helpers";
+import { expect, openContact, openLoggedEmail, openSignInLink, signInAsStudent, test, uniqueEmail } from "./helpers";
 
 const COURSE = { slug: "ai-essentials", title: "AI Essentials" };
-
-/** Opens a one-time sign-in link on this server and confirms it (the link is a POST so mail scanners can't use it). */
-async function openSignInLink(page: Page, link: string) {
-  expect(pathOf(link)).toMatch(/^\/auth\/verify\?token=/);
-  await page.goto(pathOf(link));
-  await expect(page.getByRole("heading", { level: 1, name: /almost in/i })).toBeVisible();
-  await page.getByRole("button", { name: "Continue to my courses" }).click();
-}
-
-/** Signs a student in through /login: without an email provider (demo mode) the page shows the link itself. */
-async function signInAsStudent(page: Page, email: string, next: string) {
-  await page.goto(`/login?next=${encodeURIComponent(next)}`);
-  await page.getByLabel("Email address").fill(email);
-  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(page.getByRole("heading", { name: "Check your inbox" })).toBeVisible();
-  const devLink = page.getByRole("link", { name: "Sign in now" });
-  await expect(devLink).toHaveAttribute("href", /\/auth\/verify\?token=/);
-  await openSignInLink(page, (await devLink.getAttribute("href"))!);
-}
 
 test.describe("course purchase", () => {
   test("test checkout → success → emailed sign-in → lesson → progress", async ({ page, adminPage }) => {

@@ -160,12 +160,44 @@ describe("extractOwnEmail", () => {
     expect(extractOwnEmail("Is this a valid address: jane@acme.com?")).toBeNull();
   });
 
-  it("accepts a short message that ends with its only address", () => {
+  it("ignores an address a short message asks the assistant about", () => {
+    for (const message of [
+      "Can you check jane.doe@acme-corp.com",
+      "Draft a polite follow-up email for my prospect. bob.prospect@acme-corp.com",
+      "Who is info@competitor.com",
+      "Look up hr@bigcorp.com",
+      "Our support inbox is support@acme.com",
+      "Summarize this signature: Bob Smith, CEO, Acme Inc. bob@acme.com",
+      "Is this a valid email jane@acme.com",
+      "Is this a valid email? jane@acme.com",
+      "Please verify: jane@acme.com",
+      // A contact request elsewhere in the message doesn't make an unrelated address the visitor's own.
+      "I'd like a call. Also, can you draft a follow-up for this lead? bob@acme.com",
+      "I need a call script for Bob, bob@acme.com",
+      "I'd like a follow-up email for Bob. bob@acme.com",
+      "I'd like a call about emailing bob@acme.com",
+      "I want to talk about my prospect, bob@acme.com",
+      "I'd like a call. Thanks! Look up bob@acme.com",
+    ]) {
+      expect(extractOwnEmail(message), message).toBeNull();
+    }
+  });
+
+  it("accepts a short request to be contacted that ends with its only address", () => {
     expect(extractOwnEmail("Hi, I would like a call about AI for my team. jo3.lead@example.com")).toBe("jo3.lead@example.com");
     expect(extractOwnEmail("I’d like to talk to a human, jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("Hola, quiero hablar con alguien sobre IA. jo@ejemplo.com")).toBe("jo@ejemplo.com");
+    expect(extractOwnEmail("We'd love to book a free strategy call! jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("Can someone call me? jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("I want a follow-up about the AI course. Thanks! jo@example.com")).toBe("jo@example.com");
+    expect(extractOwnEmail("Hi! I need to speak with someone about pricing - jo@example.com")).toBe("jo@example.com");
+  });
+
+  it("accepts a short message that starts with its only address", () => {
     expect(extractOwnEmail("jo@example.com please follow up")).toBe("jo@example.com");
     expect(extractOwnEmail("jo@example.com - get back to me asap, thanks")).toBe("jo@example.com");
-    expect(extractOwnEmail("Hola, quiero hablar con alguien sobre IA. jo@ejemplo.com")).toBe("jo@ejemplo.com");
+    expect(extractOwnEmail("Hi, jo@example.com, please reach out when you can")).toBe("jo@example.com");
+    expect(extractOwnEmail("jo@example.com keeps ignoring my invoices")).toBeNull();
   });
 
   it("does not treat a lone address in a long message as the visitor's own", () => {

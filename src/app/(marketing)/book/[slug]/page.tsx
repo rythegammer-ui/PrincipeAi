@@ -1,4 +1,4 @@
-import { ArrowLeft, BellRing, CheckCircle2, Clock, CreditCard, RefreshCcw, Video } from "lucide-react";
+import { ArrowLeft, ArrowRight, BellRing, CheckCircle2, Clock, CreditCard, Mail, RefreshCcw, Video } from "lucide-react";
 import { DateTime } from "luxon";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -6,8 +6,12 @@ import { notFound } from "next/navigation";
 import { BookingFlow } from "@/components/booking/booking-flow";
 import { meetingColor } from "@/components/booking/meeting-colors";
 import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { site } from "@/config/site";
 import type { MeetingType } from "@/db/schema";
-import { bookingWindow, formatDuration, getActiveMeetingType, getBusinessTimezone, slotsForMeetingType } from "@/lib/scheduling";
+import { readDiscoveryPrefill } from "@/lib/leads";
+import { checkoutMode } from "@/lib/payments";
+import { bookingWindow, formatDuration, getActiveMeetingType, getBusinessTimezone, listActiveMeetingTypes, slotsForMeetingType } from "@/lib/scheduling";
 import { cn, formatMoney, truncate } from "@/lib/utils";
 
 type Params = { slug: string };
@@ -49,20 +53,10 @@ export default async function BookMeetingPage({ params, searchParams }: { params
   const meetingType = await getActiveMeetingType(slug);
   if (!meetingType) notFound();
 
-  const timezone = await getBusinessTimezone();
-  const { todayKey, lastDateKey } = bookingWindow(meetingType, timezone);
-  // Open the calendar on the month of the first available slot.
-  const now = new Date().getTime();
-  const lookahead = Math.min(meetingType.maxDaysAhead + 1, 45) * 86_400_000;
-  const { slots } = await slotsForMeetingType(meetingType, now, now + lookahead).catch(() => ({ slots: [] as string[] }));
-  const first = slots[0] ? DateTime.fromISO(slots[0], { zone: timezone }).toISODate() : null;
-  const initialMonth = (first ?? todayKey).slice(0, 7);
-  const minMonth = todayKey.slice(0, 7);
-  // +1 day so visitors ahead of the business timezone can still reach the last bookable slot.
-  const maxMonth = (DateTime.fromISO(lastDateKey).plus({ days: 1 }).toISODate() ?? lastDateKey).slice(0, 7);
-
   const color = meetingColor(meetingType.color);
   const free = meetingType.priceCents === 0;
+  // Without a way to pay (no Stripe and no test checkout), a paid session can't be booked online: offer contact instead.
+  const paymentsOff = !free && checkoutMode() === "disabled";
 
   return (
     <section className="relative bg-zinc-50">
@@ -88,7 +82,7 @@ export default async function BookMeetingPage({ params, searchParams }: { params
                 <li className="flex items-center gap-2">
                   <Video className="size-4 text-zinc-400" aria-hidden /> {meetingType.locationLabel}
                 </li>
-                {!free && (
+                {!free && !paymentsOff && (
                   <li className="flex items-center gap-2">
                     <CreditCard className="size-4 text-zinc-400" aria-hidden /> {formatMoney(meetingType.priceCents)}, paid securely at checkout
                   </li>
@@ -120,24 +114,76 @@ export default async function BookMeetingPage({ params, searchParams }: { params
           </aside>
 
           <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-soft sm:p-8">
-            <BookingFlow
-              meetingType={{
-                slug: meetingType.slug,
-                name: meetingType.name,
-                durationMin: meetingType.durationMin,
-                priceCents: meetingType.priceCents,
-                locationLabel: meetingType.locationLabel,
-                questions: meetingType.questions,
-              }}
-              businessTimezone={timezone}
-              initialMonth={initialMonth}
-              minMonth={minMonth}
-              maxMonth={maxMonth < initialMonth ? initialMonth : maxMonth}
-              prefill={{ name: one(search.name, 120), email: one(search.email, 254) }}
-            />
+            {paymentsOff ? <BookByContact /> : <OnlineBooking meetingType={meetingType} prefill={{ name: one(search.name, 120), email: one(search.email, 254) }} />}
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+/** The calendar + intake form, opened on the month of the first available slot. */
+async function OnlineBooking({ meetingType, prefill }: { meetingType: MeetingType; prefill: { name: string; email: string } }) {
+  const timezone = await getBusinessTimezone();
+  // The consulting application's answers (implementation discovery call only; empty otherwise).
+  const answers = await readDiscoveryPrefill(meetingType).catch(() => ({}));
+  const { todayKey, lastDateKey } = bookingWindow(meetingType, timezone);
+  const now = new Date().getTime();
+  const lookahead = Math.min(meetingType.maxDaysAhead + 1, 45) * 86_400_000;
+  const { slots } = await slotsForMeetingType(meetingType, now, now + lookahead).catch(() => ({ slots: [] as string[] }));
+  const first = slots[0] ? DateTime.fromISO(slots[0], { zone: timezone }).toISODate() : null;
+  const initialMonth = (first ?? todayKey).slice(0, 7);
+  const minMonth = todayKey.slice(0, 7);
+  // +1 day so visitors ahead of the business timezone can still reach the last bookable slot.
+  const maxMonth = (DateTime.fromISO(lastDateKey).plus({ days: 1 }).toISODate() ?? lastDateKey).slice(0, 7);
+
+  return (
+    <BookingFlow
+      meetingType={{
+        slug: meetingType.slug,
+        name: meetingType.name,
+        durationMin: meetingType.durationMin,
+        priceCents: meetingType.priceCents,
+        locationLabel: meetingType.locationLabel,
+        questions: meetingType.questions,
+      }}
+      businessTimezone={timezone}
+      initialMonth={initialMonth}
+      minMonth={minMonth}
+      maxMonth={maxMonth < initialMonth ? initialMonth : maxMonth}
+      prefill={{ ...prefill, answers }}
+    />
+  );
+}
+
+/** Shown instead of the booking flow for a paid session while online payment is unavailable (mirrors the course buy box). */
+async function BookByContact() {
+  const freeCall = (await listActiveMeetingTypes().catch(() => [])).find((t) => t.priceCents === 0) ?? null;
+  return (
+    <div className="flex flex-col items-start gap-4">
+      <span className="flex size-11 items-center justify-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+        <Mail className="size-5" aria-hidden />
+      </span>
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-zinc-900">Online booking for this session is opening soon</h2>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+          Email{" "}
+          <a href={`mailto:${site.contactEmail}`} className="font-medium break-all text-brand-700 hover:underline">
+            {site.contactEmail}
+          </a>{" "}
+          and we&apos;ll find a time with you personally{freeCall ? ", or start with a free call" : ""}.
+        </p>
+      </div>
+      <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+        <ButtonLink href="/contact" size="lg">
+          Contact us to book
+        </ButtonLink>
+        {freeCall && (
+          <ButtonLink href={`/book/${freeCall.slug}`} variant="outline" size="lg">
+            Book a free call instead <ArrowRight aria-hidden />
+          </ButtonLink>
+        )}
+      </div>
+    </div>
   );
 }

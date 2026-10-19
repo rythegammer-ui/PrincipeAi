@@ -9,12 +9,12 @@ import { createLoginToken } from "@/lib/auth";
 import { CHECKOUT_FAILED_REASON, confirmPaidBooking, HOLD_EXPIRED_REASON } from "@/lib/booking-service";
 import { emailHasCourse, enrollInCourse } from "@/lib/courses";
 import { addLifetimeValue, captureLead, logActivity, upsertContact } from "@/lib/crm";
-import { escapeMarkdown, notifyOwner, sendEmail } from "@/lib/email";
+import { emailBusinessName, escapeMarkdown, notifyOwner, sendEmail } from "@/lib/email";
 import { testCheckoutAllowed } from "@/lib/integrations";
 import { rateLimit } from "@/lib/rate-limit";
 import { formatMeetingTime, getBusinessTimezone } from "@/lib/scheduling";
 import { getStripe, stripeDashboardUrl, stripeTestMode } from "@/lib/stripe";
-import { absoluteUrl, firstName, formatDate, formatDateTime, formatMoney, normalizeEmail } from "@/lib/utils";
+import { absoluteUrl, firstName, formatDate, formatDateTime, formatMoney, isValidEmail, normalizeEmail } from "@/lib/utils";
 
 /**
  * Checkout + order fulfilment (Stripe, or the built-in test checkout when Stripe isn't configured).
@@ -474,6 +474,8 @@ async function alertUndeliverable(order: Order, why: string): Promise<void> {
         `- Email: ${escapeMarkdown(order.email)}`,
         `- Order: ${order.id}`,
       ].join("\n\n"),
+      // Reply goes straight to the buyer (checkout only takes validated addresses; re-checked as defense in depth).
+      { replyTo: isValidEmail(order.email) ? order.email : null },
     );
   } catch (err) {
     console.error("[payments] undeliverable-order alert failed", order.id, err);
@@ -578,7 +580,7 @@ async function sendReceipt(order: Order, contactId: string, booking: BookingSnap
         : "**Your session isn't booked yet:** your payment arrived after the time you picked had been released, and it's no longer available. We'll be in touch shortly to find a new time or refund you in full — or just reply to this email.";
   await sendEmail({
     to: order.email,
-    subject: `Your receipt from ${site.name}`,
+    subject: `Your receipt from ${await emailBusinessName()}`,
     kind: "receipt",
     contactId,
     preheader: `${amount} — ${order.description}`,

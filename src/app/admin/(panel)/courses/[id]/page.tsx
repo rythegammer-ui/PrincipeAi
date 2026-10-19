@@ -17,6 +17,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
 import type { Course } from "@/db/schema";
+import { requireAdmin } from "@/lib/auth";
 import { getCurriculum, type CurriculumModule } from "@/lib/courses";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { cn, formatDate, pluralize } from "@/lib/utils";
@@ -314,6 +315,7 @@ export default async function EditCoursePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string; created?: string; error?: string }>;
 }) {
+  await requireAdmin();
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = await getDb();

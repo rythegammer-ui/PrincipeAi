@@ -40,8 +40,8 @@ export function fillTemplate(template: string, vars: TemplateVars, escape = fals
   });
 }
 
-/** Standard links available to every template. */
-export function defaultTemplateVars(): TemplateVars {
+/** Standard links available to every template, plus {{businessName}} (pass `emailBusinessName()`). */
+export function defaultTemplateVars(businessName: string = site.name): TemplateVars {
   return {
     siteUrl: absoluteUrl("/"),
     bookUrl: absoluteUrl("/book"),
@@ -49,8 +49,22 @@ export function defaultTemplateVars(): TemplateVars {
     assessmentUrl: absoluteUrl("/assessment"),
     guideUrl: absoluteUrl("/guide?src=email"),
     loginUrl: absoluteUrl("/login"),
-    businessName: site.name,
+    businessName,
   };
+}
+
+/**
+ * The business name customers see in emails ({{businessName}}, booking sign-offs): Admin → Settings → Business
+ * name, or site.name when it can't be read. The header, logo and email layout stay on site.name (src/config/site.ts).
+ */
+export async function emailBusinessName(): Promise<string> {
+  try {
+    const { getSettings } = await import("@/lib/settings");
+    return (await getSettings()).businessName.trim() || site.name;
+  } catch (err) {
+    console.error("[email] couldn't read the business name; using the default", err);
+    return site.name;
+  }
 }
 
 /** Wraps body HTML in the branded email layout. */
@@ -186,10 +200,13 @@ export async function sendEmail(input: SendEmailInput): Promise<{ status: EmailS
   return { status, id: providerId };
 }
 
-/** Internal notification to the business owner (new lead, booking, purchase…). */
-export async function notifyOwner(subject: string, markdown: string): Promise<void> {
+/**
+ * Internal notification to the business owner (new lead, booking, purchase…). Pass `replyTo` with the person it is
+ * about (a validated, normalized contact email) so hitting Reply in the inbox answers them, not the owner.
+ */
+export async function notifyOwner(subject: string, markdown: string, opts: { replyTo?: string | null } = {}): Promise<void> {
   const { getSettings } = await import("@/lib/settings");
   const s = await getSettings();
   if (!s.notifyEmail) return;
-  await sendEmail({ to: s.notifyEmail, subject: `[${site.name}] ${subject}`, markdown, kind: "notification" });
+  await sendEmail({ to: s.notifyEmail, subject: `[${site.name}] ${subject}`, markdown, kind: "notification", replyTo: opts.replyTo || undefined });
 }

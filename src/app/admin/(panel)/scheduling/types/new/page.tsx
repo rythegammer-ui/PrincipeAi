@@ -3,10 +3,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MeetingTypeForm } from "@/components/booking/meeting-type-form";
 import { PageHeader } from "@/components/ui/misc";
+import { requireAdmin } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "New meeting type" };
 
-export default function NewMeetingTypePage() {
+export default async function NewMeetingTypePage() {
+  await requireAdmin();
   return (
     <div className="mx-auto max-w-3xl">
       <Link href="/admin/scheduling" className="mb-4 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900">

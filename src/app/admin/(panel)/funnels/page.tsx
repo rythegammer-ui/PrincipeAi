@@ -8,6 +8,7 @@ import { TrafficChart } from "@/components/funnels/traffic-chart";
 import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader, StatCard } from "@/components/ui/misc";
+import { requireAdmin } from "@/lib/auth";
 import { RANGE_OPTIONS, formatPercent, getFunnelDashboard, parseRangeDays, rate, type EntranceRow } from "@/lib/funnels";
 import { formatMoney, pluralize } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ export const metadata: Metadata = { title: "Funnels" };
 const fmt = (n: number) => n.toLocaleString("en-US");
 
 export default async function FunnelsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireAdmin();
   const sp = await searchParams;
   const days = parseRangeDays(sp.range);
   const { range, funnels, traffic, entrances, attribution } = await getFunnelDashboard(days);

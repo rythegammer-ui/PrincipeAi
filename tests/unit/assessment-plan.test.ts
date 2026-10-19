@@ -30,7 +30,7 @@ vi.mock("@/lib/ai", async (importOriginal) => {
   };
 });
 
-import { claimPlanGeneration, PLAN_LIMITS } from "@/app/(marketing)/assessment/data";
+import { claimPlanGeneration, PLAN_LIMITS, planBudgetKeys } from "@/app/(marketing)/assessment/data";
 import { POST } from "@/app/api/assessment/[token]/plan/route";
 import { getDb, schema } from "@/db";
 import {
@@ -100,6 +100,32 @@ async function rateLimitRows(submissionId: string) {
   return db.select().from(schema.rateLimits).where(like(schema.rateLimits.key, `%${submissionId}%`));
 }
 
+/** Hits recorded against a budget key in its current window (0 when it has none). */
+async function hits(key: string): Promise<number> {
+  const db = await getDb();
+  const [row] = await db.select().from(schema.rateLimits).where(eq(schema.rateLimits.key, key));
+  return row?.count ?? 0;
+}
+
+/** Runs `fn` with the site-wide daily counter at `count`, then puts the counter back as it was. */
+async function withGlobalCount(count: number, fn: (warn: ReturnType<typeof vi.spyOn>) => Promise<void>) {
+  const db = await getDb();
+  const key = "assessment-plan:global";
+  const [existing] = await db.select().from(schema.rateLimits).where(eq(schema.rateLimits.key, key));
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    await db
+      .insert(schema.rateLimits)
+      .values({ key, count, windowStart: new Date() })
+      .onConflictDoUpdate({ target: schema.rateLimits.key, set: { count, windowStart: new Date() } });
+    await fn(warn);
+  } finally {
+    warn.mockRestore();
+    if (existing) await db.update(schema.rateLimits).set(existing).where(eq(schema.rateLimits.key, key));
+    else await db.delete(schema.rateLimits).where(eq(schema.rateLimits.key, key));
+  }
+}
+
 const isFallbackPlan = (body: string) => body.includes("## Your AI snapshot");
 
 let ipCounter = 0;
@@ -128,11 +154,17 @@ describe("plan generation budget", () => {
       await expireLease(id);
       expect((await requestPlan(token)).body).toBe("CLAUDE PLAN");
     }
+    const keys = planBudgetKeys(id, mocks.ip.value);
+    const [ipBefore, globalBefore] = [await hits(keys.ip), await hits(keys.global)];
     await expireLease(id);
     const capped = await requestPlan(token);
     expect(capped.status).toBe(200);
     expect(isFallbackPlan(capped.body)).toBe(true);
     expect(mocks.generations).toHaveLength(PLAN_LIMITS.perSubmissionPerDay);
+    // The refused request costs the address and the site-wide ceiling nothing.
+    expect(await hits(keys.submission)).toBe(PLAN_LIMITS.perSubmissionPerDay);
+    expect(await hits(keys.ip)).toBe(ipBefore);
+    expect(await hits(keys.global)).toBe(globalBefore);
   });
 
   it("caps Claude generations per IP address per day", async () => {
@@ -144,29 +176,50 @@ describe("plan generation budget", () => {
     expect(mocks.generations).toHaveLength(0);
 
     const { id } = await submission();
-    expect(await claimPlanGeneration(id, async () => ({ ok: false }))).toEqual({ ok: false, reason: "ip_limit" });
+    const keys = planBudgetKeys(id, mocks.ip.value);
+    const globalBefore = await hits(keys.global);
+    expect(await claimPlanGeneration(id, mocks.ip.value)).toEqual({ ok: false, reason: "ip_limit" });
+    // Nothing is spent by the refusal: not the submission's allowance, nor the site-wide one.
+    expect(await hits(keys.submission)).toBe(0);
+    expect(await hits(keys.ip)).toBe(PLAN_LIMITS.perIpPerDay);
+    expect(await hits(keys.global)).toBe(globalBefore);
+  });
+
+  it("counts IPv6 clients by their /64 network, like rateLimitByIp", () => {
+    expect(planBudgetKeys("s", "2001:db8:1:2:aaaa::1").ip).toBe("assessment-plan:day:2001:db8:1:2::/64");
+    expect(planBudgetKeys("s", "2001:db8:1:2:bbbb::9").ip).toBe(planBudgetKeys("s", "2001:db8:1:2:aaaa::1").ip);
+    expect(planBudgetKeys("s", "198.51.100.7").ip).toBe("assessment-plan:day:198.51.100.7");
   });
 
   it("stops Claude generations site-wide once the daily ceiling is reached", async () => {
-    const db = await getDb();
-    const key = "assessment-plan:global";
-    const [existing] = await db.select().from(schema.rateLimits).where(eq(schema.rateLimits.key, key));
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      await db
-        .insert(schema.rateLimits)
-        .values({ key, count: PLAN_LIMITS.globalPerDay, windowStart: new Date() })
-        .onConflictDoUpdate({ target: schema.rateLimits.key, set: { count: PLAN_LIMITS.globalPerDay, windowStart: new Date() } });
+    await withGlobalCount(PLAN_LIMITS.globalPerDay, async (warn) => {
       const { token } = await submission();
       const res = await requestPlan(token);
       expect(isFallbackPlan(res.body)).toBe(true);
       expect(mocks.generations).toHaveLength(0);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("daily AI plan limit"));
-    } finally {
-      warn.mockRestore();
-      if (existing) await db.update(schema.rateLimits).set(existing).where(eq(schema.rateLimits.key, key));
-      else await db.delete(schema.rateLimits).where(eq(schema.rateLimits.key, key));
-    }
+    });
+  });
+
+  it("doesn't spend a submission's or an address's budget while the daily ceiling is reached", async () => {
+    const { id, token } = await submission();
+    const keys = planBudgetKeys(id, mocks.ip.value);
+    await withGlobalCount(PLAN_LIMITS.globalPerDay, async () => {
+      // More refused visits than the submission's whole daily allowance.
+      for (let i = 0; i <= PLAN_LIMITS.perSubmissionPerDay; i++) {
+        await expireLease(id);
+        expect(isFallbackPlan((await requestPlan(token)).body)).toBe(true);
+      }
+      expect(mocks.generations).toHaveLength(0);
+      expect(await hits(keys.submission)).toBe(0);
+      expect(await hits(keys.ip)).toBe(0);
+      expect(await hits(keys.global)).toBe(PLAN_LIMITS.globalPerDay);
+    });
+    // Once the ceiling resets, the submission gets its Claude-written plan straight away.
+    await expireLease(id);
+    expect((await requestPlan(token)).body).toBe("CLAUDE PLAN");
+    expect(await hits(keys.submission)).toBe(1);
+    expect(await hits(keys.ip)).toBe(1);
   });
 
   it("serves a stored plan without claiming a generation", async () => {

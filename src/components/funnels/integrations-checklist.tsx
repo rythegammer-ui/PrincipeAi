@@ -38,8 +38,11 @@ export function ExtLink({ href, children }: { href: string; children: ReactNode 
   );
 }
 
-/** Setup checklist: one disclosure per integration, open by default when it needs attention. */
-export function IntegrationsChecklist({ items }: { items: IntegrationItem[] }) {
+/**
+ * Setup checklist: one disclosure per integration, open by default when it needs attention.
+ * `live`: a production site on a real database, where the test checkout and on-page sign-in links are off.
+ */
+export function IntegrationsChecklist({ items, live = false }: { items: IntegrationItem[]; live?: boolean }) {
   const ready = items.filter((i) => i.status === "ready").length;
   return (
     <div className="flex flex-col gap-3">
@@ -47,8 +50,10 @@ export function IntegrationsChecklist({ items }: { items: IntegrationItem[] }) {
         <span className="font-semibold text-zinc-900">
           {ready} of {items.length}
         </span>{" "}
-        connected. Everything works without the optional services: AI falls back to built-in answers, payments use a test checkout, and emails are logged
-        instead of sent.
+        connected.{" "}
+        {live
+          ? "AI is optional (it falls back to built-in answers), but this live site needs email delivery and payments: without Stripe nobody can buy, and without email students can't sign in."
+          : "Everything works without the optional services: AI falls back to built-in answers, payments use a test checkout, and emails are logged instead of sent."}
       </p>
       <ul className="flex flex-col gap-2">
         {items.map((item) => {
@@ -61,13 +66,16 @@ export function IntegrationsChecklist({ items }: { items: IntegrationItem[] }) {
               >
                 <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 rounded-2xl px-4 py-3 hover:bg-zinc-50/70 focus-visible:outline-2 focus-visible:outline-brand-500 sm:px-5 [&::-webkit-details-marker]:hidden">
                   <s.Icon className={cn("size-5 shrink-0", s.iconClass)} aria-hidden />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-zinc-900">{item.title}</span>
-                    <span className="block truncate text-xs text-zinc-500">{item.envVars.join(" · ")}</span>
+                  {/* On phones the status sits under the title, so a long one ("Required — …") doesn't squeeze it. */}
+                  <span className="flex min-w-0 flex-1 flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                    <span className="w-full min-w-0 sm:w-auto sm:flex-1">
+                      <span className="block font-medium text-zinc-900">{item.title}</span>
+                      <span className="block truncate text-xs text-zinc-500">{item.envVars.join(" · ")}</span>
+                    </span>
+                    <Badge tone={s.tone} className="sm:shrink-0">
+                      {item.statusLabel}
+                    </Badge>
                   </span>
-                  <Badge tone={s.tone} className="shrink-0">
-                    {item.statusLabel}
-                  </Badge>
                   <span aria-hidden className="text-zinc-400 transition-transform group-open:rotate-90">
                     ›
                   </span>

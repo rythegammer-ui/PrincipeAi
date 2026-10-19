@@ -12,7 +12,8 @@ import {
   rescheduleBooking,
   type CheckoutRetry,
 } from "@/lib/booking-service";
-import { CheckoutError, createCheckout } from "@/lib/payments";
+import { site } from "@/config/site";
+import { CheckoutError, checkoutMode, createCheckout } from "@/lib/payments";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { isValidTimezone } from "@/lib/scheduling";
 
@@ -78,6 +79,7 @@ export async function rescheduleBookingAction(_prev: ManageBookingState, formDat
 const HOLD_LAPSED = "The hold on this time has expired, so it's been released. Please choose a new time.";
 const PAYMENT_PROCESSING = "Your payment is still processing, so there's nothing more to pay. We'll email you as soon as it clears.";
 const CHECKOUT_UNAVAILABLE = "We couldn't start the payment step just now. Please try again in a few minutes.";
+const PAYMENTS_OFF = `Online payment isn't available right now. Please email ${site.contactEmail} and we'll arrange your session with you directly.`;
 
 /**
  * Sends the invitee back to checkout for a booking whose payment hold is still live (they left
@@ -96,6 +98,8 @@ export async function resumeCheckoutAction(_prev: ManageBookingState, formData: 
   if (booking.status === "confirmed") return { error: "This booking is already paid for and confirmed. Refresh the page to see the details." };
   if (booking.status !== "pending_payment") return { error: "This booking is no longer awaiting payment. Refresh the page to see its status." };
   if (isHoldExpired(booking)) return { error: HOLD_LAPSED };
+  // Retrying can never succeed while there's no way to pay, so don't suggest it.
+  if (checkoutMode() === "disabled") return { error: PAYMENTS_OFF };
 
   let retry: CheckoutRetry;
   try {

@@ -72,7 +72,7 @@ src/
   lib/*                        see "Core libraries"
 drizzle/                       generated SQL migrations           [foundation — read-only]
 tests/unit/*.test.ts           vitest                             [each feature adds its own]
-tests/e2e/*.spec.ts            playwright (helpers.ts, env.ts)    [integration] — see README "End-to-end tests"
+tests/e2e/*.spec.ts            playwright (helpers.ts, env.ts, mock-anthropic.ts) [integration] — see README "End-to-end tests"
 ```
 
 ## Ground rules for feature work
@@ -85,8 +85,9 @@ tests/e2e/*.spec.ts            playwright (helpers.ts, env.ts)    [integration] 
 3. Any page/layout/route that reads the database must be dynamic: the marketing, admin and learn layouts already set
    `export const dynamic = "force-dynamic"`; for pages outside those groups (and for route handlers that read the DB on GET)
    add it yourself. Never query the DB at module top level.
-4. Every **admin server action / admin API route** must call `await assertAdmin()` first (pages/layouts use
-   `requireAdmin()` — the panel layout already does). Every public mutation must validate input with **zod** and be
+4. Every **admin server action / admin API route** must call `await assertAdmin()` first, and every **admin page**
+   (plus any `generateMetadata` that reads data) `await requireAdmin()` first. The panel layout checks too, but a
+   client-side navigation re-renders only the page, not the layout (`tests/unit/foundation-security.test.ts` enforces it). Every public mutation must validate input with **zod** and be
    **rate limited** (`rateLimitByIp(bucket, limit, windowSec)` from `src/lib/rate-limit.ts`).
 5. Server Actions are the default for forms (`"use server"` files named `actions.ts` next to the page). Use
    `useActionState` + `<SubmitButton>` for pending/error UI. Revalidate with `revalidatePath` after admin mutations.
@@ -103,20 +104,20 @@ tests/e2e/*.spec.ts            playwright (helpers.ts, env.ts)    [integration] 
 
 | File | Exports | Notes |
 |---|---|---|
-| `db/index.ts` | `getDb()`, `schema`, `dbMode()`, `isDemoMode()` | `const db = await getDb()` inside handlers. Drizzle query builder (`db.select().from(schema.x)…`, `db.insert`, `db.update`, `db.transaction`, `db.execute(sql\`…\`)`). On Vercel without `DATABASE_URL` it refuses to start unless `DEMO_MODE=1` (in-memory demo) |
-| `auth.ts` | `requireAdmin()`, `assertAdmin()`, `getAdminSession()`, `getStudent()`, `requireStudent(next)`, `upsertStudent(email,name)`, `createLoginToken(email, redirectTo)`, `startStudentSession(user)` | Magic link URL: `absoluteUrl("/auth/verify?token=" + token)`. Admin sessions are bound to the current admin credentials (changing `ADMIN_PASSWORD` or `ADMIN_SESSION_VERSION` signs every admin out) |
+| `db/index.ts` | `getDb()`, `schema`, `dbMode()`, `isDemoMode()` | `const db = await getDb()` inside handlers. Drizzle query builder (`db.select().from(schema.x)…`, `db.insert`, `db.update`, `db.transaction`, `db.execute(sql\`…\`)`). Deployed on Vercel without `DATABASE_URL` it refuses to start unless `DEMO_MODE=1` (in-memory demo); local `next dev` falls back to the file database |
+| `auth.ts` | `requireAdmin()`, `assertAdmin()`, `getAdminSession()`, `getStudent()`, `requireStudent(next)`, `upsertStudent(email,name)`, `createLoginToken(email, redirectTo)`, `startStudentSession(user)` | Magic link URL: `absoluteUrl("/auth/verify?token=" + token)`. Admin sessions are bound to the current admin credentials (changing `ADMIN_PASSWORD` or `ADMIN_SESSION_VERSION` signs every admin out). The cookie check lives in `session-token.ts` (no DB imports) so `src/proxy.ts` runs the same one on every page request |
 | `crm.ts` | **`captureLead(input)`** (the one entry point for every conversion), `upsertContact`, `logActivity`, `advanceStage`, `setStage`, `addTags`, `recomputeScore`, `createTask`, `addLifetimeValue`, `contactForVisitor` | `captureLead` = upsert contact + activity + funnel event + stage + score + automations + owner notification |
 | `tracking.ts` | `trackEvent({name,…})`, `getVisitorContext()`, `FUNNEL_EVENTS`, `CLIENT_EVENTS` | Server-side funnel events. Client: `track(name, props)` from `components/analytics/page-view-tracker.tsx` (only `CLIENT_EVENTS`) |
-| `email.ts` | `sendEmail({to, subject, markdown, kind, contactId, attachments…})`, `notifyOwner`, `fillTemplate`, `defaultTemplateVars`, `markdownToEmailHtml`, `escapeMarkdown` (re-exported from `utils.ts`) | Always send Markdown; layout + logging handled for you (`/auth/verify?token=…` links are stored redacted in `email_log`). Escape visitor text with `escapeMarkdown` |
+| `email.ts` | `sendEmail({to, subject, markdown, kind, contactId, replyTo, attachments…})`, `notifyOwner(subject, markdown, { replyTo })`, `fillTemplate`, `defaultTemplateVars(businessName)`, `emailBusinessName()`, `markdownToEmailHtml`, `escapeMarkdown` (re-exported from `utils.ts`) | Always send Markdown; layout + logging handled for you (`/auth/verify?token=…` links are stored redacted in `email_log`). Escape visitor text with `escapeMarkdown`. Sign customer emails with `emailBusinessName()` (Settings → Business name). Pass the lead's address as `replyTo` to `notifyOwner` |
 | `automations.ts` | `triggerAutomations(trigger, contactId)`, `stopAutomations`, `processDueEnrollments()` | Triggers: `lead_magnet`, `quiz_completed`, `call_booked`, `purchase`, `contact_form`, `manual` |
-| `ai.ts` | `aiEnabled()`, `aiText({system, messages, effort, maxTokens})`, `aiStream({…, fallbackText, useFallback, onComplete})`, `textStreamResponse(stream)`, `claimPublicAiReply()`, `AI_MODEL` | Opus 5.5 with server-side refusal fallback. `aiText` returns `null` when AI is unavailable → use your fallback. Effort: `"low"` for chat, `"medium"` for analysis/plans. Visitor-triggered replies (chat, tutor) call `claimPublicAiReply()` first: a site-wide daily ceiling (`AI_DAILY_LIMIT`, default 2000) after which they stream the fallback |
+| `ai.ts` | `aiEnabled()`, `aiText({system, messages, effort, maxTokens})`, `aiStream({…, fallbackText, useFallback, onComplete})`, `textStreamResponse(stream)`, `claimAiReply(budget)`, `AI_MODEL` | Opus 5.5 with server-side refusal fallback. `aiText` returns `null` when AI is unavailable → use your fallback. Effort: `"low"` for chat, `"medium"` for analysis/plans. Visitor-triggered replies call `claimAiReply("chat")` / `claimAiReply("tutor")` first: separate site-wide daily ceilings (`AI_DAILY_LIMIT` / `AI_TUTOR_DAILY_LIMIT`, default 2000 each, reset at midnight UTC) after which they stream the fallback |
 | `settings.ts` | `getSettings()`, `updateSettings(patch)`, `DEFAULT_SETTINGS` | Business tz, notification toggles, assistant name/greeting/instructions, announcement bar |
 | `rate-limit.ts` | `rateLimit(key, limit, windowSec)`, `rateLimitByIp(bucket, limit, windowSec)`, `clientIp()` | `rateLimitByIp` buckets IPv6 clients by their /64 network |
 | `integrations.ts` | `integrations()`, `testCheckoutAllowed()` | Which services are configured |
 | `utils.ts` | `cn`, `formatMoney`, `formatDate`, `formatDateTime`, `timeAgo`, `absoluteUrl`, `safeRedirectPath`, `normalizeEmail`, `isValidEmail`, `escapeMarkdown`, `firstName`, `slugify`, `truncate`, `pluralize` | Client-safe. `isValidEmail` rejects quotes, brackets, parentheses, `,:;` and `\` |
 | `payments.ts` | `createCheckout(input)`, `fulfillOrder(orderId, payment)`, `refundOrder`, `failPendingOrder(orderId)`, `checkoutMode()` | owned by **courses**. A demo deployment (in-memory database) refuses a live Stripe key (`checkoutMode()` → `"disabled"`) |
 | `courses.ts` | `enrollInCourse({email,name,courseId,source,orderId})` | owned by **courses** |
-| `booking-service.ts` | `confirmPaidBooking(bookingId)`, `sendDueBookingReminders()`, `releaseExpiredHolds()` | owned by **scheduling**; cron calls the latter two |
+| `booking-service.ts` | `confirmPaidBooking(bookingId)`, `sendDueBookingReminders()`, `releaseExpiredHolds()`, `paidOrderForBooking(bookingId)`, `refreshPrepTasks(meetingTypeId)`, `prepTaskDescription(details, tz)`, `ownerGoogleCalendarUrl(details)` | owned by **scheduling**; cron calls `sendDueBookingReminders` and `releaseExpiredHolds`. `paidOrderForBooking` = the paid order of a booking (refund checks) |
 
 ### Pipeline stages
 `new → engaged → qualified → call_booked → proposal → customer` (+ `lost`). `advanceStage` only moves forward.

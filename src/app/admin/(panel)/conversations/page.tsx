@@ -9,6 +9,7 @@ import { ButtonLink, buttonVariants } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
 import { Avatar, EmptyState, PageHeader, StatCard } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { requireAdmin } from "@/lib/auth";
 import { plainText } from "@/lib/chat-fallback";
 import { integrations } from "@/lib/integrations";
 import { getSettings } from "@/lib/settings";
@@ -67,6 +68,7 @@ function KindTabs({ filters }: { filters: ConversationFilters }) {
 }
 
 export default async function ConversationsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireAdmin();
   const sp = await searchParams;
   const filters = parseConversationFilters(sp);
   const [{ rows, total, page, pageCount, pageSize }, stats, insights, settings] = await Promise.all([

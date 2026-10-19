@@ -84,20 +84,40 @@ const FOLLOW_UP_WORDS = new Set(
 /** Longest message (in words, not counting the address) where a lone address counts as the visitor's own. */
 const SHORT_MESSAGE_WORDS = 25;
 
+/**
+ * A first-person request to be contacted, the only text (besides filler) a short message may have before the
+ * visitor's address: "I'd like a call about AI for my team.", "we want a follow-up", "I'd like to talk to a human,",
+ * "Can someone call me?", "quiero hablar con alguien". "I need a call script for Bob" asks for a document, not a call.
+ */
+const CONTACT_REQUEST_CUES = new RegExp(
+  [
+    String.raw`\b(?:i|we)(?:'d|'ll|\s+would|\s+will)?\s+(?:really\s+|also\s+|just\s+)?(?:like|love|want|need)\s+(?:(?:to\s+(?:book|schedule|arrange|get|have|set\s+up)\s+)?(?:a|an|some)\s+(?:[a-z-]+\s+){0,2}?(?:call(?:-?back)?|follow[- ]?up|chat|meeting|consultation|conversation)\b(?!\s*(?:e-?mails?|messages?|notes?|templates?|letters?|drafts?|scripts?|agendas?|invites?|invitations?|summary|summaries|recaps?|reminders?|texts?|transcripts?)\b)|to\s+(?:talk|speak|chat)\b)`,
+    String.raw`\b(?:talk|speak)\s+(?:to|with)\s+(?:a\s+)?(?:human|real\s+person|person|someone|somebody)\b`,
+    String.raw`\b(?:contact|call|email|e-mail|phone|reach)\s+me\b`,
+    String.raw`\b(?:quiero|quisiera|gustar[ií]a)\s+hablar\b`,
+  ].join("|"),
+  "i",
+);
+
 /** Text before an address that points at someone else: "my client …", "reply to …", "cc: …", "her …", "Jane's email …". */
 const THIRD_PARTY_CUES = new RegExp(
   [
     String.raw`\b(?:client|customer|colleague|co-?worker|boss|friend|recipient)`,
-    String.raw`\b(?:him|her|his|their|cc|bcc)\b`,
+    String.raw`\b(?:prospects?|him|her|his|their|cc|bcc)\b`,
     String.raw`\b(?:to|from)\s*:`,
     String.raw`\b(?:send|sent|write|wrote|reply|replied|respond|forward|e-?mail|mail)\s+(?:(?:it|this|that|them|these|those)\s+)?to\b(?!\s+(?:me|us|you)\b)`,
     String.raw`\b(?!(?:it|that|here|there|what|who|let)'s\b)[a-z]+'s\s+(?:(?:work|personal|business|contact)\s+)?(?:e-?mail|address)`,
+    // Asking the assistant to work on someone's text ("Draft a reply and a call invite for Bob, bob@…").
+    String.raw`\b(?:draft|write|compose|proofread|rewrite|summari[sz]e|translate|forward)\b`,
   ].join("|"),
   "i",
 );
 
 /** …or a word that makes the address the object of a phrase: "… to jane@…", "… about jane@…". */
 const OBJECT_BEFORE = /\b(?:to|from|for|with|about|of|than|regarding|named|called)\s*[:\-–—]?\s*$/i;
+
+/** The address starts a clause of its own: "…for my team. jo@…", "…a human, jo@…", "Can someone call me? jo@…". */
+const CLAUSE_END_BEFORE = /[.,;:!?\-–—]\s*$/;
 
 /** Lower-cased words of `text` (letters, apostrophes and hyphens). */
 function words(text: string): string[] {
@@ -108,13 +128,16 @@ function words(text: string): string[] {
     .filter(Boolean);
 }
 
+const isFiller = (text: string) => words(text).every((w) => FILLER_WORDS.has(w));
+
 /**
  * The address the visitor offers as their *own* contact email, or null. Visitors often paste other people's
- * addresses ("write a reminder to my client jane@acme.com"), so an address only counts when it comes with
- * first-person phrasing ("my email is …", "reach me at …", "follow up with me by email: …" — the follow-up form's
- * wording), when the message is just the address plus a few filler words ("Sure, it's jo@example.com"), or when a
- * short message ends with its only address and nothing in it points at someone else ("Hi, I'd like a call about AI
- * for my team. jo@example.com", "jo@example.com please follow up").
+ * addresses ("write a reminder to my client jane@acme.com", "Can you check jane@acme.com"), so an address only counts
+ * when it comes with first-person phrasing ("my email is …", "reach me at …", "follow up with me by email: …" — the
+ * follow-up form's wording), when the message is just the address plus a few filler words ("Sure, it's
+ * jo@example.com"), or when a short message ends with its only address right after a request to be contacted ("Hi,
+ * I'd like a call about AI for my team. jo@example.com") or starts with it ("jo@example.com please follow up").
+ * Anything else returns null: the reply then asks for "My email is …" instead of passing the address on.
  */
 export function extractOwnEmail(text: string): string | null {
   const matches = emailMatches(text);
@@ -134,9 +157,16 @@ export function extractOwnEmail(text: string): string | null {
   const [m] = matches;
   const before = normalized.slice(0, m.start).replace(/\s+/g, " ");
   const after = normalized.slice(m.end);
-  // "Is this a valid address: jane@acme.com?" asks about the address rather than offering it.
-  if (THIRD_PARTY_CUES.test(before) || OBJECT_BEFORE.test(before) || /^\s*\?/.test(after)) return null;
-  return words(after).every((w) => FILLER_WORDS.has(w) || FOLLOW_UP_WORDS.has(w)) ? m.email : null;
+  // Only filler or a follow-up request may come after it; "Is this a valid address: jane@acme.com?" asks about it.
+  if (/^\s*\?/.test(after) || !words(after).every((w) => FILLER_WORDS.has(w) || FOLLOW_UP_WORDS.has(w))) return null;
+  if (isFiller(before)) return m.email;
+  // Otherwise the sentence right before the address (skipping "Thanks!" and the like) must ask to be contacted.
+  if (THIRD_PARTY_CUES.test(before) || OBJECT_BEFORE.test(before) || !CLAUSE_END_BEFORE.test(before)) return null;
+  const request = before
+    .split(/[.!?]+/)
+    .reverse()
+    .find((sentence) => !isFiller(sentence));
+  return request && CONTACT_REQUEST_CUES.test(request) ? m.email : null;
 }
 
 /* ------------------------------------------------------------------ */

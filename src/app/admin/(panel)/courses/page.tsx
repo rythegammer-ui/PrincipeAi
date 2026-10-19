@@ -11,6 +11,7 @@ import { EmptyState, PageHeader, StatCard } from "@/components/ui/misc";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
+import { requireAdmin } from "@/lib/auth";
 import { formatMoney } from "@/lib/utils";
 import { toggleCoursePublishedAction } from "./actions";
 
@@ -57,6 +58,7 @@ async function loadCourses() {
 }
 
 export default async function AdminCoursesPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  await requireAdmin();
   const { deleted } = await searchParams;
   const { rows, totals } = await loadCourses();
   const published = rows.filter((r) => r.course.published).length;

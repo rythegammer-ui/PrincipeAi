@@ -5,19 +5,24 @@ import { SettingsTools } from "@/components/funnels/settings-tools";
 import { PageHeader } from "@/components/ui/misc";
 import { site } from "@/config/site";
 import { AI_MODEL } from "@/lib/ai";
+import { requireAdmin } from "@/lib/auth";
 import { integrations } from "@/lib/integrations";
+import { checkoutMode, livePaymentsBlocked } from "@/lib/payments";
 import { getSettings } from "@/lib/settings";
 import { absoluteUrl } from "@/lib/utils";
+import { emailStatus, isLiveDeployment, paymentsStatus } from "./integration-status";
 import { groupTimezones, supportedTimezones } from "./timezones";
 
 export const metadata: Metadata = { title: "Settings" };
 
 const VERCEL_ENV = "Vercel → your project → Settings → Environment Variables";
 
-function integrationItems(): IntegrationItem[] {
+function integrationItems(live: boolean): IntegrationItem[] {
   const s = integrations();
   // In production /api/cron refuses every call without CRON_SECRET (see authorizeCron).
   const cronRequired = !s.cron && process.env.NODE_ENV === "production";
+  const email = emailStatus({ email: s.email, live });
+  const payments = paymentsStatus({ stripe: s.stripe, stripeWebhook: s.stripeWebhook, mode: checkoutMode(), liveKeyBlocked: livePaymentsBlocked() });
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   const webhookUrl = absoluteUrl("/api/stripe/webhook");
   const redeploy = (
@@ -94,13 +99,19 @@ function integrationItems(): IntegrationItem[] {
     {
       id: "email",
       title: "Email delivery (Resend)",
-      envVars: ["RESEND_API_KEY", "EMAIL_FROM"],
-      status: s.email ? "ready" : "optional",
-      statusLabel: s.email ? "Connected" : "Simulated",
+      envVars: ["RESEND_API_KEY", "EMAIL_FROM", "CONTACT_EMAIL"],
+      ...email,
       summary: (
         <>
-          Delivers automations, confirmations, receipts and login links. Without it, emails are recorded in the Email Log only. Sending from{" "}
-          <Code>{site.emailFrom}</Code>.
+          Delivers automations, confirmations, receipts and login links. Without it, emails are recorded in the Email Log only.
+          {live && !s.email && (
+            <>
+              {" "}
+              <strong>On a live site that means students can&apos;t sign in</strong> (their sign-in links never arrive, even after they pay), and receipts,
+              booking confirmations and your own notifications aren&apos;t delivered.
+            </>
+          )}{" "}
+          Sending from <Code>{site.emailFrom}</Code>; customers&apos; replies go to <Code>{site.contactEmail}</Code>.
         </>
       ),
       steps: [
@@ -108,6 +119,10 @@ function integrationItems(): IntegrationItem[] {
         <>Go to <strong>Domains</strong>, add your domain and create the DNS records it shows you (at your domain registrar). Wait until it says <strong>Verified</strong>.</>,
         <>Go to <strong>API Keys</strong> and create a key with sending access.</>,
         <>In {VERCEL_ENV}, add <Code>RESEND_API_KEY</Code> and <Code>EMAIL_FROM</Code>, e.g. <Code>{`${site.name} <hello@yourdomain.com>`}</Code>, using your verified domain.</>,
+        <>
+          Optional: set <Code>CONTACT_EMAIL</Code> to the inbox that should get customers&apos; replies. It is also the public contact address on the contact,
+          booking, terms and privacy pages, the footer and calendar invites.
+        </>,
         redeploy,
         <>Come back here and use <strong>Send a test email</strong> below.</>,
       ],
@@ -135,11 +150,7 @@ function integrationItems(): IntegrationItem[] {
       id: "stripe",
       title: "Payments (Stripe)",
       envVars: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
-      status: s.stripe && s.stripeWebhook ? "ready" : s.stripe ? "attention" : "optional",
-      statusLabel: s.stripe && s.stripeWebhook ? "Connected" : s.stripe ? "Webhook missing" : "Test checkout",
-      summary: s.stripe
-        ? "Course and paid-session checkouts go through Stripe. The webhook confirms payments and unlocks courses, so it must be set up too."
-        : "Without Stripe, a built-in test checkout lets you try the full purchase flow with no real payment.",
+      ...payments,
       steps: [
         <>In the <ExtLink href="https://dashboard.stripe.com/apikeys">Stripe dashboard</ExtLink>, open <strong>Developers → API keys</strong> and copy the <strong>Secret key</strong>. Start with test mode (<Code>sk_test_…</Code>).</>,
         <>Add it in {VERCEL_ENV} as <Code>STRIPE_SECRET_KEY</Code>.</>,
@@ -176,7 +187,10 @@ function integrationItems(): IntegrationItem[] {
         <>Generate a secret: <Code>openssl rand -base64 32</Code>.</>,
         <>Add it in {VERCEL_ENV} as <Code>CRON_SECRET</Code>. Vercel sends it automatically with every scheduled run, so nobody else can trigger the job.</>,
         redeploy,
-        <>On a Pro plan, run it hourly so emails go out closer to their scheduled time: in <Code>vercel.json</Code>, change the schedule to <Code>0 * * * *</Code> and redeploy.</>,
+        <>
+          On a Pro plan, run it hourly so emails go out closer to their scheduled time: in <Code>vercel.json</Code>, change the schedule to{" "}
+          <Code>0 * * * *</Code>, add <Code>CRON_INTERVAL_HOURS</Code> = <Code>1</Code> in {VERCEL_ENV} (so booking reminders keep their timing), and redeploy.
+        </>,
         <>You can always run it by hand with <strong>Run automations now</strong> below.</>,
       ],
     },
@@ -184,8 +198,10 @@ function integrationItems(): IntegrationItem[] {
 }
 
 export default async function SettingsPage() {
+  await requireAdmin();
   const settings = await getSettings();
   const timezones = groupTimezones(supportedTimezones());
+  const live = isLiveDeployment(process.env.NODE_ENV, integrations().demoMode);
 
   return (
     <div className="flex flex-col gap-10">
@@ -204,7 +220,7 @@ export default async function SettingsPage() {
           </h2>
           <p className="mt-1 text-sm text-zinc-500">Connect these in Vercel to take the platform live. Each one takes a few minutes.</p>
         </div>
-        <IntegrationsChecklist items={integrationItems()} />
+        <IntegrationsChecklist items={integrationItems(live)} live={live} />
       </section>
 
       <section aria-labelledby="tools-heading" className="flex flex-col gap-4">

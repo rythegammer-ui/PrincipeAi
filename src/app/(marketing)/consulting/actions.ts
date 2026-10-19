@@ -2,7 +2,15 @@
 
 import { redirect } from "next/navigation";
 import type { LeadFormState } from "@/components/marketing/lead-options";
-import { applicationSchema, captureApplication, fieldErrorsOf, isSpam, readFields } from "@/lib/leads";
+import {
+  DISCOVERY_MEETING_SLUG,
+  applicationSchema,
+  captureApplication,
+  fieldErrorsOf,
+  isSpam,
+  readFields,
+  rememberDiscoveryPrefill,
+} from "@/lib/leads";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { getActiveMeetingType } from "@/lib/scheduling";
 import { firstName } from "@/lib/utils";
@@ -11,11 +19,10 @@ const FIELDS = ["name", "email", "company", "website", "teamSize", "goals", "bud
 export type ApplicationField = (typeof FIELDS)[number];
 export type ApplicationState = LeadFormState<ApplicationField>;
 
-const DISCOVERY_SLUG = "implementation-discovery";
-
 /**
  * Implementation application: validate → rate limit → qualified lead + follow-up task →
- * straight to booking the discovery call (name + email prefilled).
+ * straight to booking the discovery call (name + email prefilled from the URL; company, project
+ * and budget from a short-lived cookie, since page-view tracking stores query strings).
  */
 export async function applyForImplementationAction(_prev: ApplicationState, formData: FormData): Promise<ApplicationState> {
   const values = readFields(formData, FIELDS);
@@ -34,11 +41,12 @@ export async function applyForImplementationAction(_prev: ApplicationState, form
     return { error: "Something went wrong on our side. Please try again in a moment.", values };
   }
 
-  const discovery = await getActiveMeetingType(DISCOVERY_SLUG).catch(() => null);
+  const discovery = await getActiveMeetingType(DISCOVERY_MEETING_SLUG).catch(() => null);
   if (!discovery) {
     // Booking is switched off for this call type: confirm on the page instead.
     return { ok: true, firstName: firstName(parsed.data.name) };
   }
+  await rememberDiscoveryPrefill(parsed.data);
   const query = new URLSearchParams({ name: parsed.data.name, email: parsed.data.email });
-  redirect(`/book/${DISCOVERY_SLUG}?${query.toString()}`);
+  redirect(`/book/${DISCOVERY_MEETING_SLUG}?${query.toString()}`);
 }

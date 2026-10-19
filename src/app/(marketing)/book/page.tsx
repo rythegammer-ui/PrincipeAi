@@ -5,6 +5,7 @@ import { MeetingTypeCard } from "@/components/booking/meeting-type-card";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
 import { site } from "@/config/site";
+import { checkoutMode } from "@/lib/payments";
 import { listActiveMeetingTypes } from "@/lib/scheduling";
 
 export const metadata: Metadata = {
@@ -33,6 +34,8 @@ const STEPS = [
 
 export default async function BookPage() {
   const meetingTypes = await listActiveMeetingTypes();
+  // Paid sessions can't be booked online while there's no way to pay (see /book/[slug]).
+  const paymentsOff = checkoutMode() === "disabled";
 
   return (
     <>
@@ -59,7 +62,7 @@ export default async function BookPage() {
           {meetingTypes.length ? (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {meetingTypes.map((mt) => (
-                <MeetingTypeCard key={mt.id} meetingType={mt} />
+                <MeetingTypeCard key={mt.id} meetingType={mt} paymentsOff={paymentsOff} />
               ))}
             </div>
           ) : (

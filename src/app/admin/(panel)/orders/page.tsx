@@ -8,7 +8,8 @@ import { EmptyState, PageHeader, StatCard } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
 import type { OrderStatus } from "@/db/schema";
-import { checkoutMode } from "@/lib/payments";
+import { requireAdmin } from "@/lib/auth";
+import { checkoutMode, livePaymentsBlocked } from "@/lib/payments";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { stripeDashboardUrl, stripeTestMode } from "@/lib/stripe";
 import { cn, formatDateTime, formatMoney, pluralize } from "@/lib/utils";
@@ -56,6 +57,7 @@ function filterHref(status: string, type: string) {
 }
 
 export default async function AdminOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; type?: string }> }) {
+  await requireAdmin();
   const sp = await searchParams;
   const status = STATUS_FILTERS.some((f) => f.key === sp.status) ? (sp.status as "all" | OrderStatus) : "all";
   const type = sp.type === "course" || sp.type === "booking" ? sp.type : "all";
@@ -95,6 +97,20 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
     ? await db.select({ id: schema.contacts.id, name: schema.contacts.name }).from(schema.contacts).where(inArray(schema.contacts.id, contactIds))
     : [];
   const contactName = new Map(contacts.map((c) => [c.id, c.name]));
+  // Paid sessions whose booking was cancelled since: the owner may still owe the buyer a refund.
+  const paidBookingIds = [
+    ...new Set(orders.filter((o) => o.status === "paid" && o.itemType === "booking" && o.bookingId).map((o) => o.bookingId as string)),
+  ];
+  const cancelledBookings = new Set(
+    paidBookingIds.length
+      ? (
+          await db
+            .select({ id: schema.bookings.id })
+            .from(schema.bookings)
+            .where(and(inArray(schema.bookings.id, paidBookingIds), eq(schema.bookings.status, "cancelled")))
+        ).map((b) => b.id)
+      : [],
+  );
   const mode = checkoutMode();
   // Stripe test-mode payments are flagged isTest; with test keys configured, every payment lives in test mode.
   const testKeys = stripeTestMode();
@@ -108,7 +124,9 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
             ? "Every course and paid-session checkout, synced from Stripe."
             : mode === "test"
               ? "Stripe isn't connected, so purchases run through the built-in test checkout (marked “Test”)."
-              : "Payments aren't configured. Add STRIPE_SECRET_KEY to start selling."
+              : livePaymentsBlocked()
+                ? "Checkout is off: a live Stripe key is turned off in demo mode, since orders would be lost. Connect a database, or use a test key (sk_test_…) to try payments."
+                : "Payments aren't configured. Add STRIPE_SECRET_KEY to start selling."
         }
       />
 
@@ -212,6 +230,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Badge tone={STATUS_TONES[o.status]}>{STATUS_LABELS[o.status]}</Badge>
                         {o.isTest && <Badge tone="amber">Test</Badge>}
+                        {o.status === "paid" && o.bookingId && cancelledBookings.has(o.bookingId) && <Badge tone="red">Session cancelled</Badge>}
                         {o.stripePaymentIntentId && (
                           <a
                             href={stripeDashboardUrl(o.stripePaymentIntentId, o.isTest || testKeys)}

@@ -1,9 +1,9 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Contact, QuizSubmission } from "@/db/schema";
 import { OFFERS, STRATEGY_CALL_HREF, STRATEGY_CALL_SLUG, type Recommendation } from "@/lib/assessment";
-import { rateLimit } from "@/lib/rate-limit";
+import { ipRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { getActiveMeetingType } from "@/lib/scheduling";
 import { formatMoney } from "@/lib/utils";
 
@@ -150,23 +150,62 @@ export const PLAN_LIMITS = {
   globalPerDay: 500,
 } as const;
 
-export type PlanClaim = { ok: true } | { ok: false; reason: "in_progress" | "ip_limit" | "submission_limit" | "daily_limit" };
+export type PlanRefusal = "in_progress" | "ip_limit" | "submission_limit" | "daily_limit";
+export type PlanClaim = { ok: true } | { ok: false; reason: PlanRefusal };
 
-type IpLimiter = (bucket: string, limit: number, windowSec: number) => Promise<{ ok: boolean }>;
+/** The `rate_limits` keys behind PLAN_LIMITS (the per-IP one matches `rateLimitByIp("assessment-plan:day")`). */
+export function planBudgetKeys(submissionId: string, ip: string) {
+  return {
+    lease: `assessment-plan:lease:${submissionId}`,
+    submission: `assessment-plan:sub:${submissionId}`,
+    ip: `assessment-plan:day:${ipRateLimitKey(ip)}`,
+    global: "assessment-plan:global",
+  };
+}
+
+/** Gives back hits a refused claim recorded, so a refusal never spends a budget. Best effort. */
+async function refundHits(keys: string[]): Promise<void> {
+  try {
+    const db = await getDb();
+    await db
+      .update(schema.rateLimits)
+      .set({ count: sql`greatest(${schema.rateLimits.count} - 1, 0)` })
+      .where(inArray(schema.rateLimits.key, keys));
+  } catch (err) {
+    console.error("[assessment] failed to refund the plan budget", err);
+  }
+}
 
 /**
  * Claims one Claude plan generation for a submission (call only when AI is configured). When it isn't
  * granted, the caller streams the deterministic plan instead, unsaved, so a later visit can still get
- * a Claude-written one. `ipLimit` is `rateLimitByIp` (a parameter so tests can run outside a request).
+ * a Claude-written one. `ip` is the client IP (`clientIp()`; a parameter so tests can run outside a request).
+ *
+ * The daily budgets are all-or-nothing: each counter is incremented atomically, and when one refuses,
+ * this call's hits on every daily counter are given back, so refused visits (say on a day the site-wide
+ * ceiling is reached) don't use up a submission's or an address's allowance. The narrowest budget is
+ * checked first, so the shared site-wide counter is only touched once the others have passed. The
+ * lease is kept either way: it limits a submission to one attempt per `leaseSec`.
  */
-export async function claimPlanGeneration(submissionId: string, ipLimit: IpLimiter): Promise<PlanClaim> {
+export async function claimPlanGeneration(submissionId: string, ip: string): Promise<PlanClaim> {
+  const keys = planBudgetKeys(submissionId, ip);
   // Single flight: concurrent requests for one token (or a quick retry) don't each start a generation.
-  const lease = await rateLimit(`assessment-plan:lease:${submissionId}`, 1, PLAN_LIMITS.leaseSec);
+  const lease = await rateLimit(keys.lease, 1, PLAN_LIMITS.leaseSec);
   if (!lease.ok) return { ok: false, reason: "in_progress" };
-  if (!(await ipLimit("assessment-plan:day", PLAN_LIMITS.perIpPerDay, DAY_SEC)).ok) return { ok: false, reason: "ip_limit" };
-  const perSubmission = await rateLimit(`assessment-plan:sub:${submissionId}`, PLAN_LIMITS.perSubmissionPerDay, DAY_SEC);
-  if (!perSubmission.ok) return { ok: false, reason: "submission_limit" };
-  const global = await rateLimit("assessment-plan:global", PLAN_LIMITS.globalPerDay, DAY_SEC);
-  if (!global.ok) return { ok: false, reason: "daily_limit" };
+
+  const budgets: { key: string; limit: number; reason: PlanRefusal }[] = [
+    { key: keys.submission, limit: PLAN_LIMITS.perSubmissionPerDay, reason: "submission_limit" },
+    { key: keys.ip, limit: PLAN_LIMITS.perIpPerDay, reason: "ip_limit" },
+    { key: keys.global, limit: PLAN_LIMITS.globalPerDay, reason: "daily_limit" },
+  ];
+  const hit: string[] = [];
+  for (const budget of budgets) {
+    const { ok } = await rateLimit(budget.key, budget.limit, DAY_SEC);
+    hit.push(budget.key);
+    if (!ok) {
+      await refundHits(hit);
+      return { ok: false, reason: budget.reason };
+    }
+  }
   return { ok: true };
 }

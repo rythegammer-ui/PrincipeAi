@@ -258,7 +258,7 @@ ${SIGN_OFF}`,
         subject: "How to get the most out of our call",
         body: `Hi {{firstName}},
 
-Thanks for booking a call. Your confirmation email has the time and the link to join. This one is about making the time count.
+Thanks for booking a call. Your confirmation email has the time and how to join. This one is about making the time count.
 
 **A quick prep checklist (5 minutes)**
 - [ ] Jot down the one task that eats the most of your week

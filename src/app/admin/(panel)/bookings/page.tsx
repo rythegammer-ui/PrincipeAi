@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink, buttonVariants } from "@/components/ui/button";
 import { Avatar, EmptyState, PageHeader, StatCard } from "@/components/ui/misc";
 import { getDb, schema } from "@/db";
+import { requireAdmin } from "@/lib/auth";
 import { describeTime, loadAvailabilityConfig, getBusinessTimezone, occupiesSlot } from "@/lib/scheduling";
 import { cn, formatMoney } from "@/lib/utils";
 
@@ -57,6 +58,7 @@ function tabWhere(tab: Tab, now: Date): SQL | undefined {
 }
 
 export default async function AdminBookingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; view?: string; week?: string }> }) {
+  await requireAdmin();
   const sp = await searchParams;
   const tab: Tab = sp.tab === "past" || sp.tab === "cancelled" ? sp.tab : "upcoming";
   const view = sp.view === "week" ? "week" : "list";

@@ -5,7 +5,7 @@ import type { Booking, BookingStatus, Contact, MeetingType, Order } from "@/db/s
 import { site } from "@/config/site";
 import { stopAutomations } from "@/lib/automations";
 import { captureLead, createTask, logActivity } from "@/lib/crm";
-import { escapeMarkdown, notifyOwner, sendEmail } from "@/lib/email";
+import { emailBusinessName, escapeMarkdown, notifyOwner, sendEmail } from "@/lib/email";
 import { buildIcs, formatIcsDate, type IcsMethod } from "@/lib/ics";
 import { rateLimit } from "@/lib/rate-limit";
 import {
@@ -417,11 +417,26 @@ export function prepTips(meetingType: Pick<MeetingType, "slug" | "priceCents">):
   return PREP_TIPS;
 }
 
-/** Subject + Markdown body for every booking email. Times are shown in the invitee's timezone. */
+export type BookingEmailExtra = {
+  reason?: string | null;
+  previousStart?: Date | null;
+  previousEnd?: Date | null;
+  /** Reschedules: the timezone the old time was booked in (the invitee may have picked a new one). */
+  previousTimezone?: string | null;
+  /** Cancellations: what the invitee paid for the session (none for free or unpaid bookings). */
+  paid?: { amountCents: number; currency: string } | null;
+  /** Cancellations: who cancelled. When the business cancels a paid session, the invitee is owed a full refund. */
+  by?: "invitee" | "admin";
+};
+
+/**
+ * Subject + Markdown body for every booking email. Times are shown in the invitee's timezone. `businessName`
+ * (Admin → Settings, see `emailBusinessName()`) signs the email.
+ */
 export function bookingEmailMarkdown(
   kind: BookingEmailKind,
   details: BookingDetails,
-  extra: { reason?: string | null; previousStart?: Date | null; previousEnd?: Date | null } = {},
+  extra: BookingEmailExtra & { businessName?: string } = {},
 ): { subject: string; markdown: string; preheader: string } {
   const { booking, meetingType, contact } = details;
   const when = describeTime(booking.startAt, booking.endAt, booking.timezone);
@@ -440,7 +455,7 @@ export function bookingEmailMarkdown(
   ].join("\n");
   const calendar = `[Add to Google Calendar](${bookingGoogleCalendarUrl(details)}) · [Download calendar file (.ics)](${icsDownloadUrl(booking)})`;
   const manage = `Need to change something? [Reschedule or cancel here](${manageUrl(booking)}).`;
-  const signoff = `Talk soon,  \nThe ${site.name} team`;
+  const signoff = `Talk soon,  \nThe ${md(extra.businessName || site.name)} team`;
   const tips = prepTips(meetingType)
     .map((t) => `- ${t}`)
     .join("\n");
@@ -481,7 +496,7 @@ export function bookingEmailMarkdown(
     case "rescheduled": {
       const prev =
         extra.previousStart && extra.previousEnd
-          ? describeTime(extra.previousStart, extra.previousEnd, booking.timezone)
+          ? describeTime(extra.previousStart, extra.previousEnd, extra.previousTimezone || booking.timezone)
           : null;
       return {
         subject: `Updated: ${meetingType.name} moved to ${when.shortDateLabel} at ${when.startTimeLabel} ${when.zoneAbbr}`,
@@ -489,7 +504,9 @@ export function bookingEmailMarkdown(
         markdown: [
           hi,
           "",
-          prev ? `Your session has been moved from ~~${prev.dateLabel} at ${prev.startTimeLabel}~~ to a new time:` : "Your session has been moved to a new time:",
+          prev
+            ? `Your session has been moved from ~~${prev.dateLabel} at ${prev.startTimeLabel} ${prev.zoneAbbr}~~ to a new time:`
+            : "Your session has been moved to a new time:",
           "",
           detailsBlock,
           "",
@@ -503,7 +520,17 @@ export function bookingEmailMarkdown(
         ].join("\n"),
       };
     }
-    case "cancelled":
+    case "cancelled": {
+      const paid = extra.paid && extra.paid.amountCents > 0 ? formatMoney(extra.paid.amountCents, extra.paid.currency) : null;
+      const rebook = `Whenever you're ready, you can [book a new time](${absoluteUrl(meetingType.active ? `/book/${meetingType.slug}` : "/book")}). In the meantime, the [free AI Readiness Assessment](${absoluteUrl("/assessment")}) is a great way to find your best next step.`;
+      // Booking again online takes a new payment, so a paid session we cancelled is refunded or moved by reply instead.
+      const next = !paid
+        ? [rebook]
+        : extra.by === "admin"
+          ? [
+              `Because we cancelled, you're entitled to a full refund of ${paid}. Just reply to this email and we'll process your refund, or find you a new time at no extra cost if you'd rather reschedule.`,
+            ]
+          : [`If you'd like a refund of ${paid}, just reply to this email and let us know.`, "", rebook];
       return {
         subject: `Cancelled: ${meetingType.name} on ${when.shortDateLabel} at ${when.startTimeLabel} ${when.zoneAbbr}`,
         preheader: "Your session has been cancelled.",
@@ -513,11 +540,12 @@ export function bookingEmailMarkdown(
           `Your **${md(meetingType.name)}** on ${whenLine} has been cancelled.`,
           ...(extra.reason?.trim() ? ["", `> ${md(extra.reason.trim())}`] : []),
           "",
-          `Whenever you're ready, you can [book a new time](${absoluteUrl(meetingType.active ? `/book/${meetingType.slug}` : "/book")}). In the meantime, the [free AI Readiness Assessment](${absoluteUrl("/assessment")}) is a great way to find your best next step.`,
+          ...next,
           "",
           signoff,
         ].join("\n"),
       };
+    }
   }
 }
 
@@ -535,10 +563,10 @@ export async function rescheduleCount(bookingId: string): Promise<number> {
 export async function sendBookingEmail(
   kind: BookingEmailKind,
   details: BookingDetails,
-  extra: { reason?: string | null; previousStart?: Date | null; previousEnd?: Date | null; sequence?: number } = {},
+  extra: BookingEmailExtra & { sequence?: number } = {},
 ): Promise<void> {
   try {
-    const { subject, markdown, preheader } = bookingEmailMarkdown(kind, details, extra);
+    const { subject, markdown, preheader } = bookingEmailMarkdown(kind, details, { ...extra, businessName: await emailBusinessName() });
     const method: IcsMethod = kind === "cancelled" ? "CANCEL" : "REQUEST";
     const attachments =
       kind === "reminder"
@@ -568,9 +596,35 @@ export async function sendBookingEmail(
 /* Confirmation side effects                                           */
 /* ------------------------------------------------------------------ */
 
+/** Invitee-typed text for a calendar event description, which Google Calendar may render as HTML. */
+const calendarText = (text: string) => text.replace(/[<>]/g, "");
+
+/**
+ * "Add to Google Calendar" link for the owner's own calendar: named after the invitee, with their contact
+ * details and the meeting link (the invitee's link and invite are worded for the invitee).
+ */
+export function ownerGoogleCalendarUrl(details: BookingDetails): string {
+  const { booking, meetingType, contact } = details;
+  const link = meetingLinkFor(details);
+  const who = calendarText(contact.name?.trim() || contact.email);
+  return googleCalendarUrl({
+    title: `${meetingType.name} with ${who}`,
+    start: booking.startAt,
+    end: booking.endAt,
+    details: [
+      `Invitee: ${contact.name?.trim() ? `${who} (${calendarText(contact.email)})` : who}${contact.phone ? ` · ${calendarText(contact.phone)}` : ""}`,
+      link ? `Join the call: ${link}` : `No meeting link is set: email one to ${calendarText(contact.email)} before the call.`,
+      `Bookings: ${absoluteUrl("/admin/bookings")}`,
+    ].join("\n\n"),
+    location: link ?? meetingType.locationLabel,
+  });
+}
+
 function ownerSummary(details: BookingDetails, businessTz: string, headline: string): string {
   const { booking, meetingType, contact } = details;
   const answers = answersMarkdown(meetingType, booking.answers, booking.notes);
+  // A confirmed call (new or moved) goes straight onto the owner's calendar from the alert.
+  const calendar = booking.status === "confirmed" ? ` · [Add to Google Calendar](${ownerGoogleCalendarUrl(details)})` : "";
   return [
     headline,
     "",
@@ -580,8 +634,29 @@ function ownerSummary(details: BookingDetails, businessTz: string, headline: str
     ...(meetingType.priceCents > 0 ? [`- **Price:** ${formatMoney(meetingType.priceCents)}`] : []),
     ...(answers ? ["", "**Their answers**", "", answers] : []),
     "",
-    `[View bookings](${absoluteUrl("/admin/bookings")})`,
+    `[View bookings](${absoluteUrl("/admin/bookings")})${calendar}`,
   ].join("\n");
+}
+
+export type BookingPayment = Pick<Order, "id" | "amountCents" | "currency" | "isTest" | "stripePaymentIntentId">;
+
+/** The payment taken for a booking (the first one, if it was paid more than once), or null when nothing is paid (or it was refunded). */
+export async function paidOrderForBooking(bookingId: string): Promise<BookingPayment | null> {
+  if (!isUuid(bookingId)) return null;
+  const db = await getDb();
+  const [row] = await db
+    .select({
+      id: schema.orders.id,
+      amountCents: schema.orders.amountCents,
+      currency: schema.orders.currency,
+      isTest: schema.orders.isTest,
+      stripePaymentIntentId: schema.orders.stripePaymentIntentId,
+    })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.bookingId, bookingId), eq(schema.orders.status, "paid")))
+    .orderBy(asc(schema.orders.paidAt), asc(schema.orders.createdAt))
+    .limit(1);
+  return row && row.amountCents > 0 ? row : null;
 }
 
 /** Reminder for the owner when invitees are told "we'll email your meeting link" (no link is set). */
@@ -590,17 +665,61 @@ export function missingMeetingLinkNote(details: BookingDetails): string | null {
   return `Action needed: no meeting link is set for ${details.meetingType.name}, so ${details.contact.email} was told you'll email one before the call. Send it, or add a Meeting link to this meeting type in Admin → Availability so it's included automatically.`;
 }
 
-/** Moves (or removes) the "Prepare for…" task that was created with a booking. */
-async function updatePrepTask(contactId: string, oldStart: Date, newStart: Date | null): Promise<void> {
-  const db = await getDb();
-  const where = and(
+/** Description of the "Prepare for…" task: missing-link action (if any), meeting time and intake answers. */
+export function prepTaskDescription(details: BookingDetails, businessTz: string): string {
+  const { booking, meetingType } = details;
+  return [missingMeetingLinkNote(details), formatMeetingTime(booking.startAt, booking.endAt, businessTz), answersPlainText(meetingType, booking.answers, booking.notes)]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** The open "Prepare for…" task created with a booking: due an hour before the call it was made for. */
+function prepTaskWhere(contactId: string, start: Date) {
+  return and(
     eq(schema.tasks.contactId, contactId),
     eq(schema.tasks.origin, "booking"),
-    eq(schema.tasks.dueAt, new Date(oldStart.getTime() - HOUR_MS)),
+    eq(schema.tasks.dueAt, new Date(start.getTime() - HOUR_MS)),
     isNull(schema.tasks.completedAt),
   );
-  if (newStart) await db.update(schema.tasks).set({ dueAt: new Date(newStart.getTime() - HOUR_MS) }).where(where);
-  else await db.delete(schema.tasks).where(where);
+}
+
+/** Moves the booking's "Prepare for…" task to its new time (`details` holds the moved booking) and rewrites its description to match. */
+async function movePrepTask(details: BookingDetails, oldStart: Date, businessTz: string): Promise<void> {
+  const db = await getDb();
+  await db
+    .update(schema.tasks)
+    .set({ dueAt: new Date(details.booking.startAt.getTime() - HOUR_MS), description: prepTaskDescription(details, businessTz) })
+    .where(prepTaskWhere(details.contact.id, oldStart));
+}
+
+/** Removes the "Prepare for…" task of a cancelled booking. */
+async function removePrepTask(contactId: string, start: Date): Promise<void> {
+  const db = await getDb();
+  await db.delete(schema.tasks).where(prepTaskWhere(contactId, start));
+}
+
+/**
+ * Rewrites the "Prepare for…" tasks of a meeting type's upcoming confirmed bookings, e.g. once the owner has added a
+ * meeting link, so they no longer say one is missing. Returns how many bookings were checked.
+ */
+export async function refreshPrepTasks(meetingTypeId: string): Promise<number> {
+  if (!isUuid(meetingTypeId)) return 0;
+  const db = await getDb();
+  const businessTz = await getBusinessTimezone().catch(() => site.timezone);
+  const upcoming = await db
+    .select({ booking: schema.bookings, meetingType: schema.meetingTypes, contact: schema.contacts })
+    .from(schema.bookings)
+    .innerJoin(schema.meetingTypes, eq(schema.meetingTypes.id, schema.bookings.meetingTypeId))
+    .innerJoin(schema.contacts, eq(schema.contacts.id, schema.bookings.contactId))
+    .where(and(eq(schema.bookings.meetingTypeId, meetingTypeId), eq(schema.bookings.status, "confirmed"), gt(schema.bookings.startAt, new Date())))
+    .limit(500);
+  for (const details of upcoming) {
+    await db
+      .update(schema.tasks)
+      .set({ description: prepTaskDescription(details, businessTz) })
+      .where(prepTaskWhere(details.contact.id, details.booking.startAt));
+  }
+  return upcoming.length;
 }
 
 /**
@@ -655,9 +774,7 @@ export async function finalizeConfirmedBooking(details: BookingDetails, opts: { 
       contactId: contact.id,
       dueAt: new Date(booking.startAt.getTime() - HOUR_MS),
       origin: "booking",
-      description: [linkNote, formatMeetingTime(booking.startAt, booking.endAt, businessTz), answersPlainText(meetingType, booking.answers, booking.notes)]
-        .filter(Boolean)
-        .join("\n\n"),
+      description: prepTaskDescription(details, businessTz),
     });
   } catch (err) {
     console.error("[booking] task creation failed", booking.id, err);
@@ -788,6 +905,7 @@ export async function confirmPaidBooking(bookingId: string): Promise<void> {
         businessTz,
         `**${md(contact.name ?? contact.email)}** paid for **${md(meetingType.name)}**, but the booking had been released or cancelled before payment completed and the time is no longer available. Please contact them to arrange a new time or issue a refund.`,
       ),
+      { replyTo: contact.email },
     ).catch((err) => console.error("[booking] owner notification failed", err));
     return;
   }
@@ -827,6 +945,8 @@ export async function cancelBooking(
   const owner = describeTime(booking.startAt, booking.endAt, businessTz);
   const wasConfirmed = booking.status === "confirmed";
   const fresh: BookingDetails = { ...details, booking: row };
+  // A confirmed paid session: the invitee and the owner are told how a refund works.
+  const payment = wasConfirmed ? await paidOrderForBooking(booking.id).catch(() => null) : null;
 
   await Promise.allSettled([
     logActivity(contact.id, "booking_cancelled", `Cancelled ${meetingType.name} (${owner.shortDateLabel} at ${owner.startTimeLabel} ${owner.zoneAbbr})`, {
@@ -837,13 +957,18 @@ export async function cancelBooking(
       .update(schema.orders)
       .set({ status: "expired" })
       .where(and(eq(schema.orders.bookingId, booking.id), eq(schema.orders.status, "pending"))),
-    updatePrepTask(contact.id, booking.startAt, null),
+    removePrepTask(contact.id, booking.startAt),
     wasConfirmed ? stopCallPrepUnlessBooked(contact.id, booking.id) : Promise.resolve(),
   ]);
 
   if (wasConfirmed && opts.notifyInvitee !== false) {
     const sequence = (await rescheduleCount(booking.id).catch(() => 0)) + 1;
-    await sendBookingEmail("cancelled", fresh, { reason: opts.by === "admin" ? reason : null, sequence });
+    await sendBookingEmail("cancelled", fresh, {
+      reason: opts.by === "admin" ? reason : null,
+      sequence,
+      by: opts.by,
+      paid: payment ? { amountCents: payment.amountCents, currency: payment.currency } : null,
+    });
   }
 
   if (opts.by === "invitee" && wasConfirmed) {
@@ -858,9 +983,18 @@ export async function cancelBooking(
             [
               `**${md(contact.name ?? contact.email)}** cancelled **${md(meetingType.name)}**.`,
               reason ? `\n> ${md(reason)}` : "",
-              wasConfirmed && meetingType.priceCents > 0 ? `\nThis was a paid session (${formatMoney(meetingType.priceCents)}). Issue a refund if appropriate.` : "",
+              payment
+                ? `\nThis was a paid session (${formatMoney(payment.amountCents, payment.currency)}${payment.isTest ? ", test payment" : ""}). They've been told to reply to their cancellation email if they'd like a refund. ${
+                    payment.stripePaymentIntentId
+                      ? `[Open the payment in Stripe](${stripeDashboardUrl(payment.stripePaymentIntentId, payment.isTest)})`
+                      : `[Find the order in Orders](${absoluteUrl("/admin/orders")})`
+                  } to refund it.`
+                : meetingType.priceCents > 0
+                  ? `\nThis was a paid session (${formatMoney(meetingType.priceCents)}). Issue a refund if appropriate: [view orders](${absoluteUrl("/admin/orders")}).`
+                  : "",
             ].join(""),
           ),
+          { replyTo: contact.email },
         );
       }
     } catch (err) {
@@ -939,10 +1073,15 @@ export async function rescheduleBooking(
       `Rescheduled ${meetingType.name} to ${to.shortDateLabel} at ${to.startTimeLabel} ${to.zoneAbbr}`,
       { meta: { bookingId: booking.id, from: booking.startAt.toISOString(), to: newStart.toISOString(), by: opts.by } },
     ),
-    updatePrepTask(contact.id, booking.startAt, newStart),
+    movePrepTask(fresh, booking.startAt, businessTz),
   ]);
   const sequence = await rescheduleCount(booking.id).catch(() => 1);
-  await sendBookingEmail("rescheduled", fresh, { previousStart: booking.startAt, previousEnd: booking.endAt, sequence });
+  await sendBookingEmail("rescheduled", fresh, {
+    previousStart: booking.startAt,
+    previousEnd: booking.endAt,
+    previousTimezone: booking.timezone,
+    sequence,
+  });
 
   if (opts.by === "invitee") {
     try {
@@ -955,6 +1094,7 @@ export async function rescheduleBooking(
             businessTz,
             `**${md(contact.name ?? contact.email)}** moved **${md(meetingType.name)}** from ${from.shortDateLabel} at ${from.startTimeLabel} to **${to.shortDateLabel} at ${to.startTimeLabel} ${to.zoneAbbr}**.`,
           ),
+          { replyTo: contact.email },
         );
       }
     } catch (err) {

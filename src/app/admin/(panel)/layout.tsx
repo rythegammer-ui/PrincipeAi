@@ -16,6 +16,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const status = integrations();
   // /api/cron refuses every call in production without CRON_SECRET (see authorizeCron), so say so loudly.
   const cronBlocked = process.env.NODE_ENV === "production" && !status.cron && !status.demoMode;
+  // On a live site without Resend, emails are only logged and the sign-in link is never shown (see emailStatus).
+  const emailMissing = process.env.NODE_ENV === "production" && !status.email && !status.demoMode;
 
   return (
     <div className="flex min-h-screen bg-zinc-50">
@@ -50,6 +52,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Scheduled jobs are not running: <code className="font-mono">CRON_SECRET</code> isn&apos;t set, so Vercel Cron calls are rejected and
             follow-up automation emails and booking reminders are paused. Add it in Vercel and redeploy.{" "}
             <Link href="/admin/settings#integration-cron" className="underline">
+              How to fix
+            </Link>
+          </div>
+        )}
+        {emailMissing && (
+          <div role="status" className="border-b border-red-200 bg-red-50 px-4 py-2 text-center text-xs font-medium text-red-900 sm:text-sm">
+            Email isn&apos;t connected: students can&apos;t sign in, and receipts and booking confirmations aren&apos;t sent. Add{" "}
+            <code className="font-mono">RESEND_API_KEY</code> in Vercel and redeploy.{" "}
+            <Link href="/admin/settings#integration-email" className="underline">
               How to fix
             </Link>
           </div>

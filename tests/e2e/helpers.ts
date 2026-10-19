@@ -1,4 +1,4 @@
-import { test as base, expect, type Browser, type BrowserContext, type FrameLocator, type Page } from "@playwright/test";
+import { test as base, expect, type Browser, type BrowserContext, type FrameLocator, type Locator, type Page } from "@playwright/test";
 import { E2E_ADMIN } from "./env";
 
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
@@ -71,6 +71,103 @@ export async function openContact(adminPage: Page, email: string): Promise<void>
   }).toPass({ timeout: 15_000 });
   await row.getByRole("link").first().click();
   await expect(adminPage.getByRole("link", { name: email })).toBeVisible();
+}
+
+/** Opens a one-time sign-in link on this server and confirms it (the link is a POST so mail scanners can't use it). */
+export async function openSignInLink(page: Page, link: string): Promise<void> {
+  expect(pathOf(link)).toMatch(/^\/auth\/verify\?token=/);
+  await page.goto(pathOf(link));
+  await expect(page.getByRole("heading", { level: 1, name: /almost in/i })).toBeVisible();
+  await page.getByRole("button", { name: "Continue to my courses" }).click();
+}
+
+/** Signs a student in through /login: without an email provider (demo mode) the page shows the link itself. */
+export async function signInAsStudent(page: Page, email: string, next: string): Promise<void> {
+  await page.goto(`/login?next=${encodeURIComponent(next)}`);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await expect(page.getByRole("heading", { name: "Check your inbox" })).toBeVisible();
+  const devLink = page.getByRole("link", { name: "Sign in now" });
+  await expect(devLink).toHaveAttribute("href", /\/auth\/verify\?token=/);
+  await openSignInLink(page, (await devLink.getAttribute("href"))!);
+}
+
+/**
+ * Picks the first open time in a slot picker (the calendar opens on the first day with open times; when the
+ * current month is fully booked it offers the next one). Returns the chosen time's label, e.g. "9:00 AM".
+ */
+export async function pickFirstAvailableTime(scope: Locator): Promise<string> {
+  const times = scope.getByRole("list", { name: /^Available times on / });
+  await expect(async () => {
+    if (!(await times.isVisible())) {
+      const nextMonth = scope.getByRole("button", { name: /^Check / });
+      if (await nextMonth.isVisible()) await nextMonth.click({ timeout: 1_000 });
+    }
+    await expect(times).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+  // The booking's current time (when rescheduling) is listed but disabled.
+  const slot = times.getByRole("button", { disabled: false }).first();
+  const label = ((await slot.textContent()) ?? "").trim();
+  await slot.click();
+  return label;
+}
+
+/** Heading of the assessment's last step (the contact details). */
+export const ASSESSMENT_CONTACT_STEP = "Where should we send your results?";
+
+/** The assessment quiz card: the innermost box holding both the progress bar and the current question. */
+export function assessmentQuiz(page: Page): Locator {
+  return page
+    .locator("div")
+    .filter({ has: page.getByRole("progressbar", { name: "Assessment progress" }) })
+    .filter({ has: page.getByRole("heading", { level: 2 }) })
+    .last();
+}
+
+/** Answers the current assessment question with its first option and moves on. Returns the question it answered. */
+async function answerQuestion(page: Page, quiz: Locator): Promise<string> {
+  const heading = quiz.getByRole("heading", { level: 2 });
+  const title = (await heading.textContent())?.trim() ?? "";
+  const select = quiz.getByRole("combobox");
+  const radio = quiz.getByRole("radio");
+  if (await select.count()) {
+    await select.selectOption({ index: 1 });
+  } else if (await radio.count()) {
+    // Options are cards around visually hidden inputs; tapping one moves to the next question by itself.
+    await quiz.locator("label").filter({ has: page.getByRole("radio") }).first().click();
+  } else {
+    await quiz.locator("label").filter({ has: page.getByRole("checkbox") }).first().click();
+  }
+  // Single-choice cards advance on their own; otherwise press Next.
+  await expect(async () => {
+    if ((await heading.textContent())?.trim() === title) {
+      const next = quiz.getByRole("button", { name: "Next" });
+      if (await next.isVisible()) await next.click({ timeout: 1_000 });
+    }
+    await expect(heading).not.toHaveText(title, { timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+  return title;
+}
+
+/**
+ * On /assessment: answers every question with its first option, fills in the contact step and submits. Returns the
+ * questions answered. The page then moves to the results.
+ */
+export async function completeAssessment(page: Page, person: { firstName: string; email: string; company?: string }): Promise<string[]> {
+  const quiz = assessmentQuiz(page);
+  await expect(quiz.getByText(/Question 1 of \d+/)).toBeVisible();
+  const answered: string[] = [];
+  for (let i = 0; i < 20; i++) {
+    if ((await quiz.getByRole("heading", { level: 2 }).textContent())?.trim() === ASSESSMENT_CONTACT_STEP) break;
+    answered.push(await answerQuestion(page, quiz));
+  }
+  await expect(quiz.getByRole("heading", { level: 2, name: ASSESSMENT_CONTACT_STEP })).toBeVisible();
+  await quiz.getByLabel("First name").fill(person.firstName);
+  await quiz.getByLabel("Email").fill(person.email);
+  const company = quiz.getByLabel("Company");
+  if (person.company && (await company.isVisible())) await company.fill(person.company);
+  await quiz.getByRole("button", { name: /See my results/ }).click();
+  return answered;
 }
 
 async function adminContext(browser: Browser, baseURL: string | undefined, storageState: StorageState): Promise<BrowserContext> {

@@ -21,28 +21,42 @@ export function aiEnabled(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 }
 
-/** Default site-wide ceiling on visitor-triggered AI replies per day (see `claimPublicAiReply`). */
+/** Default daily ceiling on each budget of AI replies (see `claimAiReply`). */
 export const DEFAULT_AI_DAILY_LIMIT = 2000;
 
-/** The site-wide daily ceiling: AI_DAILY_LIMIT when set to a whole number (0 = no ceiling), else the default. */
-export function publicAiDailyLimit(): number {
-  const raw = process.env.AI_DAILY_LIMIT?.trim();
+/**
+ * Separate daily budgets, so cheap anonymous traffic on the website chat can't use up the replies of the paid
+ * course tutor (which is also limited per student and open only to enrolled students).
+ */
+export type AiReplyBudget = "chat" | "tutor";
+
+const BUDGET_ENV: Record<AiReplyBudget, string> = { chat: "AI_DAILY_LIMIT", tutor: "AI_TUTOR_DAILY_LIMIT" };
+
+/** A budget's daily ceiling: AI_DAILY_LIMIT (chat) / AI_TUTOR_DAILY_LIMIT (tutor) as a whole number (0 = none), else the default. */
+export function aiDailyLimit(budget: AiReplyBudget): number {
+  const raw = process.env[BUDGET_ENV[budget]]?.trim();
   const n = raw ? Number(raw) : Number.NaN;
   return Number.isInteger(n) && n >= 0 ? n : DEFAULT_AI_DAILY_LIMIT;
 }
 
+/** Rate-limit key of a budget for the current UTC calendar day, so the ceiling resets at midnight UTC. */
+export function aiBudgetKey(budget: AiReplyBudget, now = new Date()): string {
+  return `ai:${budget}:day:${now.toISOString().slice(0, 10)}`;
+}
+
 /**
- * Counts one visitor-triggered AI reply (website chat, course tutor) against a site-wide daily ceiling, on top
- * of their per-visitor limits: a cap on spend however many addresses are used. Returns false once the ceiling
- * is spent; the caller then streams its non-AI fallback (`aiStream({ useFallback: true })`) until it resets.
+ * Counts one visitor-triggered AI reply against its budget's site-wide daily ceiling (on top of the per-visitor or
+ * per-student limits): a cap on spend however many addresses or accounts are used. Returns false once the ceiling
+ * is spent; the caller then streams its non-AI fallback (`aiStream({ useFallback: true })`) until midnight UTC.
  */
-export async function claimPublicAiReply(): Promise<boolean> {
+export async function claimAiReply(budget: AiReplyBudget): Promise<boolean> {
   if (!aiEnabled()) return true;
-  const limit = publicAiDailyLimit();
+  const limit = aiDailyLimit(budget);
   if (limit === 0) return true;
   const { rateLimit } = await import("@/lib/rate-limit");
-  const { ok } = await rateLimit("ai:global:day", limit, 24 * 60 * 60);
-  if (!ok) console.warn("[ai] site-wide daily AI reply limit reached; using the non-AI fallback");
+  // The key changes every UTC day; the 24-hour window only has to outlast the day it was first counted in.
+  const { ok } = await rateLimit(aiBudgetKey(budget), limit, 24 * 60 * 60);
+  if (!ok) console.warn(`[ai] daily AI reply limit reached for the ${budget}; using the non-AI fallback until midnight UTC`);
   return ok;
 }
 
@@ -120,7 +134,7 @@ export type AiStreamInfo = {
 export type AiStreamOptions = AiTextOptions & {
   /** Streamed when AI isn't configured, or the request fails before any text arrived. */
   fallbackText: string;
-  /** Stream `fallbackText` without calling the API (e.g. past the daily ceiling of `claimPublicAiReply`). */
+  /** Stream `fallbackText` without calling the API (e.g. past the daily ceiling of `claimAiReply`). */
   useFallback?: boolean;
   /** Streamed when the model declines. Defaults to `fallbackText` before any output, `REFUSAL_MESSAGE` after. */
   refusalText?: string;

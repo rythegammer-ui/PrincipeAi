@@ -45,7 +45,7 @@ export const PLACEHOLDERS = [
   { key: "assessmentUrl", description: "Free AI assessment" },
   { key: "guideUrl", description: "AI Starter Kit (free guide)" },
   { key: "loginUrl", description: "Student login" },
-  { key: "businessName", description: "Your business name" },
+  { key: "businessName", description: "Your business name (Settings → Business)" },
 ] as const;
 
 /** Sample person used for previews and test sends. */
@@ -203,7 +203,7 @@ const FALLBACK_DRAFTS: Record<SequenceTrigger, Record<DraftSlot, StepDraft>> = {
   call_booked: {
     first: {
       subject: "How to get the most from our call",
-      body: `Hi {{firstName}},\n\nYou're booked in. To make our time count, think about these before we talk:\n\n- The one task that eats the most of your week\n- What you've already tried with AI (it's fine if the answer is nothing)\n- What a great result from this call would look like for you\n\nYour confirmation email has the time and the link to join.\n\n${SIGN_OFF}`,
+      body: `Hi {{firstName}},\n\nYou're booked in. To make our time count, think about these before we talk:\n\n- The one task that eats the most of your week\n- What you've already tried with AI (it's fine if the answer is nothing)\n- What a great result from this call would look like for you\n\nYour confirmation email has the time and how to join.\n\n${SIGN_OFF}`,
     },
     middle: {
       subject: "A quick note before we talk",

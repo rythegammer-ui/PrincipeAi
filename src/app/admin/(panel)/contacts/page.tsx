@@ -11,6 +11,7 @@ import { ButtonLink, buttonVariants } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
 import { Avatar, EmptyState, PageHeader } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { requireAdmin } from "@/lib/auth";
 import { CONTACT_SORTS, contactFacets, contactFilterParams, listContacts, parseContactFilters } from "@/lib/crm-queries";
 import { formatMoney, timeAgo } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ const SCORE_OPTIONS = [
 ];
 
 export default async function ContactsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireAdmin();
   const sp = await searchParams;
   const filters = parseContactFilters(sp);
   const [{ rows, total, page, pageCount, pageSize }, facets] = await Promise.all([listContacts(filters), contactFacets()]);

@@ -7,11 +7,13 @@ import { PipelineBoard } from "@/components/admin/pipeline-board";
 import { ButtonLink, buttonVariants } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
 import { PageHeader } from "@/components/ui/misc";
+import { requireAdmin } from "@/lib/auth";
 import { getPipelineBoard, parsePipelineFilters, PIPELINE_CARDS_PER_STAGE } from "@/lib/crm-queries";
 
 export const metadata: Metadata = { title: "Pipeline" };
 
 export default async function PipelinePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireAdmin();
   const filters = parsePipelineFilters(await searchParams);
   const board = await getPipelineBoard(filters);
   const hasFilters = Boolean(filters.q || filters.segment || filters.minScore);

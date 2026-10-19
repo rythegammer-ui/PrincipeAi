@@ -8,6 +8,7 @@ import { z } from "zod";
 import { MEETING_COLOR_NAMES } from "@/components/booking/meeting-colors";
 import { getDb, schema } from "@/db";
 import { assertAdmin } from "@/lib/auth";
+import { refreshPrepTasks } from "@/lib/booking-service";
 import { getBusinessTimezone, isBuiltInMeetingSlug, MAX_BUFFER_MIN } from "@/lib/scheduling";
 import { slugify } from "@/lib/utils";
 
@@ -122,9 +123,13 @@ export async function saveMeetingTypeAction(_prev: SchedulingFormState, formData
   if (!slug) return { error: "Please fix the highlighted fields.", fieldErrors: { slug: "Add a URL slug." } };
 
   const db = await getDb();
-  let prev: { slug: string } | undefined;
+  let prev: { slug: string; locationUrl: string | null } | undefined;
   if (input.id) {
-    [prev] = await db.select({ slug: schema.meetingTypes.slug }).from(schema.meetingTypes).where(eq(schema.meetingTypes.id, input.id)).limit(1);
+    [prev] = await db
+      .select({ slug: schema.meetingTypes.slug, locationUrl: schema.meetingTypes.locationUrl })
+      .from(schema.meetingTypes)
+      .where(eq(schema.meetingTypes.id, input.id))
+      .limit(1);
     if (!prev) return { error: "This meeting type no longer exists." };
     if (prev.slug !== slug && isBuiltInMeetingSlug(prev.slug)) {
       return {
@@ -160,6 +165,11 @@ export async function saveMeetingTypeAction(_prev: SchedulingFormState, formData
   if (input.id && prev) {
     await db.update(schema.meetingTypes).set(values).where(eq(schema.meetingTypes.id, input.id));
     revalidateScheduling(prev.slug);
+    // A meeting link added (or removed): the prep tasks of upcoming calls stop (or start) saying one is missing.
+    if ((prev.locationUrl?.trim() || null) !== values.locationUrl) {
+      const id = input.id;
+      await refreshPrepTasks(id).catch((err) => console.error("[scheduling] prep task refresh failed", id, err));
+    }
   } else {
     await db.insert(schema.meetingTypes).values(values);
   }

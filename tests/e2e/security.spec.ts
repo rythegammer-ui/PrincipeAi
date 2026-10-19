@@ -1,5 +1,18 @@
-import { E2E_CRON_SECRET } from "./env";
+import { createHash } from "node:crypto";
+import { SignJWT } from "jose";
+import { E2E_ADMIN, E2E_AUTH_SECRET, E2E_CRON_SECRET } from "./env";
 import { expect, loginAsAdmin, test, uniqueEmail } from "./helpers";
+
+/**
+ * The request a client-side navigation to an admin page makes once the admin (panel) layout is mounted: Next renders
+ * only the page segment, skipping the layout's session check. `_rsc` must hash the router headers or Next 16
+ * redirects (next/dist/shared/lib/router/utils/cache-busting-search-param.js).
+ */
+function adminNavigation(path: string): { url: string; headers: Record<string, string> } {
+  const tree = encodeURIComponent(JSON.stringify(["", { children: ["admin", { children: ["(panel)", { children: ["__PAGE__", {}] }] }] }, null, null]));
+  const rsc = createHash("sha256").update(`0,0,${tree},0`).digest().subarray(0, 12).toString("base64url");
+  return { url: `${path}?_rsc=${rsc}`, headers: { RSC: "1", "Next-Router-State-Tree": tree } };
+}
 
 test.describe("security regressions", () => {
   test("admin pages redirect to the login page without a session", async ({ page }) => {
@@ -7,6 +20,30 @@ test.describe("security regressions", () => {
       await page.goto(path);
       await expect(page).toHaveURL(`/admin/login?next=${encodeURIComponent(path)}`);
       await expect(page.getByRole("heading", { level: 1, name: "Sign in to your dashboard" })).toBeVisible();
+    }
+  });
+
+  test("in-app navigations refuse admin sessions that were revoked", async ({ adminPage, request }) => {
+    const nav = adminNavigation("/admin/contacts");
+    // Control: the signed-in admin's navigation gets the page's RSC payload.
+    const ok = await adminPage.request.get(nav.url, { headers: nav.headers, maxRedirects: 0 });
+    expect(ok.status()).toBe(200);
+    expect(ok.headers()["content-type"] ?? "").toContain("text/x-component");
+
+    test.skip(Boolean(process.env.E2E_BASE_URL) && !process.env.E2E_AUTH_SECRET, "E2E_AUTH_SECRET is not set for this server");
+    // Validly signed admin cookies that no longer match the admin login: from before credential versions existed,
+    // or from before a password / ADMIN_SESSION_VERSION change.
+    const secret = new TextEncoder().encode(E2E_AUTH_SECRET);
+    const mint = (claims: Record<string, string>) =>
+      new SignJWT({ role: "admin", email: E2E_ADMIN.email, ...claims }).setProtectedHeader({ alg: "HS256" }).setSubject("admin").setIssuedAt().setExpirationTime("1h").sign(secret);
+    for (const [label, token] of [
+      ["no credential version", await mint({})],
+      ["stale credential version", await mint({ cv: "0".repeat(32) })],
+    ]) {
+      const res = await request.get(nav.url, { headers: { ...nav.headers, cookie: `pa_admin=${token}` }, maxRedirects: 0 });
+      expect(res.status(), label).toBe(307);
+      expect(new URL(res.headers()["location"] ?? "", "http://x").pathname, label).toBe("/admin/login");
+      expect(await res.text(), label).not.toContain("@example.com");
     }
   });
 

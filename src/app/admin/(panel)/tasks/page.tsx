@@ -5,6 +5,7 @@ import { TaskForm } from "@/components/admin/task-form";
 import { TaskItem } from "@/components/admin/task-item";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/misc";
+import { requireAdmin } from "@/lib/auth";
 import { contactOptions, getTaskBoard, type TaskRow } from "@/lib/crm-queries";
 import { cn } from "@/lib/utils";
 
@@ -54,6 +55,7 @@ function TaskSection({
 }
 
 export default async function TasksPage() {
+  await requireAdmin();
   const [board, contacts] = await Promise.all([getTaskBoard(), contactOptions()]);
   const { tz } = board;
   const open = board.overdue.length + board.today.length + board.upcoming.length + board.noDate.length;

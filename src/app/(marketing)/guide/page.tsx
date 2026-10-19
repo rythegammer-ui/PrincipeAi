@@ -11,10 +11,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-type Search = { src?: string | string[]; welcome?: string | string[] };
+type Search = { src?: string | string[]; welcome?: string | string[]; sent?: string | string[] };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? null;
 
-/** Soft-gated Starter Kit: unlocked by the opt-in cookie, a known contact, or ?src=email. */
+/**
+ * Soft-gated Starter Kit: unlocked by the opt-in cookie, a known contact, or ?src=email. After an opt-in from the
+ * gate it shows ?welcome=1, plus sent=0 when no link email went out (so the banner doesn't promise one).
+ */
 export default async function GuidePage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
   const { unlocked, contact } = await getGuideAccess(one(sp.src));
@@ -24,6 +27,7 @@ export default async function GuidePage({ searchParams }: { searchParams: Promis
       unlocked={unlocked}
       greetingName={contact?.name ? firstName(contact.name) : null}
       welcome={unlocked && one(sp.welcome) === "1"}
+      welcomeEmailed={one(sp.sent) !== "0"}
     />
   );
 }

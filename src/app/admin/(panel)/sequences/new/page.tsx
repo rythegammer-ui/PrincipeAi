@@ -4,10 +4,12 @@ import Link from "next/link";
 import { SequenceForm } from "@/components/funnels/sequence-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/misc";
+import { requireAdmin } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "New automation" };
 
-export default function NewSequencePage() {
+export default async function NewSequencePage() {
+  await requireAdmin();
   return (
     <div className="mx-auto max-w-2xl">
       <Link href="/admin/sequences" className="mb-4 inline-flex min-h-8 items-center gap-1 text-sm font-medium text-zinc-500 hover:text-zinc-900">

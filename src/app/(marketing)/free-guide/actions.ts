@@ -15,7 +15,10 @@ const PLACEMENT_PATH: Record<OptInPlacement, string> = {
   home: "/",
 };
 
-/** Starter Kit opt-in: validate → rate limit → capture lead → unlock /guide → thank-you page. */
+/**
+ * Starter Kit opt-in: validate → rate limit → capture lead (+ kit link email) → unlock /guide → thank-you page.
+ * `sent=0` tells the next page no link email went out, so it doesn't promise one.
+ */
 export async function optInAction(_prev: OptInState, formData: FormData): Promise<OptInState> {
   const values = readFields(formData, FIELDS);
   const rawPlacement = String(formData.get("placement") ?? "");
@@ -31,12 +34,13 @@ export async function optInAction(_prev: OptInState, formData: FormData): Promis
   const limit = await rateLimitByIp("optin", 8, 10 * 60);
   if (!limit.ok) return { error: "Too many attempts. Please wait a few minutes and try again.", values };
 
+  let emailed: boolean;
   try {
-    await captureGuideOptIn(parsed.data, PLACEMENT_PATH[placement]);
+    ({ emailed } = await captureGuideOptIn(parsed.data, PLACEMENT_PATH[placement]));
   } catch (err) {
     console.error("[leads] opt-in failed", err);
     return { error: "Something went wrong on our side. Please try again in a moment.", values };
   }
   await grantGuideAccess();
-  redirect(next);
+  redirect(emailed ? next : `${next}${next.includes("?") ? "&" : "?"}sent=0`);
 }

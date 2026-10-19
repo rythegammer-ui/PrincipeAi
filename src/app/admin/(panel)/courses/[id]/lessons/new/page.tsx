@@ -7,6 +7,7 @@ import { LessonForm } from "@/components/courses/admin/lesson-form";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { ButtonLink } from "@/components/ui/button";
 import { getDb, schema } from "@/db";
+import { requireAdmin } from "@/lib/auth";
 import { getCurriculum } from "@/lib/courses";
 
 export const metadata: Metadata = { title: "New lesson" };
@@ -18,6 +19,7 @@ export default async function NewLessonPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ module?: string }>;
 }) {
+  await requireAdmin();
   const [{ id }, { module: moduleParam }] = await Promise.all([params, searchParams]);
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = await getDb();

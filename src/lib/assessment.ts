@@ -1282,6 +1282,8 @@ export function buildResultsEmail(input: {
   offerTitle: string;
   offerUrl: string;
   strategyCallUrl: string;
+  /** Signs the email: pass `emailBusinessName()` (Settings → Business name). Defaults to site.name. */
+  businessName?: string;
 }): { subject: string; preheader: string; markdown: string } {
   const { result } = input;
   // Sent to whatever address was typed in, so the visitor-typed name must not become a link.
@@ -1293,7 +1295,7 @@ export function buildResultsEmail(input: {
     markdown: [
       `Hi ${first},`,
       "",
-      `Thanks for taking the ${site.name} AI Readiness Assessment. You scored **${result.score}/100**, which makes you ${withArticle(result.tier.label, true)}.`,
+      `Thanks for taking the free AI Readiness Assessment. You scored **${result.score}/100**, which makes you ${withArticle(result.tier.label, true)}.`,
       "",
       result.tier.description,
       "",
@@ -1307,7 +1309,7 @@ export function buildResultsEmail(input: {
       "",
       "Keep this email — the link above is your private results page.",
       "",
-      `The ${site.name} team`,
+      `The ${escapeMarkdownText(input.businessName?.trim() || site.name)} team`,
     ].join("\n"),
   };
 }

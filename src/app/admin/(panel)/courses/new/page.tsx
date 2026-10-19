@@ -4,10 +4,12 @@ import Link from "next/link";
 import { NewCourseForm } from "@/components/courses/admin/new-course-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/misc";
+import { requireAdmin } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "New course" };
 
-export default function NewCoursePage() {
+export default async function NewCoursePage() {
+  await requireAdmin();
   return (
     <div className="mx-auto max-w-2xl">
       <Link href="/admin/courses" className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900">

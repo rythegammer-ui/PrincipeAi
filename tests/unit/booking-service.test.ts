@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { getDb, schema } from "@/db";
 import type { MeetingType } from "@/db/schema";
 import {
+  bookingEmailMarkdown,
   cancelBooking,
   cronIntervalHours,
   effectiveReminderHours,
@@ -11,12 +12,18 @@ import {
   getBookingDetails,
   MAX_PAYMENT_HOLD_MINUTES,
   missingMeetingLinkNote,
+  ownerGoogleCalendarUrl,
+  paidOrderForBooking,
   PAYMENT_HOLD_MINUTES,
   prepareCheckoutRetry,
+  prepTaskDescription,
+  refreshPrepTasks,
   reminderSentAtFor,
+  rescheduleBooking,
   reserveSlot,
   sendDueBookingReminders,
 } from "@/lib/booking-service";
+import { formatMeetingTime, getBusinessTimezone, slotsForMeetingType } from "@/lib/scheduling";
 import { upsertContact } from "@/lib/crm";
 import { createCheckout } from "@/lib/payments";
 import { updateSettings } from "@/lib/settings";
@@ -267,5 +274,184 @@ describe("retrying checkout for a held booking", () => {
     const confirmed = await reserve(free, who.id, new Date(Date.now() + 30 * 24 * HOUR));
     expect(await prepareCheckoutRetry(confirmed!.id)).toBe("lapsed");
     expect(await prepareCheckoutRetry("not-a-uuid")).toBe("lapsed");
+  });
+});
+
+async function latestEmail(where: { to?: string; subjectLike?: string; kind: string }) {
+  const db = await getDb();
+  const conds = [eq(schema.emailLog.kind, where.kind)];
+  if (where.to) conds.push(eq(schema.emailLog.to, where.to));
+  if (where.subjectLike) conds.push(like(schema.emailLog.subject, where.subjectLike));
+  const [row] = await db.select().from(schema.emailLog).where(and(...conds)).orderBy(desc(schema.emailLog.createdAt)).limit(1);
+  return row ?? null;
+}
+
+describe("cancelling a paid session", () => {
+  let day = 200;
+  /** A confirmed paid booking with its paid order (as after checkout). */
+  async function paidBooking(name: string, order: Partial<typeof schema.orders.$inferInsert> = {}) {
+    const mt = await meetingType({ priceCents: 15000, locationUrl: "https://meet.example.com/coach" });
+    const who = await contact(name);
+    const held = await reserve(mt, who.id, new Date(Date.now() + day++ * 24 * HOUR), true);
+    if (!held) throw new Error("slot unexpectedly taken");
+    const db = await getDb();
+    await db.update(schema.bookings).set({ status: "confirmed", holdExpiresAt: null }).where(eq(schema.bookings.id, held.id));
+    const [paid] = await db
+      .insert(schema.orders)
+      .values({
+        email: who.email,
+        name,
+        itemType: "booking",
+        bookingId: held.id,
+        contactId: who.id,
+        description: mt.name,
+        amountCents: 15000,
+        status: "paid",
+        paidAt: new Date(),
+        ...order,
+      })
+      .returning();
+    return { mt, who, booking: held, order: paid };
+  }
+
+  it("finds the payment taken for a booking, ignoring unpaid and refunded orders", async () => {
+    const { booking, order } = await paidBooking("Pia Paid");
+    expect(await paidOrderForBooking(booking.id)).toMatchObject({ id: order.id, amountCents: 15000, currency: "usd" });
+
+    const db = await getDb();
+    await db.update(schema.orders).set({ status: "refunded" }).where(eq(schema.orders.id, order.id));
+    expect(await paidOrderForBooking(booking.id)).toBeNull();
+    expect(await paidOrderForBooking("not-a-uuid")).toBeNull();
+  });
+
+  it("tells the invitee they can ask for a refund, and links the owner to the payment", async () => {
+    const name = `Paul Paid ${randomUUID().slice(0, 6)}`;
+    const { who, booking } = await paidBooking(name, { stripePaymentIntentId: "pi_test_123", isTest: true });
+    expect(await cancelBooking(booking.id, { by: "invitee" })).toEqual({ ok: true });
+
+    const invitee = await latestEmail({ to: who.email, kind: "booking_cancelled" });
+    expect(invitee?.html).toContain("refund of $150");
+    expect(invitee?.html).toContain("book a new time");
+
+    const owner = await latestEmail({ subjectLike: `%Booking cancelled: ${name}%`, kind: "notification" });
+    expect(owner?.html).toContain("https://dashboard.stripe.com/test/payments/pi_test_123");
+    expect(owner?.html).not.toContain("Add to Google Calendar");
+  });
+
+  it("offers a full refund (not a paid rebooking) when the business cancels", async () => {
+    const { who, booking } = await paidBooking("Pat Paid");
+    expect(await cancelBooking(booking.id, { by: "admin", reason: "Sorry, I'm unwell." })).toEqual({ ok: true });
+    const invitee = await latestEmail({ to: who.email, kind: "booking_cancelled" });
+    expect(invitee?.html).toContain("entitled to a full refund of $150");
+    expect(invitee?.html).not.toContain("book a new time");
+  });
+
+  it("says nothing about money for a free call", async () => {
+    const mt = await meetingType();
+    const who = await contact();
+    const booking = await reserve(mt, who.id, new Date(Date.now() + day++ * 24 * HOUR));
+    expect(await cancelBooking(booking!.id, { by: "admin" })).toEqual({ ok: true });
+    const invitee = await latestEmail({ to: who.email, kind: "booking_cancelled" });
+    expect(invitee?.html).toContain("book a new time");
+    expect(invitee?.html).not.toMatch(/refund/i);
+  });
+
+  it("words the cancellation email for who cancelled and what was paid", async () => {
+    const mt = await meetingType({ priceCents: 15000 });
+    const who = await contact();
+    const booking = await reserve(mt, who.id, new Date(Date.now() + day++ * 24 * HOUR));
+    const details = (await getBookingDetails({ id: booking!.id }))!;
+    const paid = { amountCents: 15000, currency: "usd" };
+    expect(bookingEmailMarkdown("cancelled", details, { paid, by: "invitee" }).markdown).toContain("If you'd like a refund of $150, just reply to this email");
+    expect(bookingEmailMarkdown("cancelled", details, { paid, by: "admin" }).markdown).toContain("Because we cancelled, you're entitled to a full refund of $150");
+    expect(bookingEmailMarkdown("cancelled", details, { paid: null, by: "admin" }).markdown).not.toMatch(/refund/i);
+  });
+
+  it("shows a rescheduled booking's old time in the timezone it was booked in, with its zone", async () => {
+    const mt = await meetingType();
+    const who = await contact();
+    const booking = await reserve(mt, who.id, "2031-07-08T14:00:00Z");
+    const details = (await getBookingDetails({ id: booking!.id }))!;
+    // Moved, and the invitee picked another timezone for the new time.
+    const moved = {
+      ...details,
+      booking: { ...details.booking, timezone: "Europe/London", startAt: new Date("2031-07-10T14:00:00Z"), endAt: new Date("2031-07-10T14:30:00Z") },
+    };
+    const previous = { previousStart: details.booking.startAt, previousEnd: details.booking.endAt };
+    expect(bookingEmailMarkdown("rescheduled", moved, { ...previous, previousTimezone: "America/New_York" }).markdown).toContain(
+      "moved from ~~Tuesday, July 8, 2031 at 10:00 AM EDT~~ to a new time",
+    );
+    // Older callers without the old timezone: the booking's own timezone, still labelled.
+    expect(bookingEmailMarkdown("rescheduled", moved, previous).markdown).toContain("~~Tuesday, July 8, 2031 at 3:00 PM GMT+1~~");
+  });
+});
+
+describe("owner calendar link", () => {
+  it("adds confirmed bookings to the owner's calendar, named after the invitee", async () => {
+    const mt = await meetingType({ name: "Strategy Call", locationUrl: "https://meet.example.com/room" });
+    const who = await contact("Dana <b>Customer</b>");
+    const booking = await reserve(mt, who.id, "2031-06-03T14:00:00Z");
+    const details = (await getBookingDetails({ id: booking!.id }))!;
+
+    const url = new URL(ownerGoogleCalendarUrl(details));
+    expect(url.hostname).toBe("calendar.google.com");
+    expect(url.searchParams.get("text")).toBe("Strategy Call with Dana bCustomer/b");
+    expect(url.searchParams.get("dates")).toBe("20310603T140000Z/20310603T143000Z");
+    expect(url.searchParams.get("location")).toBe("https://meet.example.com/room");
+    expect(url.searchParams.get("details")).toContain(who.email);
+    expect(url.searchParams.get("details")).not.toMatch(/[<>]/);
+
+    await finalizeConfirmedBooking(details, { paid: false });
+    const owner = await latestEmail({ subjectLike: "%New booking: Dana%", kind: "notification" });
+    expect(owner?.html).toContain("Add to Google Calendar");
+    expect(owner?.html).toContain("calendar.google.com/calendar/render");
+  });
+});
+
+describe("prep task after a reschedule", () => {
+  async function prepTask(contactId: string) {
+    const db = await getDb();
+    const [task] = await db.select().from(schema.tasks).where(and(eq(schema.tasks.contactId, contactId), eq(schema.tasks.origin, "booking")));
+    return task;
+  }
+
+  it("moves the task and rewrites its meeting time, and drops the missing-link note once a link is added", async () => {
+    const mt = await meetingType({ minNoticeHours: 0, maxDaysAhead: 60 });
+    const who = await contact("Rita Rescheduler");
+    const now = Date.now();
+    const { slots } = await slotsForMeetingType(mt, now + 20 * 24 * HOUR, now + 40 * 24 * HOUR);
+    expect(slots.length).toBeGreaterThan(4);
+    const booking = await reserve(mt, who.id, slots[0]);
+    const details = (await getBookingDetails({ id: booking!.id }))!;
+    await finalizeConfirmedBooking(details, { paid: false });
+    const before = await prepTask(who.id);
+    expect(before.description).toMatch(/^Action needed: no meeting link/);
+
+    const db = await getDb();
+    await db.update(schema.meetingTypes).set({ locationUrl: "https://meet.example.com/new" }).where(eq(schema.meetingTypes.id, mt.id));
+    const newStart = new Date(slots[4]);
+    expect(await rescheduleBooking(booking!.id, newStart, { by: "admin" })).toEqual({ ok: true });
+
+    const after = await prepTask(who.id);
+    expect(after.id).toBe(before.id);
+    expect(after.dueAt?.getTime()).toBe(newStart.getTime() - HOUR);
+    expect(after.description).not.toContain("Action needed");
+    const tz = await getBusinessTimezone();
+    expect(after.description).toContain(formatMeetingTime(newStart, new Date(newStart.getTime() + 30 * MIN), tz));
+    expect(after.description).not.toContain(formatMeetingTime(booking!.startAt, booking!.endAt, tz));
+    expect(after.description).toBe(prepTaskDescription((await getBookingDetails({ id: booking!.id }))!, tz));
+  });
+
+  it("refreshes upcoming prep tasks when the meeting type gets a link", async () => {
+    const mt = await meetingType();
+    const who = await contact();
+    const booking = await reserve(mt, who.id, new Date(Date.now() + 90 * 24 * HOUR));
+    await finalizeConfirmedBooking((await getBookingDetails({ id: booking!.id }))!, { paid: false });
+    expect((await prepTask(who.id)).description).toMatch(/^Action needed/);
+
+    const db = await getDb();
+    await db.update(schema.meetingTypes).set({ locationUrl: "https://meet.example.com/later" }).where(eq(schema.meetingTypes.id, mt.id));
+    expect(await refreshPrepTasks(mt.id)).toBe(1);
+    expect((await prepTask(who.id)).description).not.toContain("Action needed");
   });
 });

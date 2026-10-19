@@ -9,6 +9,7 @@ import { Alert } from "@/components/ui/alert";
 import { ButtonLink } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/misc";
 import { getDb, schema } from "@/db";
+import { requireAdmin } from "@/lib/auth";
 import { getCurriculum } from "@/lib/courses";
 import { deleteLessonAction } from "../../../actions";
 
@@ -23,6 +24,7 @@ export default async function EditLessonPage({
   params: Promise<{ id: string; lessonId: string }>;
   searchParams: Promise<{ created?: string }>;
 }) {
+  await requireAdmin();
   const [{ id, lessonId }, { created }] = await Promise.all([params, searchParams]);
   if (!UUID.test(id) || !UUID.test(lessonId)) notFound();
   const db = await getDb();

@@ -1,11 +1,12 @@
 import "server-only";
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
-import { jwtVerify, SignJWT } from "jose";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { SignJWT } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb, schema } from "@/db";
 import { adminCredentials, authSecret } from "@/lib/runtime-mode";
+import { adminCredentialVersion, verifySessionToken, type SessionPayload } from "@/lib/session-token";
 import { normalizeEmail, safeRedirectPath } from "@/lib/utils";
 
 export const ADMIN_COOKIE = "pa_admin";
@@ -14,20 +15,6 @@ export const STUDENT_COOKIE = "pa_student";
 const ADMIN_TTL_SEC = 60 * 60 * 24 * 7; // 7 days
 const STUDENT_TTL_SEC = 60 * 60 * 24 * 30; // 30 days
 const LOGIN_TOKEN_TTL_MIN = 30;
-
-type SessionPayload = { sub: string; role: "admin" | "student"; email: string };
-
-/**
- * Binds admin sessions to the current admin login: changing ADMIN_EMAIL / ADMIN_PASSWORD, or bumping
- * ADMIN_SESSION_VERSION, invalidates every admin cookie already issued (student sessions are unaffected).
- * Keyed with the signing secret so a token never allows offline guessing of the password.
- */
-function adminCredentialVersion(creds: { email: string; password: string }): string {
-  return createHmac("sha256", authSecret())
-    .update(`${creds.email}\0${creds.password}\0${process.env.ADMIN_SESSION_VERSION ?? ""}`)
-    .digest("hex")
-    .slice(0, 32);
-}
 
 async function sign(payload: SessionPayload, ttlSec: number, extra: Record<string, string> = {}): Promise<string> {
   return new SignJWT({ ...extra, role: payload.role, email: payload.email })
@@ -38,20 +25,11 @@ async function sign(payload: SessionPayload, ttlSec: number, extra: Record<strin
     .sign(authSecret());
 }
 
-export async function verifySession(token: string | undefined, role: SessionPayload["role"]): Promise<SessionPayload | null> {
-  if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, authSecret(), { algorithms: ["HS256"] });
-    if (payload.role !== role || typeof payload.sub !== "string" || typeof payload.email !== "string") return null;
-    if (role === "admin") {
-      const creds = adminCredentials();
-      if (!creds || payload.email !== creds.email || payload.cv !== adminCredentialVersion(creds)) return null;
-    }
-    return { sub: payload.sub, role, email: payload.email };
-  } catch {
-    return null;
-  }
-}
+/**
+ * The same check the proxy runs on every /admin and /learn page request (see lib/session-token.ts): admin
+ * cookies must also match the current admin login (ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_SESSION_VERSION).
+ */
+export const verifySession = verifySessionToken;
 
 function cookieOptions(maxAge: number) {
   return {
@@ -100,7 +78,11 @@ export async function getAdminSession(): Promise<SessionPayload | null> {
   return verifySession(token, "admin");
 }
 
-/** Use in admin pages/layouts: redirects to the login page when not signed in. */
+/**
+ * Use at the top of EVERY admin page (and any generateMetadata that reads data), not only in the panel layout:
+ * a client-side navigation re-renders just the page segment, so a layout check alone doesn't guard it.
+ * Redirects to the login page when not signed in.
+ */
 export async function requireAdmin(): Promise<SessionPayload> {
   const session = await getAdminSession();
   if (!session) redirect("/admin/login");
@@ -168,7 +150,8 @@ export async function upsertStudent(email: string, name?: string | null): Promis
     .values({ email: normalized, name: name ?? contact?.name ?? null, contactId: contact?.id ?? null })
     .onConflictDoUpdate({
       target: schema.users.email,
-      set: { updatedAt: new Date() },
+      // Fill a missing name (e.g. a student granted access without one) but never overwrite one already set.
+      set: { updatedAt: new Date(), name: sql`coalesce(nullif(btrim(${schema.users.name}), ''), excluded.name)` },
     })
     .returning();
   if (!user.contactId && contact) {

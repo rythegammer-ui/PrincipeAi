@@ -54,9 +54,15 @@ export function SettingsForm({ settings, timezones }: { settings: Settings; time
       {state.error && <Alert tone="error">{state.error}</Alert>}
       {state.ok && state.message && <Alert tone="success">{state.message}</Alert>}
 
-      <Group icon={Building2} title="Business" description="How your business appears, and the timezone your calendar runs on.">
+      <Group icon={Building2} title="Business" description="The name your emails and AI assistant use, and the timezone your calendar runs on.">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Business name" htmlFor="s-businessName" error={fe.businessName} required>
+          <Field
+            label="Business name"
+            htmlFor="s-businessName"
+            error={fe.businessName}
+            hint="Signs automation and booking emails ({{businessName}}) and is used by the AI assistant. The site header and logo are set in src/config/site.ts."
+            required
+          >
             <Input id="s-businessName" name="businessName" defaultValue={text("businessName")} maxLength={80} required aria-invalid={Boolean(fe.businessName)} />
           </Field>
           <Field label="Timezone" htmlFor="s-timezone" error={fe.timezone} hint="Your availability hours are interpreted in this timezone." required>

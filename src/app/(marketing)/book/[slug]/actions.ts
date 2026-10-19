@@ -1,10 +1,13 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { finalizeConfirmedBooking, releaseHold, reserveSlot } from "@/lib/booking-service";
+import { site } from "@/config/site";
 import { captureLead, upsertContact } from "@/lib/crm";
-import { createCheckout } from "@/lib/payments";
+import { DISCOVERY_MEETING_SLUG, DISCOVERY_PREFILL_COOKIE } from "@/lib/leads";
+import { checkoutMode, createCheckout } from "@/lib/payments";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { describeTime, getActiveMeetingType, getBusinessTimezone, isSlotAvailable, isValidTimezone } from "@/lib/scheduling";
 import { getVisitorContext } from "@/lib/tracking";
@@ -80,6 +83,11 @@ export async function createBookingAction(_prev: BookingFormState, formData: For
 
   const meetingType = await getActiveMeetingType(input.type);
   if (!meetingType) return { error: "This meeting type is no longer available. Please choose another from the booking page." };
+  const paid = meetingType.priceCents > 0;
+  // No way to pay right now (the booking page offers contact instead): never hold a slot that checkout can't confirm.
+  if (paid && checkoutMode() === "disabled") {
+    return { error: `Online payment for this session isn't available right now. Please email ${site.contactEmail} or book a free strategy call instead.` };
+  }
 
   const answers: Record<string, string> = {};
   const fieldErrors: Record<string, string> = {};
@@ -102,7 +110,6 @@ export async function createBookingAction(_prev: BookingFormState, formData: For
     visitor,
   });
 
-  const paid = meetingType.priceCents > 0;
   const booking = await reserveSlot({
     meetingType,
     contactId: contact.id,
@@ -116,6 +123,8 @@ export async function createBookingAction(_prev: BookingFormState, formData: For
 
   if (!paid) {
     await finalizeConfirmedBooking({ booking, meetingType, contact }, { paid: false });
+    // The consulting application's answers have been used: don't prefill a second discovery booking with them.
+    if (meetingType.slug === DISCOVERY_MEETING_SLUG) (await cookies()).delete({ name: DISCOVERY_PREFILL_COOKIE, path: "/book" });
     // The confirmation page greets with the name typed here (not the stored contact's, which may be someone else's).
     const typedName = firstName(input.name);
     redirect(`/book/confirmed/${booking.manageToken}${typedName !== "there" ? `?n=${encodeURIComponent(typedName)}` : ""}`);

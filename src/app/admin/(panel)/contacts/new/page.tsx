@@ -4,10 +4,12 @@ import Link from "next/link";
 import { NewContactForm } from "@/components/admin/contact-forms";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/misc";
+import { requireAdmin } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "New contact" };
 
-export default function NewContactPage() {
+export default async function NewContactPage() {
+  await requireAdmin();
   return (
     <div className="mx-auto max-w-3xl">
       <Link href="/admin/contacts" className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-zinc-500 hover:text-zinc-900">

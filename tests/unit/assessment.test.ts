@@ -429,7 +429,14 @@ describe("summaries", () => {
     const email = buildResultsEmail({ name: "ada", result, resultsUrl: "https://x.test/r", offerTitle: "Course", offerUrl: "https://x.test/c", strategyCallUrl: "https://x.test/b" });
     expect(email.subject).toBe(`Your AI readiness results: ${result.score}/100 (${result.tier.label})`);
     expect(email.markdown).toContain("Hi Ada,");
+    expect(email.markdown).toContain("Thanks for taking the free AI Readiness Assessment.");
+    // The brand name already ends in "AI": never "Principe AI AI Readiness Assessment".
+    expect(email.markdown).not.toMatch(/\bAI AI\b/);
     expect(email.markdown).toContain("(https://x.test/r)");
+    // Signed with Settings → Business name (escaped), else the site name.
+    expect(email.markdown).toMatch(/\nThe Principe AI team$/);
+    const branded = buildResultsEmail({ name: "ada", result, resultsUrl: "https://x.test/r", offerTitle: "Course", offerUrl: "https://x.test/c", strategyCallUrl: "https://x.test/b", businessName: " Ada's *Studio* " });
+    expect(branded.markdown).toMatch(/\nThe Ada's \\\*Studio\\\* team$/);
   });
 });
 

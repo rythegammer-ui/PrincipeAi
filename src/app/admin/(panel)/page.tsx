@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, EmptyState, PageHeader } from "@/components/ui/misc";
+import { requireAdmin } from "@/lib/auth";
 import { DASHBOARD_RANGES, getDashboard, parseRange } from "@/lib/crm-queries";
 import { cn, formatMoney, timeAgo } from "@/lib/utils";
 
@@ -51,6 +52,7 @@ function SectionHeader({ title, description, href, linkLabel }: { title: string;
 }
 
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ range?: string | string[] }> }) {
+  await requireAdmin();
   const range = parseRange((await searchParams).range);
   const data = await getDashboard(range);
   const now = new Date();

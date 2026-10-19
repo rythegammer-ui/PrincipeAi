@@ -2,10 +2,30 @@ import "server-only";
 import { and, asc, count, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { SequenceTrigger } from "@/db/schema";
-import { defaultTemplateVars, escapeMarkdown, fillTemplate, sendEmail, type TemplateVars } from "@/lib/email";
+import { defaultTemplateVars, emailBusinessName, escapeMarkdown, fillTemplate, sendEmail, type TemplateVars } from "@/lib/email";
 import { firstName } from "@/lib/utils";
 
 const HOUR = 3_600_000;
+
+/**
+ * Template variables for one recipient: plain text for the subject, and the body's visitor- and owner-typed values
+ * (name, email, business name) Markdown-escaped so they can't add links or formatting. Shared with the automation
+ * editor's preview and test send so they match what is really emailed.
+ */
+export function recipientTemplateVars(
+  person: { name: string | null; email: string },
+  businessName: string,
+): { subject: TemplateVars; body: TemplateVars } {
+  const fullName = (person.name ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  const subject: TemplateVars = {
+    ...defaultTemplateVars(businessName),
+    firstName: firstName(person.name, person.email),
+    name: fullName,
+    email: person.email,
+  };
+  const body: TemplateVars = { ...subject, name: escapeMarkdown(fullName), email: escapeMarkdown(person.email), businessName: escapeMarkdown(businessName) };
+  return { subject, body };
+}
 
 /**
  * Triggers that fire on every occurrence (each message, booking or purchase), so a finished or
@@ -112,14 +132,7 @@ export async function processEnrollment(
   }
 
   // Visitor-supplied fields: plain text for the subject, Markdown-escaped for the body.
-  const fullName = (contact.name ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
-  const subjectVars: TemplateVars = {
-    ...defaultTemplateVars(),
-    firstName: firstName(contact.name, contact.email),
-    name: fullName,
-    email: contact.email,
-  };
-  const bodyVars: TemplateVars = { ...subjectVars, name: escapeMarkdown(fullName), email: escapeMarkdown(contact.email) };
+  const { subject: subjectVars, body: bodyVars } = recipientTemplateVars(contact, await emailBusinessName());
   const subject = fillTemplate(step.subject, subjectVars).replace(/\s+/g, " ").trim();
   const result = await sendEmail({
     to: contact.email,

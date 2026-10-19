@@ -27,7 +27,8 @@ type Props = {
   initialMonth: string;
   minMonth: string;
   maxMonth: string;
-  prefill: { name: string; email: string };
+  /** `answers`: intake answers keyed by form field name (`q_<question id>`), e.g. from the consulting application. */
+  prefill: { name: string; email: string; answers?: Record<string, string> };
 };
 
 export function BookingFlow({ meetingType, businessTimezone, initialMonth, minMonth, maxMonth, prefill }: Props) {
@@ -35,7 +36,7 @@ export function BookingFlow({ meetingType, businessTimezone, initialMonth, minMo
   const [step, setStep] = useState<"pick" | "details">("pick");
   const [slot, setSlot] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const [values, setValues] = useState<Record<string, string>>({ name: prefill.name, email: prefill.email });
+  const [values, setValues] = useState<Record<string, string>>({ ...prefill.answers, name: prefill.name, email: prefill.email });
   const headingRef = useRef<HTMLHeadingElement>(null);
   const tracked = useRef(false);
   const moved = useRef(false);

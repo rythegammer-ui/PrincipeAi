@@ -22,12 +22,15 @@ export function StarterKitGuide({
   unlocked,
   greetingName,
   welcome,
+  welcomeEmailed = true,
 }: {
   kit: StarterKit;
   unlocked: boolean;
   greetingName: string | null;
   /** Just opted in from the gate — show a confirmation banner. */
   welcome: boolean;
+  /** Whether that opt-in emailed (or queued) the kit link, which the banner then mentions. */
+  welcomeEmailed?: boolean;
 }) {
   const stats = kitStats(kit);
   const hasContent = stats.days > 0 || stats.prompts > 0 || stats.tips > 0;
@@ -101,7 +104,9 @@ export function StarterKitGuide({
             <Section narrow className="pb-0 sm:pb-0">
               {welcome && (
                 <Alert tone="success" title="You're in — the full kit is unlocked." className="mb-6">
-                  We&apos;re also emailing you a link so you can come back to it anytime.
+                  {welcomeEmailed
+                    ? "We're also emailing you a link so you can come back to it anytime."
+                    : "Bookmark this page so you can come back to it anytime."}
                 </Alert>
               )}
               {kit.intro.trim() && (

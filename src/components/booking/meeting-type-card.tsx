@@ -6,15 +6,21 @@ import { formatDuration } from "@/lib/scheduling";
 import { cn, formatMoney } from "@/lib/utils";
 import { meetingColor } from "./meeting-colors";
 
-type Props = { meetingType: Pick<MeetingType, "slug" | "name" | "description" | "durationMin" | "priceCents" | "locationLabel" | "color">; className?: string };
+type Props = {
+  meetingType: Pick<MeetingType, "slug" | "name" | "description" | "durationMin" | "priceCents" | "locationLabel" | "color">;
+  /** Online payment is unavailable: a paid session is booked by getting in touch instead. */
+  paymentsOff?: boolean;
+  className?: string;
+};
 
 /**
  * Card on /book. The whole card is one link (the title is the accessible name). The focus ring sits
  * on the card itself: an outline on the stretched link would be clipped by overflow-hidden.
  */
-export function MeetingTypeCard({ meetingType: mt, className }: Props) {
+export function MeetingTypeCard({ meetingType: mt, paymentsOff = false, className }: Props) {
   const color = meetingColor(mt.color);
   const free = mt.priceCents === 0;
+  const contactToBook = paymentsOff && !free;
   return (
     <article
       className={cn(
@@ -43,9 +49,22 @@ export function MeetingTypeCard({ meetingType: mt, className }: Props) {
           </li>
         </ul>
         {mt.description && <p className="mt-4 flex-1 text-sm leading-relaxed text-zinc-600">{mt.description}</p>}
-        <p className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700" aria-hidden>
-          Choose a time <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-        </p>
+        {contactToBook ? (
+          <div className="mt-6">
+            <p className="text-xs text-zinc-500">Online booking is opening soon.</p>
+            {/* Sits above the card's stretched link, so it's a separate target. */}
+            <Link
+              href="/contact"
+              className="relative z-10 mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-lg text-sm font-semibold text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+            >
+              Contact us to book <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </div>
+        ) : (
+          <p className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700" aria-hidden>
+            Choose a time <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+          </p>
+        )}
       </div>
     </article>
   );

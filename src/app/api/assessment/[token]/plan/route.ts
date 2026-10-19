@@ -12,7 +12,7 @@ import {
   shouldStorePlan,
   submittedContact,
 } from "@/lib/assessment";
-import { rateLimitByIp } from "@/lib/rate-limit";
+import { clientIp, rateLimitByIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 // Plan generation streams for well under a minute; stay within every Vercel plan's limit.
@@ -66,7 +66,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
   });
 
   if (aiEnabled()) {
-    const claim = await claimPlanGeneration(submission.id, rateLimitByIp);
+    const claim = await claimPlanGeneration(submission.id, await clientIp());
     if (!claim.ok) {
       if (claim.reason === "daily_limit") console.warn("[assessment] daily AI plan limit reached; serving the standard plan");
       return textStreamResponse(streamText(fallbackText));

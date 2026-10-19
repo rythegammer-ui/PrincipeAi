@@ -1,9 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { getDb, schema } from "@/db";
-import { processEnrollment, triggerAutomations } from "@/lib/automations";
-import { setMarketingSubscription, upsertContact } from "@/lib/crm";
-import { escapeMarkdown, markdownToEmailHtml, sendEmail } from "@/lib/email";
+import { site } from "@/config/site";
+import { bookingEmailMarkdown, type BookingDetails } from "@/lib/booking-service";
+import { processEnrollment, recipientTemplateVars, triggerAutomations } from "@/lib/automations";
+import { captureLead, setMarketingSubscription, upsertContact } from "@/lib/crm";
+import { emailBusinessName, escapeMarkdown, markdownToEmailHtml, notifyOwner, sendEmail } from "@/lib/email";
+import { DEFAULT_SETTINGS, updateSettings } from "@/lib/settings";
 
 const PHISH = "[Reset-your-password](https://evil.example/reset)";
 
@@ -156,5 +159,80 @@ describe("one-click unsubscribe", () => {
     expect(active).toHaveLength(0);
     const notes = await db.select().from(schema.activities).where(eq(schema.activities.contactId, contact.id));
     expect(notes.filter((a) => a.title === "Unsubscribed from marketing emails")).toHaveLength(1);
+  });
+});
+
+/** Captures the JSON bodies sent to Resend. */
+function captureResend(): { subject: string; reply_to: string; html: string }[] {
+  vi.stubEnv("RESEND_API_KEY", "re_test");
+  const sent: { subject: string; reply_to: string; html: string }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ id: "em_x" }), { status: 200 });
+    }),
+  );
+  return sent;
+}
+
+describe("business name (Admin → Settings)", () => {
+  afterEach(async () => {
+    await updateSettings({ businessName: DEFAULT_SETTINGS.businessName });
+  });
+
+  it("signs automation emails, the editor preview vars and booking emails", async () => {
+    await updateSettings({ businessName: "Principe Academy" });
+    expect(await emailBusinessName()).toBe("Principe Academy");
+
+    const contact = await contactNamed("renamed-brand-1@example.net", "Nina Name");
+    await triggerAutomations("lead_magnet", contact.id);
+    const [log] = await logFor(contact.id);
+    expect(log, "the opt-in email should be logged").toBeDefined();
+    expect(log.html).toContain("The Principe Academy team");
+    expect(log.html).not.toContain(`The ${site.name} team`);
+
+    const details = {
+      booking: {
+        id: "b1",
+        status: "cancelled",
+        startAt: new Date("2030-01-07T15:00:00Z"),
+        endAt: new Date("2030-01-07T15:30:00Z"),
+        timezone: "UTC",
+        manageToken: "0".repeat(32),
+        meetingUrl: null,
+      },
+      meetingType: { name: "Strategy call", slug: "strategy-call", locationLabel: "Video call", locationUrl: null, durationMin: 30, priceCents: 0, active: true },
+      contact: { id: contact.id, name: "Nina Name", email: contact.email },
+    } as unknown as BookingDetails;
+    const { markdown } = bookingEmailMarkdown("cancelled", details, { businessName: "Principe Academy" });
+    expect(markdown).toContain("The Principe Academy team");
+    expect(bookingEmailMarkdown("cancelled", details).markdown).toContain(`The ${site.name} team`);
+  });
+
+  it("keeps an owner-typed name from adding links or formatting to email bodies", () => {
+    const vars = recipientTemplateVars({ name: "Alex Rivera", email: "alex@example.com" }, "Acme [Login](https://evil.example)");
+    expect(vars.subject.businessName).toBe("Acme [Login](https://evil.example)");
+    expect(markdownToEmailHtml(`The ${vars.body.businessName} team`)).not.toContain("<a ");
+    expect(vars.subject.firstName).toBe("Alex");
+  });
+});
+
+describe("owner notifications", () => {
+  it("reply to the lead, not to the owner", async () => {
+    const sent = captureResend();
+    await notifyOwner("No reply-to", "Body");
+    await notifyOwner("With reply-to", "Body", { replyTo: "cora.contact@example.com" });
+    expect(sent.find((m) => m.subject.endsWith("No reply-to"))?.reply_to).toBe(site.contactEmail);
+    expect(sent.find((m) => m.subject.endsWith("With reply-to"))?.reply_to).toBe("cora.contact@example.com");
+
+    await captureLead({
+      email: "Cora.Lead@Example.com",
+      name: "Cora Lead",
+      source: "contact_form",
+      activity: { type: "form", title: "Sent a message" },
+      notify: { kind: "lead", subject: "New message from Cora Lead", markdown: "Hello" },
+    });
+    expect(sent.find((m) => m.subject.endsWith("New message from Cora Lead"))?.reply_to).toBe("cora.lead@example.com");
   });
 });

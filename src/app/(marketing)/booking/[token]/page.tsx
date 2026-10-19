@@ -9,9 +9,18 @@ import { ManageBooking } from "@/components/booking/manage-booking";
 import { Alert } from "@/components/ui/alert";
 import { ButtonLink } from "@/components/ui/button";
 import { site } from "@/config/site";
-import { bookingGoogleCalendarUrl, getBookingDetails, isChangeable, isHoldExpired, isManageToken, meetingLinkFor, PAID_UNAVAILABLE_REASON } from "@/lib/booking-service";
+import {
+  bookingGoogleCalendarUrl,
+  getBookingDetails,
+  isChangeable,
+  isHoldExpired,
+  isManageToken,
+  meetingLinkFor,
+  PAID_UNAVAILABLE_REASON,
+  paidOrderForBooking,
+} from "@/lib/booking-service";
 import { bookingWindow, describeTime, getBusinessTimezone } from "@/lib/scheduling";
-import { firstName, formatMoney } from "@/lib/utils";
+import { formatMoney } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Manage your booking", robots: { index: false, follow: false } };
 
@@ -28,6 +37,9 @@ export default async function ManageBookingPage({
   if (!details) notFound();
   const { booking, meetingType, contact } = details;
   const rebookHref = meetingType.active ? `/book/${meetingType.slug}` : "/book";
+  // A session that was paid for (and not refunded): cancelling it is refunded on request, by replying to the email.
+  const payment = booking.status === "confirmed" || booking.status === "cancelled" ? await paidOrderForBooking(booking.id) : null;
+  const paidLabel = payment ? formatMoney(payment.amountCents, payment.currency) : null;
 
   const now = new Date();
   const changeable = isChangeable(booking, now);
@@ -52,7 +64,8 @@ export default async function ManageBookingPage({
       <div className="container-narrow relative py-12 sm:py-16">
         <p className="eyebrow">Your booking</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900">Manage your booking</h1>
-        <p className="mt-2 text-zinc-600">Hi {firstName(contact.name, contact.email)}, here are the details of your booking.</p>
+        {/* No greeting by name: anyone can book with any email, and the contact's stored name may be someone else's. */}
+        <p className="mt-2 text-zinc-600">Here are the details of your booking.</p>
 
         {updated === "rescheduled" && booking.status === "confirmed" && (
           <Alert tone="success" title="Your booking has been moved" className="mt-6">
@@ -62,6 +75,9 @@ export default async function ManageBookingPage({
         {updated === "cancelled" && booking.status === "cancelled" && (
           <Alert tone="success" title="Your booking has been cancelled" className="mt-6">
             We&apos;ve let the team know. You&apos;re welcome to book again whenever it suits you.
+            {paidLabel && !booking.cancelReason?.startsWith(PAID_UNAVAILABLE_REASON) && (
+              <> If you&apos;d like a refund of {paidLabel}, just reply to the cancellation email we&apos;ve sent to {contact.email}.</>
+            )}
           </Alert>
         )}
 
@@ -103,6 +119,7 @@ export default async function ManageBookingPage({
               canCancel={canCancel}
               canPay={canPay}
               priceLabel={meetingType.priceCents > 0 ? formatMoney(meetingType.priceCents) : undefined}
+              paidLabel={booking.status === "confirmed" ? (paidLabel ?? undefined) : undefined}
               initialMonth={initialMonth}
               minMonth={minMonth}
               maxMonth={maxMonth < initialMonth ? initialMonth : maxMonth}
@@ -121,7 +138,7 @@ export default async function ManageBookingPage({
                   {booking.cancelReason?.startsWith(PAID_UNAVAILABLE_REASON)
                     ? "We received your payment, but this time was released before it completed. We'll email you to arrange a new time or a full refund."
                     : booking.status === "cancelled"
-                    ? "This booking has been cancelled, so it can no longer be changed."
+                    ? `This booking has been cancelled, so it can no longer be changed.${paidLabel && updated !== "cancelled" ? ` If you'd like a refund of ${paidLabel}, just email us.` : ""}`
                     : "This meeting has already taken place, so it can no longer be changed online. We hope it was useful!"}
                 </p>
               </div>

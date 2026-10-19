@@ -1,26 +1,21 @@
-import { jwtVerify } from "jose";
 import { NextResponse, type NextRequest } from "next/server";
-import { authSecret } from "@/lib/runtime-mode";
+import { verifySessionToken, type SessionRole } from "@/lib/session-token";
 
 /**
  * Runs before every page request:
  * 1. Assigns an anonymous visitor id + captures first-touch attribution (UTM, referrer, landing page)
  *    into cookies, so funnel analytics and CRM attribution work without client JS.
- * 2. Optimistic auth gate for /admin and /learn page loads (the real checks happen again in layouts +
- *    actions; server action POSTs pass straight through to those checks).
+ * 2. Auth gate for /admin and /learn page requests, full loads and client-side (RSC) navigations alike. It runs
+ *    the same session check as the pages (lib/session-token.ts), including admin revocation: a client-side
+ *    navigation re-renders only the page segment, not the layout that also checks. The pages check again;
+ *    server action POSTs pass straight through to the actions' own checks.
  */
 
 const YEAR = 60 * 60 * 24 * 365;
 const ATTRIBUTION_TTL = 60 * 60 * 24 * 90;
 
-async function hasValidSession(token: string | undefined, role: "admin" | "student"): Promise<boolean> {
-  if (!token) return false;
-  try {
-    const { payload } = await jwtVerify(token, authSecret(), { algorithms: ["HS256"] });
-    return payload.role === role;
-  } catch {
-    return false;
-  }
+async function hasValidSession(token: string | undefined, role: SessionRole): Promise<boolean> {
+  return (await verifySessionToken(token, role)) !== null;
 }
 
 export async function proxy(request: NextRequest) {

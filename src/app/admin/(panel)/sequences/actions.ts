@@ -21,9 +21,9 @@ import { getDb, schema } from "@/db";
 import { site } from "@/config/site";
 import { aiText } from "@/lib/ai";
 import { assertAdmin } from "@/lib/auth";
-import { processEnrollment } from "@/lib/automations";
+import { processEnrollment, recipientTemplateVars } from "@/lib/automations";
 import { logActivity, upsertContact } from "@/lib/crm";
-import { defaultTemplateVars, emailLayout, fillTemplate, markdownToEmailHtml, sendEmail } from "@/lib/email";
+import { emailBusinessName, emailLayout, fillTemplate, markdownToEmailHtml, sendEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
 import { absoluteUrl, isValidEmail, normalizeEmail } from "@/lib/utils";
@@ -256,8 +256,9 @@ const ContentFields = z.object({
   body: z.string().max(BODY_MAX * 2),
 });
 
-function sampleVars() {
-  return { ...defaultTemplateVars(), firstName: SAMPLE_PERSON.firstName, name: SAMPLE_PERSON.name, email: SAMPLE_PERSON.email };
+/** The sample person's variables, built exactly like a real send's (business name from Settings, escaped body values). */
+async function sampleVars() {
+  return recipientTemplateVars(SAMPLE_PERSON, await emailBusinessName());
 }
 
 /** Renders a step exactly as it will be emailed (sample person, branded layout). */
@@ -265,11 +266,11 @@ export async function previewStepAction(input: { subject: string; body: string }
   await assertAdmin();
   const parsed = ContentFields.safeParse(input);
   if (!parsed.success) return { ok: false, error: "This email is too long to preview." };
-  const vars = sampleVars();
-  const body = parsed.data.body.trim() ? fillTemplate(parsed.data.body, vars) : "_Start writing to see your email here._";
+  const vars = await sampleVars();
+  const body = parsed.data.body.trim() ? fillTemplate(parsed.data.body, vars.body) : "_Start writing to see your email here._";
   return {
     ok: true,
-    subject: fillTemplate(parsed.data.subject, vars),
+    subject: fillTemplate(parsed.data.subject, vars.subject),
     html: emailLayout(markdownToEmailHtml(body), { unsubscribeUrl: absoluteUrl("/unsubscribe/preview") }),
   };
 }
@@ -280,11 +281,11 @@ export async function sendTestStepAction(input: { subject: string; body: string 
   if (!parsed.success || !parsed.data.subject.trim() || !parsed.data.body.trim()) return { ok: false, error: "Add a subject and body before sending a test." };
   const limit = await rateLimit(`admin-test-email:${session.email}`, 10, 600);
   if (!limit.ok) return { ok: false, error: "That's a lot of test emails. Please wait a few minutes." };
-  const vars = sampleVars();
+  const vars = await sampleVars();
   const result = await sendEmail({
     to: session.email,
-    subject: `[Test] ${fillTemplate(parsed.data.subject, vars)}`,
-    markdown: fillTemplate(parsed.data.body, vars),
+    subject: `[Test] ${fillTemplate(parsed.data.subject, vars.subject)}`,
+    markdown: fillTemplate(parsed.data.body, vars.body),
     kind: "test",
   });
   if (result.status === "failed") return { ok: false, error: "The email provider rejected the test. Open the Email Log for details." };

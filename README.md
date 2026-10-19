@@ -60,10 +60,12 @@ Reset the local database with `npm run db:reset-local`.
    | `CRON_SECRET` | yes (scheduled jobs) | Any random string (`openssl rand -base64 32`). Vercel Cron sends it to `/api/cron`; **without it every cron run is refused in production**, so follow-up automation emails, booking reminders and hold/checkout cleanup never run |
    | `ANTHROPIC_API_KEY` | for AI | From [console.anthropic.com](https://console.anthropic.com) |
    | `ANTHROPIC_MODEL` | optional | Defaults to `claude-opus-5-5`; set `claude-sonnet-5-5` or `claude-haiku-5-5` to lower cost |
-   | `AI_DAILY_LIMIT` | optional | Site-wide ceiling on AI chat and tutor replies per day (default `2000`, `0` = none). Past it they answer with the built-in fallback until the next day. Also set a monthly spend limit in the Anthropic console |
-   | `STRIPE_SECRET_KEY` | for payments | Stripe secret key |
+   | `AI_DAILY_LIMIT` | optional | Site-wide ceiling on AI replies in the website chat per day (default `2000`, `0` = none). Past it the chat answers with the built-in fallback until the count resets at midnight UTC. Also set a monthly spend limit in the Anthropic console |
+   | `AI_TUTOR_DAILY_LIMIT` | optional | The same ceiling for the course tutor, counted separately so website chat traffic can never switch off the tutor your students paid for (default `2000`, `0` = none; each student is also limited to 150 questions a day) |
+   | `STRIPE_SECRET_KEY` | yes (to sell) | Stripe secret key. Without it checkout is turned off in production (the built-in test checkout only runs locally and in demo mode) |
    | `STRIPE_WEBHOOK_SECRET` | for payments | From the webhook endpoint below |
-   | `RESEND_API_KEY`, `EMAIL_FROM` | for email | Resend key and a verified sender, e.g. `Principe AI <hello@yourdomain.com>` |
+   | `RESEND_API_KEY`, `EMAIL_FROM` | yes (production) | Resend key and a verified sender, e.g. `Principe AI <hello@yourdomain.com>`. Without it no email is delivered in production: students (paying ones too) can't sign in, and receipts, booking confirmations and your notifications never arrive (locally and in demo mode the login page shows the sign-in link instead) |
+   | `CONTACT_EMAIL` | optional | Public contact address (contact, booking, terms and privacy pages, footer, calendar invites) and the reply-to address of customer emails. Defaults to `principeconsults@gmail.com` |
    | `BUSINESS_TIMEZONE` | optional | Default `America/New_York` (also editable in Admin → Settings) |
    | `CRON_INTERVAL_HOURS` | optional | How often the cron runs, in hours (default `24`). Set `1` if you switch `vercel.json` to an hourly schedule |
    | `DEMO_MODE` | optional | `1` runs a deployment without a database as a throwaway demo (see step 2). Leave unset in production |
@@ -82,8 +84,27 @@ After this update, open **Admin → Courses** and clear the **Compare-at price**
 and *AI Automation Accelerator* (the old seed set $97 / $497 / $797 “was” prices that were never charged). Only show a
 compare-at price you have actually charged.
 
-Also add the `charge.dispute.created` and `charge.dispute.closed` events to your Stripe webhook endpoint (step 4), so
-chargebacks reach the app: a new dispute alerts you, and a lost one marks the order refunded and removes its course access.
+Also add the `checkout.session.async_payment_failed`, `charge.dispute.created` and `charge.dispute.closed` events to your
+Stripe webhook endpoint (step 4), so failed delayed payments and chargebacks reach the app: a failed bank payment marks
+its order failed and tells the buyer, a new dispute alerts you, and a lost one marks the order refunded and removes its
+course access.
+
+This update also tightens production security. Check these **before** you redeploy:
+
+- **Admin password and `AUTH_SECRET` length.** Admin login is now disabled in production unless `ADMIN_PASSWORD` is at
+  least 12 characters and `AUTH_SECRET` at least 16 (the login page says which one is missing). Lengthen them in Vercel
+  first if needed.
+- **You will be signed out once.** Admin sessions are now tied to the current admin login, so every admin session from
+  before the update ends; sign in again. From now on changing `ADMIN_PASSWORD` or `ADMIN_SESSION_VERSION` signs every
+  admin out.
+- **A deployment without a database no longer runs as a demo.** Without `DATABASE_URL` (or `POSTGRES_URL`) a Vercel
+  deployment now refuses to serve pages instead of silently running on in-memory data. Connect a database (step 2), or
+  set `DEMO_MODE=1` if it really is a throwaway demo.
+- **The demo login is withdrawn once a live key is set.** A demo deployment offers `admin@principe.ai` / `demo1234` only
+  while no Resend, Stripe or Anthropic key is configured. If you set any of them, also set `ADMIN_EMAIL`,
+  `ADMIN_PASSWORD` and `AUTH_SECRET`.
+- **AI reply ceilings.** `AI_DAILY_LIMIT` now covers the website chat only and resets at midnight UTC; the course tutor
+  has its own `AI_TUTOR_DAILY_LIMIT` (default `2000`). If you lowered `AI_DAILY_LIMIT` to cap spend, set both.
 
 ### Cron
 
@@ -98,7 +119,8 @@ at the last run before the call (up to 24 hours ahead). You can also trigger it 
 
 ## Customize
 
-- **Brand, contact email, nav**: `src/config/site.ts`
+- **Brand, nav**: `src/config/site.ts` (the public contact email and the reply-to of customer emails: `CONTACT_EMAIL`)
+- **Business name in emails and the AI assistant**: Admin → Settings → Business
 - **Colors and fonts**: `src/app/globals.css`
 - **Courses and lessons**: Admin → Courses (or edit the seed files in `src/db/seed-content/` before first deploy)
 - **Booking types and availability**: Admin → Availability
@@ -122,24 +144,38 @@ at the last run before the call (up to 24 hours ahead). You can also trigger it 
 ### End-to-end tests
 
 The Playwright suite in `tests/e2e/` drives the real site in a browser: every public page, the free-guide funnel, the
-assessment, booking (book, reschedule, cancel), a course purchase through the test checkout and the student portal, the AI
-chat widget, the admin dashboard (contacts, notes, tasks, pipeline, settings, automations, CSV export) and security
-checks (admin-only actions and exports, the cron secret, open redirects). It needs no accounts or keys.
+assessment, booking (book, reschedule, cancel), a paid coaching session through the test checkout (including backing
+out of checkout and paying later from the manage page), a course purchase and the student portal, the AI course tutor
+(enrolled and not-enrolled students), the AI chat widget, the admin dashboard (contacts, notes, tasks, pipeline,
+settings, automations, CSV export) and security checks (admin-only actions and exports, the cron secret, open
+redirects). It needs no accounts or keys.
 
 ```bash
 npx playwright install chromium   # once
 npx next build                    # the suite runs against a production build
-npm run test:e2e                  # starts `next start` on port 3400 and runs every test
+npm run test:e2e                  # starts the servers below and runs every test
 ```
 
-- Playwright starts the server itself with a throwaway in-memory database, the built-in test checkout, simulated email
-  and the non-AI fallback answers, and switches off any `DATABASE_URL`, Resend, Stripe or Anthropic key set in your
-  shell. It also sets its own admin login, `AUTH_SECRET` and `CRON_SECRET` (see `tests/e2e/env.ts`).
+- Playwright starts the app itself (`next start` on port 3400) with a throwaway in-memory database, the built-in test
+  checkout, simulated email and the non-AI fallback answers, and switches off any `DATABASE_URL`, Resend, Stripe or
+  Anthropic key set in your shell. It also sets its own admin login, `AUTH_SECRET` and `CRON_SECRET` (see `tests/e2e/env.ts`).
 - Emails are read from **Admin → Email Log**. One-time sign-in links are stored redacted there, so student sign-in
   uses the link the login page shows when no email provider is configured.
-- Two projects run: `desktop`, and `mobile` (390px wide) for the tests tagged `@mobile`. Run one with
-  `npm run test:e2e -- --project=desktop`, or one file with `npm run test:e2e -- tests/e2e/booking.spec.ts`.
+- Three projects run:
+  - `desktop`: every spec except the AI one, on the server without an AI key (so replies are the non-AI fallbacks).
+  - `mobile` (390px wide): the tests tagged `@mobile`.
+  - `ai`: `tests/e2e/ai-claude.spec.ts`, which runs the **real Claude code path** (`src/lib/ai.ts` and the Anthropic
+    SDK) against a mock Anthropic API. Playwright also starts `tests/e2e/mock-anthropic.ts` (a small Node server for
+    `POST /v1/messages` on port 3402, streaming and non-streaming, that records every request) and a second app server
+    on port 3401 with `ANTHROPIC_API_KEY=test-key` and `ANTHROPIC_BASE_URL` pointing at the mock. The tests check the
+    chat widget, the assessment plan (and that it's stored), Admin → contact **Summarize** and an automation's
+    **Draft with AI**, plus what the app sent: the model (`claude-opus-5-5`, or your `ANTHROPIC_MODEL`), `effort`,
+    no sampling parameters or thinking budget, the server-side fallback beta and the cached system prompt.
+- Run one project with `npm run test:e2e -- --project=desktop` (only the servers that project needs are started), or
+  one file with `npm run test:e2e -- tests/e2e/booking.spec.ts`. Ports: `E2E_PORT`, `E2E_AI_PORT`, `E2E_MOCK_ANTHROPIC_PORT`.
 - To use a Chromium that's already installed, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chrome`.
-- To test a server that's already running, set `E2E_BASE_URL` (plus `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD` and
-  `E2E_CRON_SECRET` for that server). The suite creates contacts, bookings and orders, so never point it at production.
+- To test a server that's already running, set `E2E_BASE_URL` (plus `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`,
+  `E2E_CRON_SECRET` and `E2E_AUTH_SECRET` for that server; tests that need a secret you leave out are skipped). The `ai`
+  project is then skipped unless you also set `E2E_AI_BASE_URL` (a server whose `ANTHROPIC_BASE_URL` is the mock) and
+  `E2E_MOCK_ANTHROPIC_URL`. The suite creates contacts, bookings and orders, so never point it at production.
 - On failure, traces and screenshots are saved in `test-results/` (`npx playwright show-trace <trace.zip>`).

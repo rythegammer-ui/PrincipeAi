@@ -1,6 +1,9 @@
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { eq, like } from "drizzle-orm";
 import { SignJWT } from "jose";
+import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // next/headers outside a request: an in-memory cookie jar and a settable client IP.
@@ -20,11 +23,13 @@ import { hasRedactedSignInLink, redactSignInLinks, sendEmail } from "@/lib/email
 import { ipRateLimitKey } from "@/lib/rate-limit";
 import { adminCredentials, authSecret, dbMode, isDemoMode, missingDatabaseError } from "@/lib/runtime-mode";
 import { safeRedirectPath } from "@/lib/utils";
+import { proxy } from "@/proxy";
 
 const CLEARED = [
   "DATABASE_URL",
   "POSTGRES_URL",
   "VERCEL",
+  "VERCEL_ENV",
   "DEMO_MODE",
   "AUTH_SECRET",
   "ADMIN_EMAIL",
@@ -70,6 +75,20 @@ describe("runtime mode", () => {
     vi.stubEnv("DATABASE_URL", "");
     vi.stubEnv("VERCEL", "");
     expect(missingDatabaseError()).toBeNull();
+  });
+
+  it("keeps the local file database in `next dev` after `vercel env pull` (VERCEL=1 in .env.local)", () => {
+    vi.stubEnv("PGLITE_DIR", "");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("NODE_ENV", "development");
+    expect(dbMode()).toBe("pglite-file");
+    expect(missingDatabaseError()).toBeNull();
+    // A local production build run with the pulled variables (VERCEL_ENV=development) isn't a deployment either.
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL_ENV", "development");
+    expect(missingDatabaseError()).toBeNull();
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect(missingDatabaseError()).toMatch(/DATABASE_URL/);
   });
 
   it("uses the public demo signing key only while the dashboard is on the public demo login", () => {
@@ -168,6 +187,74 @@ describe("admin sessions", () => {
     const alerts = await db.select().from(schema.emailLog).where(like(schema.emailLog.subject, "%Repeated failed admin sign-ins%"));
     expect(alerts).toHaveLength(1);
     expect(alerts[0].kind).toBe("notification");
+  });
+});
+
+/** A client-side (RSC) navigation to an admin page with the (panel) layout already mounted: it skips the layout. */
+function adminNavigation(pathname: string, adminCookie?: string): NextRequest {
+  const tree = ["", { children: ["admin", { children: ["(panel)", { children: ["__PAGE__", {}] }] }] }, null, null];
+  const headers = new Headers({ RSC: "1", "Next-Router-State-Tree": encodeURIComponent(JSON.stringify(tree)) });
+  if (adminCookie) headers.set("cookie", `${ADMIN_COOKIE}=${adminCookie}`);
+  return new NextRequest(`http://localhost:3000${pathname}`, { headers });
+}
+
+const passedThrough = (res: Response) => res.headers.get("x-middleware-next") === "1";
+const toLogin = (res: Response) => res.status === 307 && new URL(res.headers.get("location") ?? "", "http://x").pathname === "/admin/login";
+
+describe("proxy auth gate", () => {
+  it("applies admin revocation to in-app navigations, which skip the panel layout's check", async () => {
+    mocks.jar.clear();
+    await startAdminSession("admin@principe.ai");
+    const token = mocks.jar.get(ADMIN_COOKIE)!;
+    expect(passedThrough(await proxy(adminNavigation("/admin/contacts", token)))).toBe(true);
+    expect(toLogin(await proxy(adminNavigation("/admin/contacts")))).toBe(true);
+
+    // Revoked by ADMIN_SESSION_VERSION, by a new password, or by a new admin email.
+    vi.stubEnv("ADMIN_SESSION_VERSION", "2");
+    expect(toLogin(await proxy(adminNavigation("/admin/contacts", token)))).toBe(true);
+    vi.stubEnv("ADMIN_SESSION_VERSION", "");
+    vi.stubEnv("ADMIN_PASSWORD", "a-brand-new-password");
+    expect(toLogin(await proxy(adminNavigation("/admin/emails", token)))).toBe(true);
+    vi.stubEnv("ADMIN_PASSWORD", "");
+    vi.stubEnv("ADMIN_EMAIL", "someone-else@example.com");
+    expect(toLogin(await proxy(adminNavigation("/admin/settings", token)))).toBe(true);
+    vi.stubEnv("ADMIN_EMAIL", "");
+    expect(passedThrough(await proxy(adminNavigation("/admin/settings", token)))).toBe(true);
+  });
+
+  it("refuses validly signed admin cookies from before credential versions (no `cv` claim) and student cookies", async () => {
+    const legacy = await new SignJWT({ role: "admin", email: "admin@principe.ai" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject("admin")
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(authSecret());
+    expect(toLogin(await proxy(adminNavigation("/admin/contacts", legacy)))).toBe(true);
+
+    await startStudentSession({ id: "4f7c8f5e-0000-4000-8000-000000000002", email: "student@example.com" });
+    const student = mocks.jar.get(STUDENT_COOKIE)!;
+    expect(toLogin(await proxy(adminNavigation("/admin/contacts", student)))).toBe(true);
+    const learn = new NextRequest("http://localhost:3000/learn", { headers: { cookie: `${STUDENT_COOKIE}=${student}` } });
+    expect(passedThrough(await proxy(learn))).toBe(true);
+  });
+});
+
+describe("admin pages", () => {
+  const panel = path.resolve(import.meta.dirname, "../../src/app/admin/(panel)");
+  const pages = (readdirSync(panel, { recursive: true }) as string[]).filter((f) => path.basename(f) === "page.tsx");
+
+  it("each check the admin session before anything else (layouts don't re-run on client navigation)", () => {
+    expect(pages.length).toBeGreaterThan(20);
+    for (const page of pages) {
+      const src = readFileSync(path.join(panel, page), "utf8");
+      for (const fn of ["export default async function", "export async function generateMetadata"]) {
+        const at = src.indexOf(fn);
+        if (fn.startsWith("export default")) expect(at, `${page} must export an async page`).toBeGreaterThanOrEqual(0);
+        if (at < 0) continue;
+        const firstAwait = src.slice(at).match(/\bawait [\w.]+\(/)?.[0];
+        expect(firstAwait, `${page}: ${fn} must start with \`await requireAdmin()\``).toBe("await requireAdmin(");
+      }
+    }
   });
 });
 

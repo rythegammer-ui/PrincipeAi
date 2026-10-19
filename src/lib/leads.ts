@@ -15,8 +15,10 @@ import {
 import { getDb, schema } from "@/db";
 import type { Contact } from "@/db/schema";
 import { captureLead, contactForVisitor, createTask } from "@/lib/crm";
-import { escapeMarkdown } from "@/lib/email";
+import { emailBusinessName, escapeMarkdown, sendEmail } from "@/lib/email";
+import { rateLimit } from "@/lib/rate-limit";
 import { getVisitorContext } from "@/lib/tracking";
+import { absoluteUrl, firstName, normalizeEmail } from "@/lib/utils";
 
 /**
  * Lead capture for the marketing funnels: free Starter Kit opt-in, consulting application
@@ -163,9 +165,63 @@ export { escapeMarkdown };
 /* Captures                                                            */
 /* ------------------------------------------------------------------ */
 
-/** Starter Kit opt-in → contact (stage "new", tagged starter-kit) + welcome sequence + owner alert. */
-export async function captureGuideOptIn(input: OptInInput, path: string): Promise<Contact> {
+/** Ids of this address's enrollments in the Starter Kit ("lead_magnet") email sequences. */
+async function kitEnrollmentIds(email: string): Promise<Set<string>> {
+  const db = await getDb();
+  const e = schema.sequenceEnrollments;
+  const rows = await db
+    .select({ id: e.id })
+    .from(e)
+    .innerJoin(schema.emailSequences, eq(schema.emailSequences.id, e.sequenceId))
+    .innerJoin(schema.contacts, eq(schema.contacts.id, e.contactId))
+    .where(and(eq(schema.contacts.email, email), eq(schema.emailSequences.trigger, "lead_magnet")));
+  return new Set(rows.map((r) => r.id));
+}
+
+/** Kit link emails one address can be sent per hour (the opt-in form is public, so it mustn't be usable to spam someone). */
+const GUIDE_LINK_EMAILS_PER_HOUR = 2;
+
+/**
+ * Emails the Starter Kit link on its own (not a marketing email: the visitor just asked for it), for opt-ins the
+ * welcome sequence won't email: a repeat opt-in, an unsubscribed contact, or the sequence paused. True when sent.
+ */
+async function sendGuideLinkEmail(contact: Contact, name: string): Promise<boolean> {
+  const limit = await rateLimit(`guide-link:${contact.email}`, GUIDE_LINK_EMAILS_PER_HOUR, 60 * 60);
+  if (!limit.ok) return false;
+  const businessName = await emailBusinessName();
+  const { status } = await sendEmail({
+    to: contact.email,
+    subject: "Here's your link to the AI Starter Kit",
+    preheader: "Open your kit and come back to it anytime.",
+    markdown: [
+      `Hi ${escapeMarkdown(firstName(name, contact.email))},`,
+      "",
+      "Here's the link to your AI Starter Kit, as requested:",
+      "",
+      `**[Open your AI Starter Kit](${absoluteUrl("/guide?src=email")})**`,
+      "",
+      "Bookmark it so you can come back to the plan and the prompt library anytime.",
+      "",
+      "If you didn't ask for this, you can safely ignore this email.",
+      "",
+      `Talk soon,  \nThe ${escapeMarkdown(businessName)} team`,
+    ].join("\n"),
+    kind: "guide_link",
+    contactId: contact.id,
+  });
+  return status === "sent" || status === "simulated";
+}
+
+/**
+ * Starter Kit opt-in → contact (stage "new", tagged starter-kit) + welcome sequence + owner alert. The welcome
+ * sequence's first email carries the kit link, but it only starts once per contact; when it doesn't start (or
+ * won't email them), the link is emailed on its own. `emailed` says whether a link email went out or is queued,
+ * so the confirmation can promise one only then.
+ */
+export async function captureGuideOptIn(input: OptInInput, path: string): Promise<{ contact: Contact; emailed: boolean }> {
   const interest = optionLabel(INTEREST_OPTIONS, input.interest);
+  const email = normalizeEmail(input.email);
+  const before = await kitEnrollmentIds(email);
   const { contact } = await captureLead({
     email: input.email,
     name: input.name,
@@ -185,11 +241,23 @@ export async function captureGuideOptIn(input: OptInInput, path: string): Promis
         `- **Wants AI help with:** ${interest}`,
         `- **Signed up on:** ${path}`,
         "",
-        "They've been enrolled in the Starter Kit welcome sequence.",
+        before.size > 0
+          ? "They'd opted in before, so the welcome sequence wasn't restarted."
+          : "They've been enrolled in the Starter Kit welcome sequence.",
       ].join("\n"),
     },
   });
-  return contact;
+
+  let emailed = false;
+  try {
+    // A new enrollment for a subscribed contact means the welcome sequence sends (or has queued) the kit email.
+    const after = await kitEnrollmentIds(email);
+    const sequenceStarted = !contact.unsubscribed && [...after].some((id) => !before.has(id));
+    emailed = sequenceStarted || (await sendGuideLinkEmail(contact, input.name));
+  } catch (err) {
+    console.error("[leads] Starter Kit link email failed", err);
+  }
+  return { contact, emailed };
 }
 
 /** Plain-text summary of an application (CRM timeline + task description). */
@@ -279,6 +347,95 @@ export async function captureApplication(input: ApplicationInput): Promise<Conta
     origin: "application",
   });
   return contact;
+}
+
+/* ------------------------------------------------------------------ */
+/* Discovery-call prefill                                              */
+/* ------------------------------------------------------------------ */
+
+/** Booking page the consulting application sends applicants to next. */
+export const DISCOVERY_MEETING_SLUG = "implementation-discovery";
+
+/**
+ * Short-lived httpOnly cookie that carries the application's answers into the discovery booking form, so applicants
+ * don't type them twice. Not the URL: page-view tracking stores query strings.
+ */
+export const DISCOVERY_PREFILL_COOKIE = "pa_discovery_prefill";
+const DISCOVERY_PREFILL_MAX_AGE = 60 * 60;
+/** Booking answers are capped at this many characters (the booking form and its server action use the same limit). */
+const PREFILL_ANSWER_MAX = 2000;
+/** Browsers drop a cookie whose name + value pass 4 KB; Next.js URI-encodes the value, so budget the encoded size. */
+const PREFILL_COOKIE_MAX_BYTES = 3800;
+
+/** Answers to the discovery call's questions, keyed by question id. */
+export type DiscoveryPrefill = { company: string; project: string; budget: string };
+
+/** Cuts text to `max` UTF-16 units without leaving half of a surrogate pair (an emoji) at the end. */
+function cut(text: string, max: number): string {
+  return text.length <= max ? text : text.slice(0, max).replace(/[\uD800-\uDBFF]$/, "");
+}
+
+export function discoveryPrefillFrom(input: ApplicationInput): DiscoveryPrefill {
+  return {
+    company: cut([input.company, input.website].filter(Boolean).join(" · "), PREFILL_ANSWER_MAX),
+    project: cut(input.goals, PREFILL_ANSWER_MAX),
+    budget: optionLabel(BUDGET_OPTIONS, input.budget),
+  };
+}
+
+/** The cookie value (JSON), with the project text shortened as needed so the encoded cookie fits. */
+export function encodeDiscoveryPrefill(prefill: DiscoveryPrefill): string {
+  let project = prefill.project;
+  for (;;) {
+    const value = JSON.stringify({ ...prefill, project });
+    if (!project || DISCOVERY_PREFILL_COOKIE.length + 1 + encodeURIComponent(value).length <= PREFILL_COOKIE_MAX_BYTES) return value;
+    project = cut(project, Math.floor(project.length * 0.9)).trimEnd();
+  }
+}
+
+/** Remembers an application's answers (for an hour, on /book only) to prefill the discovery booking form. */
+export async function rememberDiscoveryPrefill(input: ApplicationInput): Promise<void> {
+  const jar = await cookies();
+  jar.set(DISCOVERY_PREFILL_COOKIE, encodeDiscoveryPrefill(discoveryPrefillFrom(input)), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/book",
+    maxAge: DISCOVERY_PREFILL_MAX_AGE,
+  });
+}
+
+/**
+ * Booking-form values (`q_<question id>` → answer) from a prefill cookie value, for the meeting type's own questions
+ * only. Empty for any other meeting type and for a missing or malformed cookie.
+ */
+export function parseDiscoveryPrefill(
+  raw: string | null | undefined,
+  meetingType: { slug: string; questions: readonly { id: string }[] },
+): Record<string, string> {
+  if (!raw || meetingType.slug !== DISCOVERY_MEETING_SLUG) return {};
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const out: Record<string, string> = {};
+  for (const q of meetingType.questions) {
+    const value = Object.hasOwn(data, q.id) ? (data as Record<string, unknown>)[q.id] : undefined;
+    if (typeof value !== "string") continue;
+    const answer = cut(value.trim(), PREFILL_ANSWER_MAX);
+    if (answer) out[`q_${q.id}`] = answer;
+  }
+  return out;
+}
+
+/** The discovery booking form's prefilled answers for this browser (see `parseDiscoveryPrefill`). */
+export async function readDiscoveryPrefill(meetingType: { slug: string; questions: readonly { id: string }[] }): Promise<Record<string, string>> {
+  if (meetingType.slug !== DISCOVERY_MEETING_SLUG) return {};
+  const jar = await cookies();
+  return parseDiscoveryPrefill(jar.get(DISCOVERY_PREFILL_COOKIE)?.value, meetingType);
 }
 
 /** Contact form → contact + timeline entry + owner alert + a reply-to task. */

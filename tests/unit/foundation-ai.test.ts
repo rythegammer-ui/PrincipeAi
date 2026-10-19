@@ -44,7 +44,7 @@ vi.mock("@anthropic-ai/sdk", () => {
   return { default: Anthropic };
 });
 
-const { aiStream, aiText, REFUSAL_MESSAGE } = await import("@/lib/ai");
+const { aiBudgetKey, aiDailyLimit, aiStream, aiText, claimAiReply, DEFAULT_AI_DAILY_LIMIT, REFUSAL_MESSAGE } = await import("@/lib/ai");
 
 async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
   return new Response(stream).text();
@@ -128,5 +128,46 @@ describe("aiStream", () => {
     const onComplete = vi.fn();
     expect(await readAll(aiStream({ ...base, onComplete }))).toBe("FALLBACK PLAN");
     expect(onComplete).toHaveBeenCalledWith("FALLBACK PLAN", { source: "fallback", refused: false, interrupted: false });
+  });
+});
+
+describe("claimAiReply", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keeps separate daily budgets for the public chat and the course tutor", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2031-03-04T12:00:00Z"));
+    vi.stubEnv("AI_DAILY_LIMIT", "2");
+    vi.stubEnv("AI_TUTOR_DAILY_LIMIT", "1");
+    expect(await claimAiReply("chat")).toBe(true);
+    expect(await claimAiReply("chat")).toBe(true);
+    expect(await claimAiReply("chat")).toBe(false);
+    // Anonymous chat traffic that spent its ceiling leaves the paid tutor's budget untouched.
+    expect(await claimAiReply("tutor")).toBe(true);
+    expect(await claimAiReply("tutor")).toBe(false);
+  });
+
+  it("resets at midnight UTC, not 24 hours after the first reply", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.stubEnv("AI_DAILY_LIMIT", "1");
+    vi.setSystemTime(new Date("2031-05-06T23:58:00Z"));
+    expect(await claimAiReply("chat")).toBe(true);
+    expect(await claimAiReply("chat")).toBe(false);
+    vi.setSystemTime(new Date("2031-05-07T00:00:05Z"));
+    expect(await claimAiReply("chat")).toBe(true);
+    expect(aiBudgetKey("chat", new Date("2031-05-07T00:00:05Z"))).toBe("ai:chat:day:2031-05-07");
+  });
+
+  it("reads each budget's limit from its own variable (0 = no ceiling, invalid = default)", async () => {
+    expect(aiDailyLimit("chat")).toBe(DEFAULT_AI_DAILY_LIMIT);
+    vi.stubEnv("AI_DAILY_LIMIT", "50");
+    vi.stubEnv("AI_TUTOR_DAILY_LIMIT", "abc");
+    expect(aiDailyLimit("chat")).toBe(50);
+    expect(aiDailyLimit("tutor")).toBe(DEFAULT_AI_DAILY_LIMIT);
+    vi.stubEnv("AI_TUTOR_DAILY_LIMIT", "0");
+    expect(aiDailyLimit("tutor")).toBe(0);
+    for (let i = 0; i < 3; i++) expect(await claimAiReply("tutor")).toBe(true);
   });
 });

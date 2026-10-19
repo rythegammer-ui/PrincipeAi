@@ -13,7 +13,7 @@ import {
   jsonError,
   publicMessages,
 } from "@/app/api/chat/conversation-store";
-import { aiStream, claimPublicAiReply, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
+import { aiStream, claimAiReply, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
 import { buildTutorSystemPrompt, toModelMessages } from "@/lib/ai-prompts";
 import { getStudent } from "@/lib/auth";
 import { buildTutorFallback } from "@/lib/chat-fallback";
@@ -99,8 +99,8 @@ export async function POST(request: NextRequest) {
   }
   const conversationId = conversation.id;
 
-  // Site-wide daily ceiling on AI spend: past it, the reply is the non-AI fallback.
-  const useAi = await claimPublicAiReply();
+  // The tutor's own daily ceiling on AI spend (separate from the public chat's): past it, the reply is the non-AI fallback.
+  const useAi = await claimAiReply("tutor");
   const stream = aiStream({
     system: buildTutorSystemPrompt({ course, lesson }),
     messages: toModelMessages(history, CONTEXT_MESSAGES),

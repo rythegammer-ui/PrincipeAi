@@ -18,7 +18,7 @@ import {
   serializeSubmission,
 } from "@/lib/assessment";
 import { captureLead, createTask } from "@/lib/crm";
-import { sendEmail } from "@/lib/email";
+import { emailBusinessName, sendEmail } from "@/lib/email";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { absoluteUrl } from "@/lib/utils";
 import { loadOffer, loadStrategyCall, withPrefill } from "./data";
@@ -163,7 +163,11 @@ async function sendResultsEmail(input: {
   resultsUrl: string;
 }): Promise<void> {
   try {
-    const [offer, call] = await Promise.all([loadOffer(input.result.recommendation), loadStrategyCall()]);
+    const [offer, call, businessName] = await Promise.all([
+      loadOffer(input.result.recommendation),
+      loadStrategyCall(),
+      emailBusinessName(),
+    ]);
     const person = { name: input.name, email: input.email };
     const message = buildResultsEmail({
       name: input.name,
@@ -172,6 +176,7 @@ async function sendResultsEmail(input: {
       offerTitle: offer.title,
       offerUrl: absoluteUrl(withPrefill(offer.href, person)),
       strategyCallUrl: absoluteUrl(withPrefill(call.href, person)),
+      businessName,
     });
     await sendEmail({
       to: input.email,

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
-import { aiStream, claimPublicAiReply, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
+import { aiStream, claimAiReply, REFUSAL_MESSAGE, textStreamResponse } from "@/lib/ai";
 import { buildAssistantSystemPrompt, chatEmailNote, toModelMessages, withNoteOnLastUserMessage } from "@/lib/ai-prompts";
 import { buildChatFallback, extractEmail, extractOwnEmail } from "@/lib/chat-fallback";
 import { captureLead, contactForVisitor, logActivity, recomputeScore } from "@/lib/crm";
@@ -88,8 +88,9 @@ export async function POST(request: NextRequest) {
   const conversationId = conversation.id;
 
   // Lead capture: only an address the visitor offers as their own ("my email is …", the follow-up form, just the
-  // address, or a short message ending with it). Others — e.g. "write a reminder to my client jane@acme.com" — must
-  // never become leads or notifications; the reply then says the address wasn't passed on.
+  // address, or a short request to be contacted ending with it). Others — e.g. "write a reminder to my client
+  // jane@acme.com", "Can you check jane@acme.com" — must never become leads or notifications; the reply then says the
+  // address wasn't passed on and asks for "My email is …".
   const email = extractOwnEmail(message);
   let emailCaptured: string | null = null;
   if (email) {
@@ -142,8 +143,8 @@ export async function POST(request: NextRequest) {
   const emailInMessage = email ?? extractEmail(message);
   const emailCaptureFailed = email !== null && emailCaptured === null;
 
-  // Site-wide daily ceiling on AI spend: past it, the reply is the non-AI fallback.
-  const useAi = await claimPublicAiReply();
+  // Site-wide daily ceiling on AI spend for the public chat: past it, the reply is the non-AI fallback.
+  const useAi = await claimAiReply("chat");
   const stream = aiStream({
     system: buildAssistantSystemPrompt({ settings, courses, meetingTypes }),
     // Tell the model whether an address really reached the team (only the visitor's own, and not when rate limited

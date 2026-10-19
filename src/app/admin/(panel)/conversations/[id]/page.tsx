@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Markdown } from "@/components/ui/markdown";
 import { Avatar, EmptyState } from "@/components/ui/misc";
 import type { ChatMessage } from "@/db/schema";
+import { requireAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { formatDateTime } from "@/lib/utils";
 import { DeleteConversationButton } from "../_components/delete-conversation-button";
@@ -80,6 +81,7 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 }
 
 export default async function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin();
   const { id } = await params;
   if (!UUID.test(id)) notFound();
   const [data, settings] = await Promise.all([getConversationDetail(id), getSettings()]);

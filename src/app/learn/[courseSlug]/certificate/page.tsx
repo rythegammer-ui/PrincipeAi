@@ -31,7 +31,13 @@ export default async function CertificatePage({ params }: { params: Promise<{ co
     .from(schema.lessonProgress)
     .innerJoin(schema.lessons, eq(schema.lessons.id, schema.lessonProgress.lessonId))
     .where(and(eq(schema.lessonProgress.userId, student.id), eq(schema.lessons.courseId, course.id)));
-  const recipient = student.name?.trim() || student.email;
+  // The name on the certificate: the student's own, else the name on their CRM contact, else their email.
+  let recipient = student.name?.trim();
+  if (!recipient && student.contactId) {
+    const [contact] = await db.select({ name: schema.contacts.name }).from(schema.contacts).where(eq(schema.contacts.id, student.contactId)).limit(1);
+    recipient = contact?.name?.trim();
+  }
+  recipient ||= student.email;
   const completedOn = completedAt ?? new Date();
   const tz = await getBusinessTimezone();
 

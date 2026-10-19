@@ -22,6 +22,8 @@ type Props = {
   /** Unpaid booking with a live hold: offer "Complete payment" and "Choose a different time". */
   canPay?: boolean;
   priceLabel?: string;
+  /** What the invitee paid for this confirmed session (cancelling it is refunded on request). */
+  paidLabel?: string;
   initialMonth: string;
   minMonth: string;
   maxMonth: string;
@@ -40,7 +42,7 @@ export function ManageBooking(props: Props) {
   const [mode, setMode] = useState<"idle" | "reschedule" | "cancel">("idle");
 
   if (mode === "reschedule") return <Reschedule {...props} onClose={() => setMode("idle")} />;
-  if (mode === "cancel") return <Cancel token={props.token} onClose={() => setMode("idle")} />;
+  if (mode === "cancel") return <Cancel token={props.token} paidLabel={props.paidLabel} onClose={() => setMode("idle")} />;
 
   if (props.canPay) {
     return (
@@ -143,7 +145,7 @@ function Reschedule({ token, meetingTypeSlug, durationMin, bookingTimezone, curr
   );
 }
 
-function Cancel({ token, onClose }: { token: string; onClose: () => void }) {
+function Cancel({ token, paidLabel, onClose }: { token: string; paidLabel?: string; onClose: () => void }) {
   const [state, dispatch, pending] = useActionState<ManageBookingState, FormData>(cancelBookingAction, {});
   return (
     <section aria-labelledby="cancel-heading" className="rounded-2xl border border-red-200 bg-white p-5 shadow-soft sm:p-8">
@@ -151,6 +153,11 @@ function Cancel({ token, onClose }: { token: string; onClose: () => void }) {
         Cancel this booking?
       </h2>
       <p className="mt-1 text-sm text-zinc-600">We&apos;ll let the team know and send you a cancellation for your calendar. You can always book again later.</p>
+      {paidLabel && (
+        <p className="mt-2 text-sm text-zinc-600">
+          This was a paid session ({paidLabel}). If you&apos;d like a refund, just reply to your cancellation email.
+        </p>
+      )}
       {state.error && (
         <Alert tone="error" className="mt-4">
           {state.error}

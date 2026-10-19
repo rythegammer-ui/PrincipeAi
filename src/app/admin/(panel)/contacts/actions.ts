@@ -152,6 +152,10 @@ export async function updateContactProfileAction(_prev: FormState, formData: For
 
   const [updated] = await db.update(c).set(parsed.data).where(eq(c.id, id.data)).returning({ id: c.id });
   if (!updated) return { error: "This contact no longer exists." };
+  // Keep the student account's name (portal greeting, completion certificates) in step with a corrected name.
+  if (parsed.data.name) {
+    await db.update(schema.users).set({ name: parsed.data.name }).where(eq(schema.users.contactId, id.data));
+  }
   await recomputeScore(id.data);
   revalidateCrm();
   return { ok: true, message: "Profile saved." };

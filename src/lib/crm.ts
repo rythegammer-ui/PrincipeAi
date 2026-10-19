@@ -220,6 +220,8 @@ export async function captureLead(input: CaptureLeadInput): Promise<{ contact: C
         await notifyOwner(
           input.notify.subject,
           `${input.notify.markdown}\n\n[Open contact in CRM](${absoluteUrl(`/admin/contacts/${contact.id}`)})`,
+          // Replying from the inbox answers the lead (their address is validated and normalized by upsertContact).
+          { replyTo: contact.email },
         );
       }
     } catch (err) {

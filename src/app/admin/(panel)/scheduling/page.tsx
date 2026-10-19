@@ -13,6 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
+import { requireAdmin } from "@/lib/auth";
+import { checkoutMode } from "@/lib/payments";
 import { formatDuration, getBusinessTimezone, loadAvailabilityConfig } from "@/lib/scheduling";
 import { cn, formatMoney } from "@/lib/utils";
 import { removeBlockedDateAction } from "./actions";
@@ -20,6 +22,7 @@ import { removeBlockedDateAction } from "./actions";
 export const metadata: Metadata = { title: "Availability" };
 
 export default async function SchedulingPage({ searchParams }: { searchParams: Promise<{ saved?: string; deleted?: string }> }) {
+  await requireAdmin();
   const { saved, deleted } = await searchParams;
   const db = await getDb();
   const [types, bookingCounts, config, blocked, timezone] = await Promise.all([
@@ -34,6 +37,8 @@ export default async function SchedulingPage({ searchParams }: { searchParams: P
   const todayKey = now.toISODate() ?? "";
   const upcomingBlocked = blocked.filter((b) => b.date >= todayKey);
   const pastBlocked = blocked.length - upcomingBlocked.length;
+  // Paid meeting types can't be booked online without a way to pay: the booking page asks visitors to get in touch.
+  const paymentsOff = checkoutMode() === "disabled";
 
   return (
     <div>
@@ -116,6 +121,14 @@ export default async function SchedulingPage({ searchParams }: { searchParams: P
                               </p>
                               {t.active && !t.locationUrl?.trim() && (
                                 <p className="mt-1 text-xs text-amber-700">No meeting link: invitees are told you&apos;ll email one before each call.</p>
+                              )}
+                              {t.active && t.priceCents > 0 && paymentsOff && (
+                                <p className="mt-1 text-xs text-amber-700">
+                                  Online payment is off, so visitors are asked to contact you instead of booking this online.{" "}
+                                  <Link href="/admin/settings" className="font-medium underline-offset-2 hover:underline">
+                                    Set up payments
+                                  </Link>
+                                </p>
                               )}
                             </div>
                           </div>

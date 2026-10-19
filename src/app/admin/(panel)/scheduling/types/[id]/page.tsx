@@ -8,12 +8,14 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/misc";
 import { getDb, schema } from "@/db";
+import { requireAdmin } from "@/lib/auth";
 import { isUuid } from "@/lib/booking-service";
 import { isBuiltInMeetingSlug } from "@/lib/scheduling";
 
 export const metadata: Metadata = { title: "Edit meeting type" };
 
 export default async function EditMeetingTypePage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin();
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const db = await getDb();

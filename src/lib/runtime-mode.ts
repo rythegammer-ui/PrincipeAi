@@ -15,7 +15,7 @@ export function databaseUrl(): string | undefined {
  *                    Vercel for a demo deployment), and the `next build` phase
  *
  * A Vercel deployment with no database URL and no DEMO_MODE=1 is NOT silently turned into a demo:
- * `missingDatabaseError()` reports it and getDb() refuses to start.
+ * `missingDatabaseError()` reports it and getDb() refuses to start (local `next dev` keeps the file database).
  */
 export function dbMode(): DbMode {
   if (databaseUrl()) return "postgres";
@@ -31,11 +31,20 @@ export function isDemoMode(): boolean {
 }
 
 /**
+ * True inside a deployed Vercel runtime. `vercel env pull` writes VERCEL=1 (and VERCEL_ENV=development) into
+ * .env.local, which `next dev` loads too, so VERCEL alone doesn't mean "deployed".
+ */
+function deployedOnVercel(): boolean {
+  return Boolean(process.env.VERCEL) && process.env.NODE_ENV === "production" && process.env.VERCEL_ENV !== "development";
+}
+
+/**
  * Why no database can be used, or null. On Vercel the embedded file database can't work (read-only,
  * per-instance filesystem), so a deployment without DATABASE_URL must opt in to the demo explicitly.
+ * Local development keeps the embedded file database even with Vercel's variables pulled in.
  */
 export function missingDatabaseError(): string | null {
-  if (dbMode() === "pglite-file" && process.env.VERCEL) {
+  if (dbMode() === "pglite-file" && deployedOnVercel()) {
     return "No database configured: set DATABASE_URL (or POSTGRES_URL), or DEMO_MODE=1 for a throwaway demo.";
   }
   return null;

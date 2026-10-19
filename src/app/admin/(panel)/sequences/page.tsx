@@ -10,6 +10,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
+import { requireAdmin } from "@/lib/auth";
 import { integrations } from "@/lib/integrations";
 
 export const metadata: Metadata = { title: "Email Automations" };
@@ -39,6 +40,7 @@ async function listSequences() {
 const fmt = (v: number) => v.toLocaleString("en-US");
 
 export default async function SequencesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireAdmin();
   const sp = await searchParams;
   const [rows, status] = await Promise.all([listSequences(), Promise.resolve(integrations())]);
   const totals = rows.reduce((t, r) => ({ inProgress: t.inProgress + r.inProgress, sent: t.sent + r.sent }), { inProgress: 0, sent: 0 });

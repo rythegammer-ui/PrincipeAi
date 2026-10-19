@@ -10,6 +10,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getDb, schema } from "@/db";
+import { requireAdmin } from "@/lib/auth";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { formatDateTime } from "@/lib/utils";
 
@@ -28,11 +29,13 @@ async function loadEmail(id: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  await requireAdmin();
   const row = await loadEmail((await params).id);
   return { title: row ? row.email.subject : "Email not found" };
 }
 
 export default async function EmailDetailPage({ params }: Props) {
+  await requireAdmin();
   const row = await loadEmail((await params).id);
   if (!row) notFound();
   const { email, contactName } = row;

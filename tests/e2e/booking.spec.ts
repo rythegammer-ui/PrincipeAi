@@ -1,25 +1,4 @@
-import type { Locator } from "@playwright/test";
-import { expect, openLoggedEmail, test, uniqueEmail } from "./helpers";
-
-/**
- * Picks the first open time in a slot picker (the calendar opens on the first day with open times; when the
- * current month is fully booked it offers the next one). Returns the chosen time's label, e.g. "9:00 AM".
- */
-async function pickFirstAvailableTime(scope: Locator): Promise<string> {
-  const times = scope.getByRole("list", { name: /^Available times on / });
-  await expect(async () => {
-    if (!(await times.isVisible())) {
-      const nextMonth = scope.getByRole("button", { name: /^Check / });
-      if (await nextMonth.isVisible()) await nextMonth.click({ timeout: 1_000 });
-    }
-    await expect(times).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 30_000 });
-  // The booking's current time (when rescheduling) is listed but disabled.
-  const slot = times.getByRole("button", { disabled: false }).first();
-  const label = ((await slot.textContent()) ?? "").trim();
-  await slot.click();
-  return label;
-}
+import { expect, openLoggedEmail, pickFirstAvailableTime, test, uniqueEmail } from "./helpers";
 
 test.describe("booking a free strategy call", () => {
   test("book → confirmation → manage → reschedule → cancel, visible in admin", async ({ page, adminPage }) => {
@@ -89,5 +68,50 @@ test.describe("booking a free strategy call", () => {
     const cancelledRow = adminPage.getByRole("listitem").filter({ has: adminPage.getByRole("link", { name }) });
     await expect(cancelledRow).toBeVisible();
     await expect(cancelledRow).toContainText(/Cancelled/);
+  });
+});
+
+test.describe("booking the implementation discovery call", () => {
+  test("a consulting application prefills the booking form once", async ({ page, adminPage }) => {
+    const email = uniqueEmail("apply");
+    const goals = `Answer common customer questions on our website and book appointments (${Date.now().toString(36)}).`;
+
+    await page.goto("/consulting");
+    const application = page.locator("form").filter({ has: page.getByLabel("Work email") });
+    await application.getByLabel("Your name").fill("Carl Consult");
+    await application.getByLabel("Work email").fill(email);
+    await application.getByLabel("Company").fill("Consult Co");
+    await application.getByLabel("Website").fill("consultco.example.com");
+    await application.getByLabel("Team size").selectOption({ label: "2–10 people" });
+    await application.getByLabel("Ideal timeline").selectOption({ label: "In the next 1–3 months" });
+    await application.getByLabel("What would you like AI to automate or build?").fill(goals);
+    await application.getByLabel("Budget range for this project").selectOption({ label: "$5,000 – $15,000" });
+    await application.getByRole("button", { name: "Continue to pick a call time" }).click();
+
+    // The booking form carries the application's answers.
+    await expect(page).toHaveURL(/\/book\/implementation-discovery\?/);
+    const main = page.getByRole("main");
+    await pickFirstAvailableTime(main);
+    await expect(page.getByLabel("Your name")).toHaveValue("Carl Consult");
+    await expect(page.getByLabel("Email")).toHaveValue(email);
+    await expect(page.getByLabel("Company name and website")).toHaveValue("Consult Co · https://consultco.example.com");
+    await expect(page.getByLabel("What would you like to automate or build with AI?")).toHaveValue(goals);
+    await expect(page.getByLabel("Rough budget range")).toHaveValue("$5,000 – $15,000");
+    await page.getByRole("button", { name: "Confirm booking" }).click();
+    await expect(page).toHaveURL(/\/book\/confirmed\/[0-9a-f]{32}/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/You.re booked, Carl!/);
+
+    // Admin → Bookings shows the answers with the booking.
+    await adminPage.goto("/admin/bookings");
+    const row = adminPage.getByRole("listitem").filter({ hasText: email });
+    await expect(row).toContainText("AI Implementation Discovery Call");
+    await row.getByText(/^Intake answers/).click();
+    await expect(row.getByText(goals)).toBeVisible();
+
+    // The answers are used once: the next discovery booking from this browser starts blank.
+    await page.goto("/book/implementation-discovery");
+    await pickFirstAvailableTime(main);
+    await expect(page.getByLabel("Company name and website")).toHaveValue("");
+    await expect(page.getByLabel("What would you like to automate or build with AI?")).toHaveValue("");
   });
 });

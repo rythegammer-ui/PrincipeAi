@@ -27,9 +27,13 @@ function pickTripwire(courses: CourseSummary[]): CourseSummary | null {
   );
 }
 
-export default async function FreeGuideThankYouPage() {
-  const [courses, strategyCall] = await Promise.all([listPublishedCourses(), getActiveMeetingType("ai-strategy-call")]);
+type Search = { sent?: string | string[] };
+
+export default async function FreeGuideThankYouPage({ searchParams }: { searchParams: Promise<Search> }) {
+  const [courses, strategyCall, sp] = await Promise.all([listPublishedCourses(), getActiveMeetingType("ai-strategy-call"), searchParams]);
   const course = pickTripwire(courses);
+  // The opt-in adds ?sent=0 when no link email went out (e.g. several requests for the same address in an hour).
+  const emailed = (Array.isArray(sp.sent) ? sp.sent[0] : sp.sent) !== "0";
 
   return (
     <>
@@ -52,10 +56,12 @@ export default async function FreeGuideThankYouPage() {
               Open the Starter Kit <ArrowRight aria-hidden />
             </TrackedLink>
           </div>
-          <p className="mt-6 inline-flex items-center gap-2 text-sm text-zinc-500">
-            <MailCheck className="size-4 text-brand-500" aria-hidden />
-            We&apos;re also sending a link to your inbox. If you don&apos;t see it, check your promotions or spam folder.
-          </p>
+          {emailed && (
+            <p className="mt-6 inline-flex items-center gap-2 text-sm text-zinc-500">
+              <MailCheck className="size-4 text-brand-500" aria-hidden />
+              We&apos;re also sending a link to your inbox. If you don&apos;t see it, check your promotions or spam folder.
+            </p>
+          )}
         </div>
       </section>
 

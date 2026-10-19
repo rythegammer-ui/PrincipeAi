@@ -17,7 +17,7 @@ import { Avatar, EmptyState } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
 import type { EnrollmentStatus } from "@/db/schema";
-import { getAdminSession } from "@/lib/auth";
+import { getAdminSession, requireAdmin } from "@/lib/auth";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 
@@ -34,11 +34,13 @@ async function loadSequence(id: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  await requireAdmin();
   const seq = await loadSequence((await params).id);
   return { title: seq ? seq.name : "Automation not found" };
 }
 
 export default async function SequencePage({ params, searchParams }: Props) {
+  await requireAdmin();
   const { id } = await params;
   const sp = await searchParams;
   const seq = await loadSequence(id);

@@ -5,17 +5,21 @@ import { categoryAnchor, kitStats, kitSummary } from "@/components/marketing/sta
 import type { StarterKit } from "@/content/starter-kit";
 import { getDb, schema } from "@/db";
 import {
+  DISCOVERY_PREFILL_COOKIE,
   applicationSchema,
   captureApplication,
   captureContactMessage,
   captureGuideOptIn,
   contactSchema,
+  discoveryPrefillFrom,
+  encodeDiscoveryPrefill,
   escapeMarkdown,
   fieldErrorsOf,
   formatApplication,
   isSpam,
   normalizeWebsite,
   optInSchema,
+  parseDiscoveryPrefill,
   readFields,
 } from "@/lib/leads";
 
@@ -142,9 +146,68 @@ describe("starter kit helpers", () => {
   });
 });
 
+describe("discovery-call prefill", () => {
+  const discovery = {
+    slug: "implementation-discovery",
+    questions: [
+      { id: "company", label: "Company name and website", required: true },
+      { id: "project", label: "What would you like to automate or build with AI?", required: true },
+      { id: "budget", label: "Rough budget range", required: false },
+    ],
+  };
+
+  it("maps an application to the discovery call's answers", () => {
+    const prefill = discoveryPrefillFrom(applicationSchema.parse(validApplication));
+    expect(prefill).toEqual({
+      company: "Acme Bakery · https://acmebakery.com",
+      project: validApplication.goals,
+      budget: "$5,000 – $15,000",
+    });
+    expect(discoveryPrefillFrom(applicationSchema.parse({ ...validApplication, website: "" })).company).toBe("Acme Bakery");
+  });
+
+  it("round-trips through the cookie into booking-form values", () => {
+    const raw = encodeDiscoveryPrefill(discoveryPrefillFrom(applicationSchema.parse(validApplication)));
+    expect(parseDiscoveryPrefill(raw, discovery)).toEqual({
+      q_company: "Acme Bakery · https://acmebakery.com",
+      q_project: validApplication.goals,
+      q_budget: "$5,000 – $15,000",
+    });
+  });
+
+  it("keeps the encoded cookie under the browser size limit", () => {
+    const long = { company: "Ünïcödé Café 🍰".repeat(10), project: "Automatisierung für unsere Bäckerei 🥐, bitte! ".repeat(60), budget: "Not sure yet" };
+    const raw = encodeDiscoveryPrefill(long);
+    expect(DISCOVERY_PREFILL_COOKIE.length + 1 + encodeURIComponent(raw).length).toBeLessThanOrEqual(3800);
+    const parsed = parseDiscoveryPrefill(raw, discovery);
+    expect(parsed.q_company).toBe(long.company);
+    expect(parsed.q_budget).toBe("Not sure yet");
+    expect(parsed.q_project.length).toBeGreaterThan(200);
+    expect(long.project.startsWith(parsed.q_project)).toBe(true);
+    // Never ends on half an emoji.
+    expect(() => encodeURIComponent(parsed.q_project)).not.toThrow();
+    // Short answers are left alone.
+    expect(JSON.parse(encodeDiscoveryPrefill({ company: "A", project: "B", budget: "C" }))).toEqual({ company: "A", project: "B", budget: "C" });
+  });
+
+  it("only fills the discovery call's own questions and ignores bad cookies", () => {
+    const raw = JSON.stringify({ company: "  Acme  ", project: "x".repeat(2500), budget: 5, notes: "extra" });
+    expect(parseDiscoveryPrefill(raw, discovery)).toEqual({ q_company: "Acme", q_project: "x".repeat(2000) });
+    // The owner edited the questions: only matching ids are prefilled.
+    expect(parseDiscoveryPrefill(raw, { ...discovery, questions: [{ id: "company" }, { id: "agenda" }] })).toEqual({ q_company: "Acme" });
+    expect(parseDiscoveryPrefill(raw, { ...discovery, slug: "ai-strategy-call" })).toEqual({});
+    // Inherited properties are never read.
+    expect(parseDiscoveryPrefill(raw, { ...discovery, questions: [{ id: "constructor" }, { id: "toString" }] })).toEqual({});
+    for (const bad of [undefined, null, "", "not json", "[1,2]", "null", '"str"', "42"]) {
+      expect(parseDiscoveryPrefill(bad, discovery)).toEqual({});
+    }
+  });
+});
+
 describe("lead captures (PGlite)", () => {
   it("captures a Starter Kit opt-in as a new, tagged lead with a welcome email", async () => {
-    const contact = await captureGuideOptIn({ name: "Olivia Optin", email: "olivia.leads@example.com", interest: "business" }, "/free-guide");
+    const { contact, emailed } = await captureGuideOptIn({ name: "Olivia Optin", email: "olivia.leads@example.com", interest: "business" }, "/free-guide");
+    expect(emailed).toBe(true);
     expect(contact.stage).toBe("new");
     expect(contact.source).toBe("lead_magnet");
     expect(contact.segment).toBe("business");
@@ -157,6 +220,60 @@ describe("lead captures (PGlite)", () => {
     // (The "optin" funnel event needs a request's visitor cookie, so it's covered by the dev-server flow, not here.)
     const emails = await db.select().from(schema.emailLog);
     expect(emails.some((e) => e.subject === "[Principe AI] New lead: Olivia Optin downloaded the Starter Kit")).toBe(true);
+    // The welcome sequence's first step carries the kit link, so no separate link email.
+    const own = emails.filter((e) => e.to === "olivia.leads@example.com");
+    expect(own.map((e) => e.subject)).toEqual(["Your AI Starter Kit is here, Olivia"]);
+  });
+
+  it("emails the kit link again on a repeat opt-in, at most twice an hour per address", async () => {
+    const email = "nina.repeat@example.com";
+    const optIn = () => captureGuideOptIn({ name: "Nina Name", email, interest: "life" }, "/free-guide");
+    expect((await optIn()).emailed).toBe(true);
+    expect((await optIn()).emailed).toBe(true);
+    expect((await optIn()).emailed).toBe(true);
+    // Third repeat inside the hour: no email, so the confirmation mustn't promise one.
+    expect((await optIn()).emailed).toBe(false);
+
+    const db = await getDb();
+    const sent = await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, email));
+    expect(sent.filter((e) => e.kind === "sequence").map((e) => e.subject)).toEqual(["Your AI Starter Kit is here, Nina"]);
+    const links = sent.filter((e) => e.kind === "guide_link");
+    expect(links).toHaveLength(2);
+    expect(links[0].subject).toBe("Here's your link to the AI Starter Kit");
+    expect(links[0].html).toContain("/guide?src=email");
+    expect(links[0].html).not.toContain("/unsubscribe/");
+    // The owner is told the sequence wasn't restarted.
+    const alerts = await db.select().from(schema.emailLog).where(eq(schema.emailLog.subject, "[Principe AI] New lead: Nina Name downloaded the Starter Kit"));
+    expect(alerts.some((e) => e.html.includes("the welcome sequence wasn"))).toBe(true);
+  });
+
+  it("emails the kit link to an unsubscribed contact who asks for it again", async () => {
+    const email = "dana.unsub@example.com";
+    const first = await captureGuideOptIn({ name: "Dana Customer", email, interest: "business" }, "/free-guide");
+    const db = await getDb();
+    await db.update(schema.contacts).set({ unsubscribed: true }).where(eq(schema.contacts.id, first.contact.id));
+    const again = await captureGuideOptIn({ name: "Dana Customer", email, interest: "business" }, "/guide");
+    expect(again.emailed).toBe(true);
+    const links = await db.select().from(schema.emailLog).where(and(eq(schema.emailLog.to, email), eq(schema.emailLog.kind, "guide_link")));
+    expect(links).toHaveLength(1);
+    expect(links[0].status).toBe("simulated");
+  });
+
+  it("emails the kit link when the welcome sequence is paused", async () => {
+    const db = await getDb();
+    const seq = schema.emailSequences;
+    const active = await db.select({ id: seq.id }).from(seq).where(and(eq(seq.trigger, "lead_magnet"), eq(seq.active, true)));
+    expect(active.length).toBeGreaterThan(0);
+    await db.update(seq).set({ active: false }).where(eq(seq.trigger, "lead_magnet"));
+    try {
+      const email = "paula.paused@example.com";
+      const { emailed } = await captureGuideOptIn({ name: "Paula", email, interest: "both" }, "/");
+      expect(emailed).toBe(true);
+      const sent = await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, email));
+      expect(sent.map((e) => e.kind)).toEqual(["guide_link"]);
+    } finally {
+      for (const { id } of active) await db.update(seq).set({ active: true }).where(eq(seq.id, id));
+    }
   });
 
   it("captures an application as a qualified lead with a deal value and a high-priority task", async () => {

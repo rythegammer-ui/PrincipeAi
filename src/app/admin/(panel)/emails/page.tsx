@@ -13,6 +13,7 @@ import { Input, Select } from "@/components/ui/form";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
+import { requireAdmin } from "@/lib/auth";
 import { integrations } from "@/lib/integrations";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { formatDateTime, truncate } from "@/lib/utils";
@@ -60,6 +61,7 @@ async function recentStatusCounts() {
 }
 
 export default async function EmailLogPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireAdmin();
   const sp = await searchParams;
   const filters = Filters.parse({ q: first(sp.q) ?? "", status: first(sp.status), kind: first(sp.kind), page: first(sp.page) ?? 1 });
   const conds: SQL[] = [];

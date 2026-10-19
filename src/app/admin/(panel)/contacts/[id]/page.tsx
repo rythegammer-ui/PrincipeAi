@@ -56,6 +56,7 @@ import { Avatar } from "@/components/ui/misc";
 import { getDb, schema } from "@/db";
 import type { OrderStatus } from "@/db/schema";
 import { aiEnabled } from "@/lib/ai";
+import { requireAdmin } from "@/lib/auth";
 import { getContact360 } from "@/lib/crm-queries";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { cn, formatDate, formatDateTime, formatMoney, timeAgo } from "@/lib/utils";
@@ -67,6 +68,7 @@ const ENROLLMENT_TONES: Record<string, BadgeTone> = { active: "brand", completed
 type Params = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) return { title: "Contact" };
   const db = await getDb();
@@ -95,6 +97,7 @@ function Empty({ children }: { children: ReactNode }) {
 }
 
 export default async function ContactPage({ params }: Params) {
+  await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const [data, tz] = await Promise.all([getContact360(id), getBusinessTimezone()]);

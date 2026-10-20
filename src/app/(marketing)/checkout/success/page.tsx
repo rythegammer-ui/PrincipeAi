@@ -16,7 +16,7 @@ import { OrderSummary } from "../order-summary";
 
 export const metadata: Metadata = { title: "Thank you", robots: { index: false, follow: false } };
 
-type Search = { order?: string; session_id?: string };
+type Search = { order?: string | string[]; session_id?: string | string[] };
 
 /**
  * A Stripe Payment Link sends buyers back with only `session_id` (no order id): finds the order for that session,
@@ -45,15 +45,16 @@ async function orderIdForSession(sessionId: string): Promise<string | null> {
  * checkout — so course access always goes through the magic link emailed to that address.
  */
 async function resolve(search: Search): Promise<{ details: OrderDetails | null; proof: boolean; processing: boolean }> {
-  let orderId = search.order;
-  if (!orderId && search.session_id && isStripeSessionId(search.session_id) && search.session_id.length <= 200) {
-    orderId = (await orderIdForSession(search.session_id)) ?? undefined;
+  // A repeated query parameter arrives as an array: treat it as missing.
+  let orderId = typeof search.order === "string" ? search.order : undefined;
+  const sessionId = typeof search.session_id === "string" ? search.session_id : undefined;
+  if (!orderId && sessionId && isStripeSessionId(sessionId) && sessionId.length <= 200) {
+    orderId = (await orderIdForSession(sessionId)) ?? undefined;
   }
   if (!orderId || !z.uuid().safeParse(orderId).success) return { details: null, proof: false, processing: false };
   let details = await getOrderDetails(orderId);
   if (!details) return { details: null, proof: false, processing: false };
 
-  const sessionId = search.session_id;
   const proof = Boolean(sessionId && details.order.stripeSessionId && details.order.stripeSessionId === sessionId);
   let processing = false;
 
@@ -119,6 +120,7 @@ function CheckEmail({ loginHref }: { loginHref?: string }) {
 export default async function CheckoutSuccessPage({ searchParams }: { searchParams: Promise<Search> }) {
   const search = await searchParams;
   const { details, proof, processing } = await resolve(search);
+  const sessionId = typeof search.session_id === "string" ? search.session_id : undefined;
   if (!details) return <CheckEmail />;
 
   const { order, course, booking } = details;
@@ -190,7 +192,7 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
         <div className="mt-6">
           <OrderSummary details={details} />
         </div>
-        <ButtonLink href={`/checkout/success?order=${order.id}${search.session_id ? `&session_id=${encodeURIComponent(search.session_id)}` : ""}`} variant="outline" className="mt-6">
+        <ButtonLink href={`/checkout/success?order=${order.id}${sessionId ? `&session_id=${encodeURIComponent(sessionId)}` : ""}`} variant="outline" className="mt-6">
           Refresh status
         </ButtonLink>
       </Shell>
@@ -217,8 +219,8 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
             <ButtonLink href={learnHref} size="lg" className="w-full sm:w-auto">
               Start learning <ArrowRight aria-hidden />
             </ButtonLink>
-          ) : canResend && search.session_id ? (
-            <AccessLinkForm orderId={order.id} sessionId={search.session_id} loginHref={loginHref} />
+          ) : canResend && sessionId ? (
+            <AccessLinkForm orderId={order.id} sessionId={sessionId} loginHref={loginHref} />
           ) : (
             <ButtonLink href={loginHref} size="lg" className="w-full sm:w-auto">
               Sign in to start learning <ArrowRight aria-hidden />

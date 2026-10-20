@@ -14,8 +14,11 @@ export type PaymentLinkRow = {
   title: string;
   slug: string;
   price: string;
-  /** ready: selling at the current price · stale: made for an old price (sync) · missing: not created yet · off: unpublished or free. */
-  status: "ready" | "stale" | "missing" | "off";
+  /**
+   * ready: selling at the current price · stale: made for an old price (sync) · missing: not created yet ·
+   * off: unpublished or free · still-selling: unpublished or free, but its link hasn't been switched off yet (sync).
+   */
+  status: "ready" | "stale" | "missing" | "off" | "still-selling";
   stripeUrl: string | null;
   /** Absolute /buy/<slug> link: works anywhere and always points at the current Stripe link. */
   buyUrl: string;
@@ -26,6 +29,7 @@ const STATUS: Record<PaymentLinkRow["status"], { label: string; tone: "green" | 
   stale: { label: "Price changed: sync", tone: "amber" },
   missing: { label: "Not created yet", tone: "amber" },
   off: { label: "Not for sale", tone: "neutral" },
+  "still-selling": { label: "Still on sale in Stripe: sync", tone: "amber" },
 };
 
 /** Admin → Courses: each paid course's Stripe payment link, the email tag for it, and a "Sync with Stripe" button. */
@@ -34,11 +38,14 @@ export function PaymentLinksPanel({
   stripe,
   mode,
   webhook,
+  syncErrors,
 }: {
   rows: PaymentLinkRow[];
   stripe: "connected" | "missing" | "blocked";
   mode: "test" | "live";
   webhook: "env" | "auto" | "missing";
+  /** Problems from the last sync (on deploy, after a course change, or the daily check). */
+  syncErrors: readonly string[];
 }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<PaymentLinkSyncState | null>(null);
@@ -60,7 +67,7 @@ export function PaymentLinksPanel({
         {stripe === "connected" && (
           <Button
             variant="outline"
-            className="shrink-0 self-start"
+            className="h-11 shrink-0 self-start sm:h-10"
             disabled={pending}
             onClick={() =>
               start(async () => {
@@ -77,6 +84,9 @@ export function PaymentLinksPanel({
         )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <p role="status" aria-live="polite" className="sr-only">
+          {pending ? "Syncing with Stripe…" : result ? (result.ok ? result.message : result.error) : ""}
+        </p>
         {stripe === "missing" && (
           <Alert tone="info">Connect Stripe (Settings → Integrations) to create payment links. Until then, the buy links below open each course&apos;s sales page.</Alert>
         )}
@@ -86,6 +96,15 @@ export function PaymentLinksPanel({
             Stripe isn&apos;t sending payment notifications to this site yet. Click <strong>Sync with Stripe</strong> to set that up automatically, or add a
             webhook in Stripe (Settings → Integrations shows how). Until then, buyers are enrolled when they return to the site after paying, or by the
             daily check.
+          </Alert>
+        )}
+        {!result && syncErrors.length > 0 && (
+          <Alert tone="warning" title="The last sync with Stripe had problems. Click Sync with Stripe to try again.">
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs break-all">
+              {syncErrors.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
           </Alert>
         )}
         {result && (
@@ -117,18 +136,18 @@ export function PaymentLinksPanel({
                     <p className="mt-1 font-mono text-xs break-all text-zinc-500">{row.status === "off" ? `/courses/${row.slug}` : tag}</p>
                     {row.stripeUrl && row.status === "ready" && <p className="mt-0.5 font-mono text-xs break-all text-zinc-400">{row.stripeUrl}</p>}
                   </div>
-                  {row.status !== "off" && (
+                  {row.status !== "off" && row.status !== "still-selling" && (
                     <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <CopyButton text={tag} label="Copy email tag" srLabel={`Copy email tag for ${row.title}`} />
-                      <CopyButton text={row.buyUrl} label="Copy buy link" srLabel={`Copy buy link for ${row.title}`} />
+                      <CopyButton text={tag} label="Copy email tag" className="min-h-11 sm:min-h-9" srLabel={`Copy email tag for ${row.title}`} />
+                      <CopyButton text={row.buyUrl} label="Copy buy link" className="min-h-11 sm:min-h-9" srLabel={`Copy buy link for ${row.title}`} />
                       {row.stripeUrl && row.status === "ready" && (
                         <>
-                          <CopyButton text={row.stripeUrl} label="Copy Stripe link" srLabel={`Copy Stripe payment link for ${row.title}`} />
+                          <CopyButton text={row.stripeUrl} label="Copy Stripe link" className="min-h-11 sm:min-h-9" srLabel={`Copy Stripe payment link for ${row.title}`} />
                           <a
                             href={row.stripeUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-zinc-700 ring-1 ring-zinc-200 ring-inset hover:bg-brand-50 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+                            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 sm:min-h-9 text-xs font-semibold text-zinc-700 ring-1 ring-zinc-200 ring-inset hover:bg-brand-50 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
                           >
                             <ExternalLink className="size-3.5" aria-hidden /> Open
                             <span className="sr-only"> Stripe checkout for {row.title} (opens in a new tab)</span>

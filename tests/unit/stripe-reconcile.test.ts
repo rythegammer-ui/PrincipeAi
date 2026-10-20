@@ -176,10 +176,16 @@ describe("Stripe checkout reconcile job", () => {
       metadata: { source: "principe-payment-link", courseId, courseSlug: "ai-essentials" },
       customer_details: { email, name: "Link Buyer" },
     };
-    // Our own checkouts and other people's payment links are left alone.
+    // Our own checkouts and other people's payment links are left alone, and a payment refunded in full isn't delivered.
     const ownCheckout = { ...linkSession, id: `cs_test_${randomUUID().replace(/-/g, "")}`, payment_link: null, metadata: {} };
     const foreignLink = { ...linkSession, id: `cs_test_${randomUUID().replace(/-/g, "")}`, metadata: {} };
-    mocks.listed.push(linkSession, ownCheckout, foreignLink);
+    const refunded = {
+      ...linkSession,
+      id: `cs_test_${randomUUID().replace(/-/g, "")}`,
+      customer_details: { email: `refunded-${email}`, name: "Refunded Buyer" },
+      payment_intent: { id: `pi_${randomUUID().slice(0, 12)}`, object: "payment_intent", status: "succeeded", latest_charge: { id: "ch_refunded", object: "charge", refunded: true } },
+    };
+    mocks.listed.push(linkSession, ownCheckout, foreignLink, refunded);
 
     for (let run = 0; run < 2; run++) {
       const summary = await runScheduledJobs();
@@ -188,7 +194,7 @@ describe("Stripe checkout reconcile job", () => {
     const orders = await db.select().from(schema.orders).where(eq(schema.orders.email, email));
     expect(orders).toHaveLength(1);
     expect(orders[0]).toMatchObject({ status: "paid", stripeSessionId: sessionId, courseId, isTest: true, amountCents: priceCents });
-    for (const other of [ownCheckout, foreignLink]) {
+    for (const other of [ownCheckout, foreignLink, refunded]) {
       expect(await db.select().from(schema.orders).where(eq(schema.orders.stripeSessionId, other.id))).toHaveLength(0);
     }
     mocks.listed.length = 0;

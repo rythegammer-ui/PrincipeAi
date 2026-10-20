@@ -14,7 +14,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { site } from "@/config/site";
 import { getDb, schema } from "@/db";
 import { requireAdmin } from "@/lib/auth";
-import { linkMatchesCourse, readPaymentLinks, readWebhookSecret } from "@/lib/payment-links";
+import { linkMatchesCourse, readLastSync, readPaymentLinks, readWebhookSecret } from "@/lib/payment-links";
 import { livePaymentsBlocked } from "@/lib/payments";
 import { getStripe, stripeTestMode } from "@/lib/stripe";
 import { absoluteUrl, formatMoney } from "@/lib/utils";
@@ -67,11 +67,19 @@ async function loadPaymentLinks(courses: (typeof schema.courses.$inferSelect)[])
   const db = await getDb();
   const mode = stripeTestMode() ? "test" : "live";
   const stripe = livePaymentsBlocked() ? "blocked" : getStripe() ? "connected" : "missing";
-  const [links, storedWebhook] = await Promise.all([readPaymentLinks(db, mode), readWebhookSecret(db, mode)]);
+  const [links, storedWebhook, lastSync] = await Promise.all([readPaymentLinks(db, mode), readWebhookSecret(db, mode), readLastSync(db)]);
   const rows: PaymentLinkRow[] = courses.map((course) => {
     const link = links.get(course.id);
     const forSale = course.published && course.priceCents > 0;
-    const status: PaymentLinkRow["status"] = !forSale ? "off" : linkMatchesCourse(link, course, site.currency) ? "ready" : link ? "stale" : "missing";
+    const status: PaymentLinkRow["status"] = !forSale
+      ? link?.active
+        ? "still-selling"
+        : "off"
+      : linkMatchesCourse(link, course, site.currency)
+        ? "ready"
+        : link
+          ? "stale"
+          : "missing";
     return {
       courseId: course.id,
       title: course.title,
@@ -83,7 +91,8 @@ async function loadPaymentLinks(courses: (typeof schema.courses.$inferSelect)[])
     };
   });
   const webhook = process.env.STRIPE_WEBHOOK_SECRET?.trim() ? "env" : storedWebhook ? "auto" : "missing";
-  return { rows, stripe, mode, webhook } as const;
+  const syncErrors = lastSync && lastSync.mode === mode ? lastSync.errors : [];
+  return { rows, stripe, mode, webhook, syncErrors } as const;
 }
 
 export default async function AdminCoursesPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {

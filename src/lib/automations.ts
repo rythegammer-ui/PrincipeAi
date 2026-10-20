@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, count, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { SequenceTrigger } from "@/db/schema";
+import { sequenceCopyUpgrades } from "@/db/seed-content/sequences";
 import { buyLinkPattern, defaultTemplateVars, emailBusinessName, escapeMarkdown, fillTemplate, sendEmail, type TemplateVars } from "@/lib/email";
 import { firstName } from "@/lib/utils";
 
@@ -27,6 +28,44 @@ export function recipientTemplateVars(
   };
   const body: TemplateVars = { ...subject, name: escapeMarkdown(fullName), email: escapeMarkdown(person.email), businessName: escapeMarkdown(businessName) };
   return { subject, body };
+}
+
+/** Settings row listing the copy upgrades already applied, so each runs once and an owner's later edit is never undone. */
+export const COPY_UPGRADES_KEY = "seedCopyUpgradesApplied";
+
+/**
+ * Brings default email copy seeded before a feature existed up to date (e.g. course buy links): see
+ * `sequenceCopyUpgrades` in seed-content/sequences.ts. Each upgrade runs once, and only on steps where the owner
+ * hasn't rewritten that paragraph. Runs at the start of the scheduled automations job, i.e. only on code that can
+ * render the new copy, before any of it is sent. Returns how many steps changed.
+ */
+export async function upgradeSequenceCopy(): Promise<number> {
+  const db = await getDb();
+  const [row] = await db.select({ value: schema.settings.value }).from(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY)).limit(1);
+  const applied = new Set(Array.isArray(row?.value) ? (row.value as unknown[]).filter((v): v is string => typeof v === "string") : []);
+  const pending = sequenceCopyUpgrades.filter((u) => !applied.has(u.id));
+  if (pending.length === 0) return 0;
+  let changed = 0;
+  for (const u of pending) {
+    const steps = await db
+      .select({ id: schema.sequenceSteps.id, body: schema.sequenceSteps.body })
+      .from(schema.sequenceSteps)
+      .innerJoin(schema.emailSequences, eq(schema.emailSequences.id, schema.sequenceSteps.sequenceId))
+      .where(and(eq(schema.emailSequences.name, u.sequence), eq(schema.sequenceSteps.subject, u.subject)));
+    for (const step of steps) {
+      // Already has the new copy (a database seeded after it was written), or the owner rewrote the paragraph.
+      if (!step.body.includes(u.from) || step.body.includes(u.to)) continue;
+      await db.update(schema.sequenceSteps).set({ body: step.body.replace(u.from, () => u.to) }).where(eq(schema.sequenceSteps.id, step.id));
+      changed++;
+    }
+    applied.add(u.id);
+  }
+  const value = [...applied];
+  await db
+    .insert(schema.settings)
+    .values({ key: COPY_UPGRADES_KEY, value, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: schema.settings.key, set: { value, updatedAt: new Date() } });
+  return changed;
 }
 
 /**

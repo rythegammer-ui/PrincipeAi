@@ -161,7 +161,8 @@ export function EmailComposer({
           </SubmitButton>
           <p className="text-xs text-zinc-500">
             Sent from your business address and logged on the timeline. <code className="font-mono">{"{{firstName}}"}</code> and{" "}
-            <code className="font-mono">{"{{buy_link:course-slug}}"}</code> (a checkout link for that course) are filled in for this contact.
+            <code className="font-mono">{"{{buy_link:course-slug}}"}</code> (a checkout link for that course) are filled in for this contact when it&apos;s
+            sent.
           </p>
         </div>
       </form>

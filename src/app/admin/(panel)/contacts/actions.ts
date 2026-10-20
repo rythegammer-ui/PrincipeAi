@@ -342,10 +342,12 @@ export async function sendContactEmailAction(_prev: FormState, formData: FormDat
   const [contact] = await db.select({ id: c.id, email: c.email, name: c.name }).from(c).where(eq(c.id, id)).limit(1);
   if (!contact) return { error: "This contact no longer exists.", values };
 
-  // Same {{placeholders}} as automation emails, e.g. {{firstName}} or {{buy_link:<course-slug>}}.
+  // Same {{placeholders}} as automation emails, e.g. {{firstName}} or {{buy_link:<course-slug>}}. Anything else in
+  // double braces (say, a prompt template quoted from a lesson) is sent as typed.
   const vars = recipientTemplateVars(contact, await emailBusinessName());
-  const filledSubject = fillTemplate(subject, vars.subject).replace(/\s+/g, " ").trim() || subject;
-  const filledBody = fillTemplate(body, vars.body);
+  const filledSubject = fillTemplate(subject, vars.subject, false, true).replace(/\s+/g, " ").trim();
+  const filledBody = fillTemplate(body, vars.body, false, true);
+  if (!filledSubject) return { error: "The subject is empty once its placeholders are filled in.", fieldErrors: { subject: "Add a subject line." }, values };
   const result = await sendEmail({ to: contact.email, subject: filledSubject, markdown: filledBody, kind: "manual", contactId: contact.id });
   if (result.status === "failed") {
     revalidateCrm();

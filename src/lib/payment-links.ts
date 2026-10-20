@@ -11,10 +11,15 @@
  * The sync also creates the Stripe webhook endpoint when STRIPE_WEBHOOK_SECRET isn't set, and keeps its signing
  * secret in `settings` (`stripeWebhook:<mode>`), since Stripe only reveals a secret when the endpoint is created.
  *
+ * Every object it manages is stamped with this database's install id (`metadata.install`). Another database using
+ * the same Stripe account (a local copy, a preview with its own database) only ever touches its own objects, and
+ * the webhook ignores checkouts from links it didn't make.
+ *
  * No "server-only": the build script imports this. Callers pass the database and the Stripe client.
  * OWNER: courses & payments.
  */
-import { asc, eq, like } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, asc, eq, like, lt, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import Stripe from "stripe";
 import { z } from "zod";
@@ -79,6 +84,33 @@ const StoredWebhookSchema = z.object({
   createdAt: z.string(),
 });
 type StoredWebhook = z.infer<typeof StoredWebhookSchema>;
+
+const INSTALL_KEY = "stripeInstallId";
+const LAST_SYNC_KEY = "stripePaymentLinkSync:last";
+
+/** This database's random install id (created on first use), stamped on the Stripe objects it manages. */
+export async function stripeInstallId(db: DB): Promise<string> {
+  const read = async () => {
+    const [row] = await db.select({ value: schema.settings.value }).from(schema.settings).where(eq(schema.settings.key, INSTALL_KEY)).limit(1);
+    return typeof row?.value === "string" && row.value ? row.value : null;
+  };
+  const existing = await read();
+  if (existing) return existing;
+  await db.insert(schema.settings).values({ key: INSTALL_KEY, value: randomUUID(), updatedAt: new Date() }).onConflictDoNothing();
+  const created = await read();
+  if (!created) throw new Error("Couldn't record this site's Stripe install id");
+  return created;
+}
+
+const LastSyncSchema = z.object({ at: z.string(), mode: z.enum(["test", "live"]), errors: z.array(z.string()) });
+export type LastPaymentLinkSync = z.infer<typeof LastSyncSchema>;
+
+/** When the last sync ran and what went wrong, if anything (shown in Admin → Courses). */
+export async function readLastSync(db: DB): Promise<LastPaymentLinkSync | null> {
+  const [row] = await db.select({ value: schema.settings.value }).from(schema.settings).where(eq(schema.settings.key, LAST_SYNC_KEY)).limit(1);
+  const parsed = LastSyncSchema.safeParse(row?.value);
+  return parsed.success ? parsed.data : null;
+}
 
 async function upsertSetting(db: DB, key: string, value: unknown) {
   await db
@@ -161,10 +193,11 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function ensureProduct(stripe: Stripe, course: SyncCourse, siteUrl: string): Promise<string> {
+async function ensureProduct(stripe: Stripe, course: SyncCourse, siteUrl: string, install: string): Promise<string> {
   const id = productIdFor(course.id);
   const description = course.subtitle.trim();
   const url = `${siteUrl}/courses/${course.slug}`;
+  const metadata = { source: PAYMENT_LINK_SOURCE, install, courseId: course.id, courseSlug: course.slug };
   let product: Stripe.Product | null = null;
   try {
     product = await stripe.products.retrieve(id);
@@ -172,23 +205,24 @@ async function ensureProduct(stripe: Stripe, course: SyncCourse, siteUrl: string
     if (!isMissing(err)) throw err;
   }
   if (!product) {
-    const created = await stripe.products.create({
-      id,
-      name: course.title,
-      ...(description ? { description } : {}),
-      url,
-      metadata: { source: PAYMENT_LINK_SOURCE, courseId: course.id, courseSlug: course.slug },
-    });
-    return created.id;
+    try {
+      const created = await stripe.products.create({
+        id,
+        name: course.title,
+        ...(description ? { description } : {}),
+        url,
+        metadata,
+      });
+      return created.id;
+    } catch (err) {
+      // Created a moment ago by another sync: use it.
+      product = await stripe.products.retrieve(id).catch(() => null);
+      if (!product) throw err;
+    }
   }
-  if (!product.active || product.name !== course.title || (product.description ?? "") !== description || product.url !== url || product.metadata.courseSlug !== course.slug) {
-    await stripe.products.update(id, {
-      active: true,
-      name: course.title,
-      description,
-      url,
-      metadata: { source: PAYMENT_LINK_SOURCE, courseId: course.id, courseSlug: course.slug },
-    });
+  const metadataOk = Object.entries(metadata).every(([k, v]) => product?.metadata[k] === v);
+  if (!product.active || product.name !== course.title || (product.description ?? "") !== description || product.url !== url || !metadataOk) {
+    await stripe.products.update(id, { active: true, name: course.title, description, url, metadata });
   }
   return id;
 }
@@ -216,13 +250,51 @@ async function ensurePrice(stripe: Stripe, productId: string, course: SyncCourse
   return price.id;
 }
 
-function linkMetadata(course: SyncCourse, priceId: string): Record<string, string> {
-  return { source: PAYMENT_LINK_SOURCE, courseId: course.id, courseSlug: course.slug, priceId };
+function linkMetadata(course: SyncCourse, priceId: string, install: string): Record<string, string> {
+  return { source: PAYMENT_LINK_SOURCE, install, courseId: course.id, courseSlug: course.slug, priceId };
 }
 
 function inactiveMessage(siteUrl: string): string {
   return `This checkout link is no longer active. See ${siteUrl}/courses for our current courses and prices.`;
 }
+
+/* One sync at a time (build, Admin → Courses, and the sync after a course change can overlap): a lease row in
+ * `settings`, taken over if its holder died without releasing it. */
+const LOCK_KEY = "stripePaymentLinkSync:lock";
+const LOCK_TTL_MS = 3 * 60_000;
+const LOCK_WAIT_MS = 60_000;
+
+async function acquireSyncLock(db: DB, token: string): Promise<boolean> {
+  const rows = await db
+    .insert(schema.settings)
+    .values({ key: LOCK_KEY, value: { token }, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: schema.settings.key,
+      set: { value: { token }, updatedAt: new Date() },
+      setWhere: lt(schema.settings.updatedAt, new Date(Date.now() - LOCK_TTL_MS)),
+    })
+    .returning({ key: schema.settings.key });
+  return rows.length > 0;
+}
+
+async function releaseSyncLock(db: DB, token: string): Promise<void> {
+  await db.delete(schema.settings).where(and(eq(schema.settings.key, LOCK_KEY), sql`${schema.settings.value}->>'token' = ${token}`));
+}
+
+type SyncInput = {
+  db: DB;
+  stripe: Stripe;
+  mode: StripeMode;
+  /** Absolute site URL (e.g. https://principeai.com); a trailing slash is ignored. */
+  siteUrl: string;
+  currency: string;
+  /** Also create the webhook endpoint when none is configured (skipped when STRIPE_WEBHOOK_SECRET is set). */
+  webhook?: { envSecretSet: boolean };
+  /** How long to wait for another sync to finish (default one minute). */
+  lockWaitMs?: number;
+  /** Stops the sync between Stripe calls (e.g. when a build step times out). */
+  signal?: AbortSignal;
+};
 
 /**
  * Creates or updates the Product, Price and Payment Link of every paid, published course, switches off links for
@@ -230,20 +302,34 @@ function inactiveMessage(siteUrl: string): string {
  * run any number of times: existing Stripe objects are found again by their ids, lookup keys and metadata.
  * One course failing doesn't stop the others; failures are listed in `errors`.
  */
-export async function syncPaymentLinks(input: {
-  db: DB;
-  stripe: Stripe;
-  mode: StripeMode;
-  /** Absolute site URL without a trailing slash (e.g. https://principeai.com). */
-  siteUrl: string;
-  currency: string;
-  /** Also create the webhook endpoint when none is configured (skipped when STRIPE_WEBHOOK_SECRET is set). */
-  webhook?: { envSecretSet: boolean };
-}): Promise<PaymentLinkSyncResult> {
+export async function syncPaymentLinks(input: SyncInput): Promise<PaymentLinkSyncResult> {
+  const token = randomUUID();
+  const deadline = Date.now() + (input.lockWaitMs ?? LOCK_WAIT_MS);
+  while (!(await acquireSyncLock(input.db, token))) {
+    if (Date.now() > deadline) throw new Error("Another payment-link sync is still running. Try again in a minute.");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  try {
+    let result: PaymentLinkSyncResult;
+    try {
+      result = await runSync(input);
+    } catch (err) {
+      await upsertSetting(input.db, LAST_SYNC_KEY, { at: new Date().toISOString(), mode: input.mode, errors: [errorMessage(err)] }).catch(() => {});
+      throw err;
+    }
+    await upsertSetting(input.db, LAST_SYNC_KEY, { at: new Date().toISOString(), mode: input.mode, errors: result.errors });
+    return result;
+  } finally {
+    await releaseSyncLock(input.db, token).catch(() => {});
+  }
+}
+
+async function runSync(input: SyncInput): Promise<PaymentLinkSyncResult> {
   const { db, stripe, mode, currency } = input;
   const siteUrl = input.siteUrl.replace(/\/+$/, "");
   const redirectUrl = `${siteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
   const result: PaymentLinkSyncResult = { mode, courses: [], retired: 0, webhook: null, errors: [] };
+  const install = await stripeInstallId(db);
 
   const courses: SyncCourse[] = await db
     .select({
@@ -258,12 +344,13 @@ export async function syncPaymentLinks(input: {
     .orderBy(asc(schema.courses.sortOrder), asc(schema.courses.createdAt));
   const stored = await readPaymentLinks(db, mode);
 
-  // This app's links in Stripe, by course. An earlier link for the same price is switched back on rather than
+  // This database's links in Stripe, by course. An earlier link for the same price is switched back on rather than
   // replaced (so links already sent work again), a lost database row is recovered, and stray active links are retired.
+  // Links made by another database on the same Stripe account are never touched.
   const all = await stripe.paymentLinks.list({ limit: 100 }).autoPagingToArray({ limit: 5000 });
   const linksByCourse = new Map<string, Stripe.PaymentLink[]>();
   for (const link of all) {
-    if (link.metadata?.source !== PAYMENT_LINK_SOURCE || !link.metadata.courseId) continue;
+    if (link.metadata?.source !== PAYMENT_LINK_SOURCE || link.metadata.install !== install || !link.metadata.courseId) continue;
     const list = linksByCourse.get(link.metadata.courseId) ?? [];
     list.push(link);
     linksByCourse.set(link.metadata.courseId, list);
@@ -276,6 +363,7 @@ export async function syncPaymentLinks(input: {
   };
 
   for (const course of courses) {
+    input.signal?.throwIfAborted();
     const current = stored.get(course.id);
     const candidates = activeLinks(course.id);
     try {
@@ -292,7 +380,7 @@ export async function syncPaymentLinks(input: {
         continue;
       }
 
-      const productId = await ensureProduct(stripe, course, siteUrl);
+      const productId = await ensureProduct(stripe, course, siteUrl, install);
       const priceId = await ensurePrice(stripe, productId, course, currency);
 
       // Reuse the stored link while it's for this price (even if it was switched off), else one Stripe already has
@@ -305,12 +393,12 @@ export async function syncPaymentLinks(input: {
         null;
 
       let status: PaymentLinkSyncStatus;
-      const metadata = linkMetadata(course, priceId);
+      const metadata = linkMetadata(course, priceId, install);
       if (!link) {
         link = await stripe.paymentLinks.create({
           line_items: [{ price: priceId, quantity: 1 }],
           metadata,
-          payment_intent_data: { description: course.title, metadata: { source: PAYMENT_LINK_SOURCE, courseId: course.id } },
+          payment_intent_data: { description: course.title, metadata: { source: PAYMENT_LINK_SOURCE, install, courseId: course.id } },
           after_completion: { type: "redirect", redirect: { url: redirectUrl } },
           allow_promotion_codes: true,
           inactive_message: inactiveMessage(siteUrl),
@@ -325,7 +413,7 @@ export async function syncPaymentLinks(input: {
             active: true,
             after_completion: { type: "redirect", redirect: { url: redirectUrl } },
             metadata,
-            payment_intent_data: { description: course.title, metadata: { source: PAYMENT_LINK_SOURCE, courseId: course.id } },
+            payment_intent_data: { description: course.title, metadata: { source: PAYMENT_LINK_SOURCE, install, courseId: course.id } },
             inactive_message: inactiveMessage(siteUrl),
           });
           status = "updated";
@@ -378,8 +466,9 @@ export async function syncPaymentLinks(input: {
   }
 
   if (input.webhook) {
+    input.signal?.throwIfAborted();
     try {
-      result.webhook = await ensureWebhookEndpoint(db, stripe, mode, siteUrl, input.webhook.envSecretSet);
+      result.webhook = await ensureWebhookEndpoint(db, stripe, mode, siteUrl, input.webhook.envSecretSet, install);
     } catch (err) {
       result.webhook = { status: "failed", detail: errorMessage(err) };
       result.errors.push(`Webhook endpoint: ${errorMessage(err)}`);
@@ -390,10 +479,29 @@ export async function syncPaymentLinks(input: {
 
 /**
  * Makes sure Stripe sends this site's checkout and refund events. Uses STRIPE_WEBHOOK_SECRET's endpoint when that's
- * set; otherwise creates (or keeps up to date) an endpoint of its own and stores its signing secret.
+ * set (removing the one the site made, so events aren't handled twice); otherwise creates (or keeps up to date) an
+ * endpoint of its own and stores its signing secret.
  */
-async function ensureWebhookEndpoint(db: DB, stripe: Stripe, mode: StripeMode, siteUrl: string, envSecretSet: boolean): Promise<NonNullable<PaymentLinkSyncResult["webhook"]>> {
-  if (envSecretSet) return { status: "env" };
+async function ensureWebhookEndpoint(
+  db: DB,
+  stripe: Stripe,
+  mode: StripeMode,
+  siteUrl: string,
+  envSecretSet: boolean,
+  install: string,
+): Promise<NonNullable<PaymentLinkSyncResult["webhook"]>> {
+  const key = `${WEBHOOK_PREFIX}${mode}`;
+  if (envSecretSet) {
+    const stored = await readWebhook(db, mode);
+    if (!stored) return { status: "env" };
+    try {
+      await stripe.webhookEndpoints.del(stored.endpointId);
+    } catch (err) {
+      if (!isMissing(err)) throw err;
+    }
+    await db.delete(schema.settings).where(eq(schema.settings.key, key));
+    return { status: "env", detail: "Removed the endpoint the site had created: STRIPE_WEBHOOK_SECRET's endpoint is used instead" };
+  }
   const url = `${siteUrl}/api/stripe/webhook`;
   if (!url.startsWith("https://") || /\/\/(localhost|127\.0\.0\.1)[:/]/.test(url)) {
     return { status: "skipped", detail: "Stripe can only send webhooks to a public https address" };
@@ -407,14 +515,15 @@ async function ensureWebhookEndpoint(db: DB, stripe: Stripe, mode: StripeMode, s
     const missing = !events.includes("*") && STRIPE_WEBHOOK_EVENTS.some((e) => !events.includes(e));
     if (mine.url !== url || missing || mine.status !== "enabled") {
       await stripe.webhookEndpoints.update(mine.id, { url, enabled_events: STRIPE_WEBHOOK_EVENTS, disabled: false });
-      if (mine.url !== url) await upsertSetting(db, `${WEBHOOK_PREFIX}${mode}`, { ...stored, url });
+      if (mine.url !== url) await upsertSetting(db, key, { ...stored, url });
       return { status: "updated" };
     }
     return { status: "ok" };
   }
 
   const sameUrl = endpoints.filter((e) => e.url === url);
-  const foreign = sameUrl.find((e) => e.metadata?.source !== WEBHOOK_SOURCE);
+  // Made by hand, or by another database on this Stripe account: not ours to replace.
+  const foreign = sameUrl.find((e) => e.metadata?.source !== WEBHOOK_SOURCE || e.metadata.install !== install);
   if (foreign) {
     return {
       status: "unmanaged",
@@ -429,10 +538,10 @@ async function ensureWebhookEndpoint(db: DB, stripe: Stripe, mode: StripeMode, s
     enabled_events: STRIPE_WEBHOOK_EVENTS,
     api_version: Stripe.API_VERSION,
     description: "Principe AI: checkout, refunds and disputes (created automatically by the site)",
-    metadata: { source: WEBHOOK_SOURCE },
+    metadata: { source: WEBHOOK_SOURCE, install },
   });
   if (!created.secret) throw new Error("Stripe did not return the new webhook endpoint's signing secret");
-  await upsertSetting(db, `${WEBHOOK_PREFIX}${mode}`, { v: 1, endpointId: created.id, url, secret: created.secret, createdAt: new Date().toISOString() });
+  await upsertSetting(db, key, { v: 1, endpointId: created.id, url, secret: created.secret, createdAt: new Date().toISOString() });
   return { status: "created" };
 }
 

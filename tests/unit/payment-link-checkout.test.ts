@@ -6,7 +6,7 @@ import { getDb, schema } from "@/db";
 import { recipientTemplateVars } from "@/lib/automations";
 import { emailHasCourse, getCourseWithCurriculum } from "@/lib/courses";
 import { defaultTemplateVars, fillTemplate } from "@/lib/email";
-import { paymentLinkKey, PAYMENT_LINK_SOURCE, type StoredPaymentLink } from "@/lib/payment-links";
+import { paymentLinkKey, PAYMENT_LINK_SOURCE, stripeInstallId, type StoredPaymentLink } from "@/lib/payment-links";
 
 const SECRET = "whsec_test_payment_link_secret";
 const STORED_SECRET = "whsec_test_stored_by_the_sync";
@@ -142,6 +142,31 @@ describe("Stripe payment-link checkouts", () => {
     expect(await ordersFor(abandoned.id)).toHaveLength(0);
   });
 
+  it("only takes checkouts from this site's own links", async () => {
+    const db = await getDb();
+    const install = await stripeInstallId(db);
+    const ours = linkSession(`ours-${randomUUID().slice(0, 8)}@example.com`, { metadata: { source: PAYMENT_LINK_SOURCE, install, courseId: course.id, courseSlug: course.slug } });
+    expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: ours } }))).status).toBe(200);
+    expect((await ordersFor(ours.id))[0]).toMatchObject({ status: "paid", courseId: course.id });
+
+    // A link made by another database on the same Stripe account (a local copy, say): that site's sale.
+    const theirs = linkSession(`theirs-${randomUUID().slice(0, 8)}@example.com`, {
+      metadata: { source: PAYMENT_LINK_SOURCE, install: "another-database", courseId: course.id, courseSlug: course.slug },
+    });
+    expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: theirs } }))).status).toBe(200);
+    expect(await ordersFor(theirs.id)).toHaveLength(0);
+  });
+
+  it("doesn't enroll a buyer in a different course that took over a deleted course's slug", async () => {
+    const email = `orphan-${randomUUID().slice(0, 8)}@example.com`;
+    const session = linkSession(email, { metadata: { source: PAYMENT_LINK_SOURCE, courseId: randomUUID(), courseSlug: course.slug } });
+    // Paid for a course that no longer exists: the order is kept for the owner (who is alerted), and Stripe retries.
+    expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: session } }))).status).toBe(500);
+    const [order] = await ordersFor(session.id);
+    expect(order).toMatchObject({ courseId: null, status: "pending" });
+    expect(await emailHasCourse(email, course.id)).toBe(false);
+  });
+
   it("accepts events signed with the secret of the endpoint the sync created", async () => {
     const db = await getDb();
     await db
@@ -220,9 +245,13 @@ describe("Stripe payment-link checkouts", () => {
   });
 
   it("fills {{buy_link:<slug>}} in emails, with the reader's email for that reader", () => {
-    const body = "Start [here]({{buy_link:ai-essentials}}) or {{ buy_link:ai-for-business }}. {{buy_link}} {{buy_link:Bad Slug}}";
+    const body = "Start [here]({{buy_link:ai-essentials}}) or {{ buy_link:ai-for-business }}. {{buy_link}} {{buy_link: AI_Essentials }} {{buy_link:}}";
     expect(fillTemplate(body, defaultTemplateVars("Principe"))).toBe(
-      "Start [here](https://principe.example/buy/ai-essentials) or https://principe.example/buy/ai-for-business.  {{buy_link:Bad Slug}}",
+      "Start [here](https://principe.example/buy/ai-essentials) or https://principe.example/buy/ai-for-business.  https://principe.example/buy/ai-essentials ",
+    );
+    // Text the owner typed keeps double braces it doesn't mean as placeholders (e.g. a prompt template).
+    expect(fillTemplate("Hi {{firstName}}: reply to {{name}} at {{company}} {{x:y}}", { firstName: "Ana" }, false, true)).toBe(
+      "Hi Ana: reply to {{name}} at {{company}} {{x:y}}",
     );
     const vars = recipientTemplateVars({ name: "Ana", email: "ana+promo@example.com" }, "Principe");
     expect(fillTemplate("[Buy]({{buy_link:ai-essentials}})", vars.body)).toBe("[Buy](https://principe.example/buy/ai-essentials?email=ana%2Bpromo%40example.com)");

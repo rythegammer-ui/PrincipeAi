@@ -31,19 +31,36 @@ export { escapeMarkdown } from "@/lib/utils";
 
 export type TemplateVars = Record<string, string | number | null | undefined>;
 
+/** Lowercase-dash form of a placeholder argument: "AI_Essentials " → "ai-essentials" (matches course slugs). */
+function placeholderArg(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 /**
- * Replaces {{placeholders}}. Unknown placeholders are removed. Values are HTML-escaped when `escape` is true.
- * A placeholder can take a slug argument, `{{buy_link:ai-essentials}}`: it uses `vars["buy_link:ai-essentials"]`,
- * else `vars["buy_link:*"]` with `{arg}` replaced by the slug.
+ * Replaces {{placeholders}}. Unknown placeholders are removed, or left as typed with `keepUnknown` (for text the
+ * owner wrote by hand, which may quote {{…}} on purpose). Values are HTML-escaped when `escape` is true.
+ * A placeholder can take an argument, `{{buy_link:ai-essentials}}`: it uses `vars["buy_link:ai-essentials"]`, else
+ * `vars["buy_link:*"]` with `{arg}` replaced. The argument is normalized like a slug, so `{{buy_link: AI_Essentials}}`
+ * works too.
  */
-export function fillTemplate(template: string, vars: TemplateVars, escape = false): string {
-  return template.replace(/\{\{\s*(\w+)(?::([a-z0-9]+(?:-[a-z0-9]+)*))?\s*\}\}/g, (_, key: string, arg: string | undefined) => {
-    let v = arg ? vars[`${key}:${arg}`] : vars[key];
-    if (arg && (v === undefined || v === null)) {
-      const pattern = vars[`${key}:*`];
-      v = pattern === undefined || pattern === null ? pattern : String(pattern).replaceAll("{arg}", arg);
+export function fillTemplate(template: string, vars: TemplateVars, escape = false, keepUnknown = false): string {
+  return template.replace(/\{\{\s*(\w+)(?:\s*:([^{}]*))?\s*\}\}/g, (match: string, key: string, rawArg: string | undefined) => {
+    let v: TemplateVars[string];
+    if (rawArg === undefined) {
+      v = vars[key];
+    } else {
+      const arg = placeholderArg(rawArg);
+      if (arg) {
+        v = vars[`${key}:${arg}`];
+        const pattern = vars[`${key}:*`];
+        if ((v === undefined || v === null) && pattern !== undefined && pattern !== null) v = String(pattern).replaceAll("{arg}", arg);
+      }
     }
-    if (v === undefined || v === null) return "";
+    if (v === undefined || v === null) return keepUnknown ? match : "";
     return escape ? escapeHtml(String(v)) : String(v);
   });
 }

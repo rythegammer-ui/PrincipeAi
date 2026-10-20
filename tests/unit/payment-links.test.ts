@@ -8,9 +8,11 @@ import {
   paymentLinkKey,
   PAYMENT_LINK_SOURCE,
   productIdFor,
+  readLastSync,
   readPaymentLinks,
   readWebhookSecret,
   STRIPE_WEBHOOK_EVENTS,
+  stripeInstallId,
   stripeModeForKey,
   syncPaymentLinks,
 } from "@/lib/payment-links";
@@ -143,7 +145,10 @@ describe("Stripe payment-link sync", () => {
     expect((await readPaymentLinks(db, "live")).size).toBe(0);
 
     const created = fake.links.get(link.paymentLinkId)!;
-    expect(created.metadata).toEqual({ source: PAYMENT_LINK_SOURCE, courseId: course.id, courseSlug: course.slug, priceId: link.priceId });
+    const install = await stripeInstallId(db);
+    expect(install).toMatch(/^[0-9a-f-]{36}$/);
+    expect(created.metadata).toEqual({ source: PAYMENT_LINK_SOURCE, install, courseId: course.id, courseSlug: course.slug, priceId: link.priceId });
+    expect(await readLastSync(db)).toMatchObject({ mode: "test", errors: [] });
     expect(created.after_completion).toEqual({ type: "redirect", redirect: { url: `${SITE}/checkout/success?session_id={CHECKOUT_SESSION_ID}` } });
     expect(created.line_items).toEqual([{ price: link.priceId, quantity: 1 }]);
     expect(fake.prices.get(link.priceId)).toMatchObject({ unit_amount: course.priceCents, currency: "usd", product: productIdFor(course.id) });
@@ -257,6 +262,59 @@ describe("Stripe payment-link sync", () => {
     const manual = await sync({ siteUrl: "https://other.example", webhook: { envSecretSet: false } });
     expect(manual.webhook?.status).toBe("unmanaged");
     expect(fake.endpoints.has("we_manual")).toBe(true);
+
+    // Back on our own address, then STRIPE_WEBHOOK_SECRET is added: the site's own endpoint goes, so events aren't handled twice.
+    expect((await sync({ webhook: { envSecretSet: false } })).webhook?.status).toBe("created");
+    const ours = [...fake.endpoints.values()].find((e) => e.url === `${SITE}/api/stripe/webhook`)!;
+    expect(await readWebhookSecret(db, "test")).not.toBeNull();
+    expect((await sync({ webhook: { envSecretSet: true } })).webhook?.status).toBe("env");
+    expect(fake.endpoints.has(ours.id as string)).toBe(false);
+    expect(await readWebhookSecret(db, "test")).toBeNull();
+  });
+
+  it("never touches the links or webhook of another database on the same Stripe account", async () => {
+    const other = fakeStripe();
+    // Another database's link (e.g. a local copy) for a course this one doesn't have, and its own endpoint at our address.
+    const foreignLink = await other.stripe.paymentLinks.create({
+      line_items: [{ price: "price_foreign", quantity: 1 }],
+      metadata: { source: PAYMENT_LINK_SOURCE, install: "another-database", courseId: randomUUID(), courseSlug: "elsewhere", priceId: "price_foreign" },
+    });
+    other.endpoints.set("we_foreign", { id: "we_foreign", url: `${SITE}/api/stripe/webhook`, status: "enabled", metadata: { source: "principe-webhook", install: "another-database" }, enabled_events: STRIPE_WEBHOOK_EVENTS });
+    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:live"));
+    const result = await syncPaymentLinks({ db, stripe: other.stripe, mode: "live", siteUrl: SITE, currency: "usd", webhook: { envSecretSet: false } });
+    expect(result.retired).toBe(0);
+    expect(other.links.get(foreignLink.id)?.active).toBe(true);
+    expect(result.webhook?.status).toBe("unmanaged");
+    expect(other.endpoints.has("we_foreign")).toBe(true);
+  });
+
+  it("stops between Stripe calls when asked, and records why", async () => {
+    const stop = new AbortController();
+    stop.abort(new Error("build step timed out"));
+    await expect(sync({ signal: stop.signal })).rejects.toThrow(/timed out/);
+    expect(await readLastSync(db)).toMatchObject({ errors: ["build step timed out"] });
+    // The lock was released: the next sync runs straight away.
+    expect((await sync({ lockWaitMs: 0 })).errors).toEqual([]);
+    expect(await readLastSync(db)).toMatchObject({ errors: [] });
+  });
+
+  it("runs one sync at a time, so overlapping syncs never duplicate links", async () => {
+    const other = fakeStripe();
+    const courses = await paidCourses();
+    const live = (o: Partial<Parameters<typeof syncPaymentLinks>[0]> = {}) =>
+      syncPaymentLinks({ db, stripe: other.stripe, mode: "live", siteUrl: SITE, currency: "usd", ...o });
+    const results = await Promise.all([live(), live(), live()]);
+    for (const r of results) expect(r.errors).toEqual([]);
+    expect(other.created.links).toBe(courses.length);
+    expect(other.created.products).toBe(courses.length);
+    expect([...other.links.values()].filter((l) => l.active)).toHaveLength(courses.length);
+
+    // A sync that can't get its turn gives up with a clear message; a lock left by a crashed sync is taken over.
+    await db.insert(schema.settings).values({ key: "stripePaymentLinkSync:lock", value: { token: "someone-else" }, updatedAt: new Date() });
+    await expect(live({ lockWaitMs: 50 })).rejects.toThrow(/still running/);
+    await db.update(schema.settings).set({ updatedAt: new Date(Date.now() - 10 * 60_000) }).where(eq(schema.settings.key, "stripePaymentLinkSync:lock"));
+    expect((await live({ lockWaitMs: 50 })).errors).toEqual([]);
+    expect(await db.select().from(schema.settings).where(eq(schema.settings.key, "stripePaymentLinkSync:lock"))).toHaveLength(0);
   });
 
   it("tells test keys from live keys", () => {

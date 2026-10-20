@@ -16,7 +16,6 @@ import { site } from "../src/config/site";
 import * as schema from "../src/db/schema";
 import { seedIfEmpty } from "../src/db/seed";
 import { describeSync, stripeModeForKey, syncPaymentLinks } from "../src/lib/payment-links";
-import { upgradeSequenceCopy } from "./upgrade-sequence-copy";
 
 type DB = PostgresJsDatabase<typeof schema>;
 
@@ -28,17 +27,26 @@ async function syncStripe(db: DB) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : site.url);
   const mode = stripeModeForKey(key);
   console.log(`[migrate] Syncing Stripe payment links (${mode} mode) for ${siteUrl}…`);
+  // Stops the sync between Stripe calls after 90s, so a slow Stripe never holds up the build for long.
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(new Error("timed out after 90s")), 90_000);
   try {
     const stripe = new Stripe(key, { maxNetworkRetries: 2, timeout: 20_000, appInfo: { name: "Principe AI" } });
-    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out after 90s")), 90_000).unref());
-    const result = await Promise.race([
-      syncPaymentLinks({ db, stripe, mode, siteUrl, currency: site.currency, webhook: { envSecretSet: Boolean(process.env.STRIPE_WEBHOOK_SECRET?.trim()) } }),
-      timeout,
-    ]);
+    const result = await syncPaymentLinks({
+      db,
+      stripe,
+      mode,
+      siteUrl,
+      currency: site.currency,
+      webhook: { envSecretSet: Boolean(process.env.STRIPE_WEBHOOK_SECRET?.trim()) },
+      signal: stop.signal,
+    });
     for (const line of describeSync(result)) console.log(`[migrate]   ${line}`);
     if (result.errors.length) console.warn(`[migrate] Stripe sync finished with ${result.errors.length} problem(s); retry from Admin → Courses.`);
   } catch (err) {
     console.warn("[migrate] Stripe payment-link sync failed (the build continues; retry from Admin → Courses):", err instanceof Error ? err.message : err);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -60,12 +68,6 @@ async function main() {
   await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
   const res = await seedIfEmpty(db, { demoData: process.env.SEED_DEMO_DATA === "1" });
   console.log(res.seeded ? "[migrate] Seeded default catalog." : "[migrate] Database already seeded.");
-  try {
-    const upgraded = await upgradeSequenceCopy(db, res.seeded);
-    if (upgraded) console.log(`[migrate] Updated ${upgraded} default email${upgraded === 1 ? "" : "s"} with new links.`);
-  } catch (err) {
-    console.warn("[migrate] Email copy update skipped:", err instanceof Error ? err.message : err);
-  }
   await syncStripe(db);
   await client.end();
 }

@@ -2,9 +2,18 @@ import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { and, asc, eq, gt, inArray, like, lt, notLike, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { processDueEnrollments } from "@/lib/automations";
+import { processDueEnrollments, upgradeSequenceCopy } from "@/lib/automations";
 import { releaseExpiredHolds, sendDueBookingReminders } from "@/lib/booking-service";
-import { failPendingOrder, fulfillOrder, recoverPaymentLinkCheckouts, UNDELIVERABLE_ALERT_PREFIX, UNDELIVERABLE_ALERT_TTL_MS } from "@/lib/payments";
+import {
+  failPendingOrder,
+  fulfillOrder,
+  paymentLinkSyncBlocked,
+  recoverPaymentLinkCheckouts,
+  sessionFullyRefunded,
+  syncCoursePaymentLinks,
+  UNDELIVERABLE_ALERT_PREFIX,
+  UNDELIVERABLE_ALERT_TTL_MS,
+} from "@/lib/payments";
 import { getStripe, paymentIntentId, type Stripe } from "@/lib/stripe";
 import type { JobKey } from "@/components/funnels/automation-utils";
 
@@ -110,8 +119,9 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
     if (!order.sessionId) continue;
     let closedByStripe = false;
     try {
-      const session = await stripe.checkout.sessions.retrieve(order.sessionId, { expand: ["payment_intent"] });
-      if (session.payment_status === "paid" || session.payment_status === "no_payment_required") {
+      const session = await stripe.checkout.sessions.retrieve(order.sessionId, { expand: ["payment_intent", "payment_intent.latest_charge"] });
+      // A payment refunded in full before anything was delivered has nothing left to deliver.
+      if ((session.payment_status === "paid" || session.payment_status === "no_payment_required") && !sessionFullyRefunded(session)) {
         await fulfillOrder(order.id, {
           stripePaymentIntentId: paymentIntentId(session.payment_intent),
           isTest: session.livemode === false,
@@ -156,14 +166,31 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
 
 const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = {
   async automations() {
+    // Default emails written before a feature existed get their update before anything is sent (once).
+    let upgraded = 0;
+    try {
+      upgraded = await upgradeSequenceCopy();
+    } catch (err) {
+      console.error("[jobs] email copy upgrade failed", err);
+    }
     const r = await processDueEnrollments();
-    return { count: r.sent, detail: `${r.processed} due` };
+    return { count: r.sent, detail: `${r.processed} due${upgraded ? `, ${upgraded} default email${upgraded === 1 ? "" : "s"} updated` : ""}` };
   },
   async bookingReminders() {
     return { count: await sendDueBookingReminders() };
   },
   // Before holds and stale orders are released, so a paid checkout whose webhook was missed is delivered instead.
   stripeCheckouts: reconcileStripeCheckouts,
+  // Catches up when a sync after a course change failed (or a link was changed in the Stripe dashboard).
+  async paymentLinks() {
+    const blocked = paymentLinkSyncBlocked();
+    if (blocked) return { count: 0, detail: blocked };
+    const result = await syncCoursePaymentLinks();
+    if (!result) return { count: 0 };
+    if (result.errors.length) throw new Error(result.errors.join("; "));
+    const changed = result.courses.filter((c) => c.status !== "unchanged" && c.status !== "not-for-sale").length + result.retired;
+    return { count: changed, detail: `${result.courses.filter((c) => c.url).length} live` };
+  },
   async expiredHolds() {
     return { count: await releaseExpiredHolds() };
   },

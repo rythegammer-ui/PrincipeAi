@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { getDb, schema } from "@/db";
 import { sequenceCopyUpgrades } from "@/db/seed-content/sequences";
-import { COPY_UPGRADES_KEY, upgradeSequenceCopy } from "../../scripts/upgrade-sequence-copy";
+import { COPY_UPGRADES_KEY, upgradeSequenceCopy } from "@/lib/automations";
 
 type DB = Awaited<ReturnType<typeof getDb>>;
 
@@ -34,13 +34,13 @@ describe("default email copy upgrades", () => {
     await setBody(db, guideStep.id, current.replace(guide.to, guide.from));
     await setBody(db, assessmentStep.id, assessmentStep.body.replace(assessment.to, "Our courses are great, have a look: {{coursesUrl}}"));
 
-    expect(await upgradeSequenceCopy(db, false)).toBe(1);
+    expect(await upgradeSequenceCopy()).toBe(1);
     expect((await stepFor(db, guide.sequence, guide.subject)).body).toBe(current);
     expect((await stepFor(db, assessment.sequence, assessment.subject)).body).toContain("Our courses are great");
 
-    // The owner later removes the links again: a later build doesn't put them back.
+    // The owner later removes the links again: a later run doesn't put them back.
     await setBody(db, guideStep.id, current.replace(guide.to, guide.from));
-    expect(await upgradeSequenceCopy(db, false)).toBe(0);
+    expect(await upgradeSequenceCopy()).toBe(0);
     expect((await stepFor(db, guide.sequence, guide.subject)).body).toContain(guide.from);
     expect((await stepFor(db, guide.sequence, guide.subject)).body).not.toContain(guide.to);
 
@@ -48,11 +48,13 @@ describe("default email copy upgrades", () => {
     expect(marker.value).toEqual(sequenceCopyUpgrades.map((u) => u.id));
   });
 
-  it("only records the upgrades for a database seeded just now", async () => {
+  it("only records the upgrades for a database seeded with the new copy", async () => {
     await db.delete(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY));
     const guideStep = await stepFor(db, guide.sequence, guide.subject);
-    expect(await upgradeSequenceCopy(db, true)).toBe(0);
-    expect((await stepFor(db, guide.sequence, guide.subject)).body).toBe(guideStep.body);
+    await setBody(db, guideStep.id, guideStep.body.includes(guide.to) ? guideStep.body : guideStep.body.replace(guide.from, guide.to));
+    const seeded = (await stepFor(db, guide.sequence, guide.subject)).body;
+    expect(await upgradeSequenceCopy()).toBe(0);
+    expect((await stepFor(db, guide.sequence, guide.subject)).body).toBe(seeded);
     const [marker] = await db.select().from(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY));
     expect(marker.value).toEqual(sequenceCopyUpgrades.map((u) => u.id));
   });

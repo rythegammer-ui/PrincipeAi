@@ -293,6 +293,7 @@ export const JOB_LABELS = {
   automations: "Automation emails sent",
   bookingReminders: "Booking reminders sent",
   stripeCheckouts: "Missed Stripe payments recovered",
+  paymentLinks: "Stripe payment links updated",
   expiredHolds: "Unpaid booking holds released",
   expiredOrders: "Abandoned checkouts expired",
   rateLimits: "Old rate-limit records cleared",

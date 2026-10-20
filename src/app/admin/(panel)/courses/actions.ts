@@ -9,7 +9,7 @@ import { assertAdmin } from "@/lib/auth";
 import { enrollInCourse } from "@/lib/courses";
 import { PENDING_ORDER_TTL_MS } from "@/lib/jobs";
 import { describeSync } from "@/lib/payment-links";
-import { syncCoursePaymentLinks, syncCoursePaymentLinksLater } from "@/lib/payments";
+import { paymentLinkSyncBlocked, syncCoursePaymentLinks, syncCoursePaymentLinksLater } from "@/lib/payments";
 import { rateLimit } from "@/lib/rate-limit";
 import { parseVideoUrl } from "@/lib/video";
 import { slugify } from "@/lib/utils";
@@ -274,9 +274,11 @@ export async function syncPaymentLinksAction(): Promise<PaymentLinkSyncState> {
   const session = await assertAdmin();
   const limit = await rateLimit(`admin-payment-links:${session.email}`, 10, 600);
   if (!limit.ok) return { ok: false, error: "That's a lot of syncs in a few minutes. Please wait a little and try again." };
+  const blocked = paymentLinkSyncBlocked();
+  if (blocked) return { ok: false, error: blocked };
   try {
     const result = await syncCoursePaymentLinks();
-    if (!result) return { ok: false, error: "Stripe isn't connected. Add STRIPE_SECRET_KEY in your Vercel environment variables, then redeploy." };
+    if (!result) return { ok: false, error: "Payment links can't be synced from here." };
     revalidatePath("/admin/courses");
     const details = describeSync(result);
     if (result.errors.length) return { ok: false, error: `Synced with ${result.errors.length} problem${result.errors.length === 1 ? "" : "s"}.`, details };

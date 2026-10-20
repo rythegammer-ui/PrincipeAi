@@ -12,7 +12,7 @@ import { emailHasCourse, enrollInCourse } from "@/lib/courses";
 import { addLifetimeValue, captureLead, logActivity, upsertContact } from "@/lib/crm";
 import { emailBusinessName, escapeMarkdown, notifyOwner, sendEmail } from "@/lib/email";
 import { testCheckoutAllowed } from "@/lib/integrations";
-import { syncPaymentLinks, type PaymentLinkSyncResult } from "@/lib/payment-links";
+import { stripeInstallId, syncPaymentLinks, type PaymentLinkSyncResult } from "@/lib/payment-links";
 import { rateLimit } from "@/lib/rate-limit";
 import { formatMeetingTime, getBusinessTimezone } from "@/lib/scheduling";
 import { getStripe, paymentIntentId, stripeDashboardUrl, stripeTestMode, type Stripe } from "@/lib/stripe";
@@ -734,13 +734,22 @@ export async function failPendingOrder(orderId: string): Promise<Order | null> {
   return order;
 }
 
+/** Why payment links can't be synced from here, or null when they can. */
+export function paymentLinkSyncBlocked(): string | null {
+  if (!getStripe()) return "Stripe isn't connected. Add STRIPE_SECRET_KEY in your Vercel environment variables, then redeploy.";
+  if (livePaymentsBlocked()) return "Payments are turned off on this demo site.";
+  // A preview deployment would point the links and the webhook at itself.
+  if (process.env.VERCEL && process.env.VERCEL_ENV !== "production") return "Payment links are only synced from the production site.";
+  return null;
+}
+
 /**
  * Brings every course's Stripe Payment Link up to date (src/lib/payment-links.ts), and sets up the Stripe webhook
- * endpoint if STRIPE_WEBHOOK_SECRET isn't set. Null when Stripe isn't configured or payments are off.
+ * endpoint if STRIPE_WEBHOOK_SECRET isn't set. Null when that can't be done here (see paymentLinkSyncBlocked).
  */
 export async function syncCoursePaymentLinks(): Promise<PaymentLinkSyncResult | null> {
   const stripe = getStripe();
-  if (!stripe || livePaymentsBlocked()) return null;
+  if (!stripe || paymentLinkSyncBlocked()) return null;
   return syncPaymentLinks({
     db: await getDb(),
     stripe,
@@ -753,7 +762,7 @@ export async function syncCoursePaymentLinks(): Promise<PaymentLinkSyncResult | 
 
 /** Runs syncCoursePaymentLinks after the response (call it after a course's price, status or details change). */
 export function syncCoursePaymentLinksLater(): void {
-  if (!getStripe()) return;
+  if (paymentLinkSyncBlocked()) return;
   after(async () => {
     try {
       const result = await syncCoursePaymentLinks();
@@ -782,6 +791,9 @@ export async function orderIdForCheckoutSession(session: Stripe.Checkout.Session
   const [existing] = await db.select({ id: schema.orders.id }).from(schema.orders).where(eq(schema.orders.stripeSessionId, session.id)).limit(1);
   if (existing) return existing.id;
   if (!opts.create || session.mode !== "payment" || session.status !== "complete") return null;
+  // A link made by another database on the same Stripe account (e.g. a local copy): that site's sale, not ours.
+  const install = session.metadata?.install;
+  if (install && install !== (await stripeInstallId(db))) return null;
   return createPaymentLinkOrder(session);
 }
 
@@ -790,8 +802,13 @@ async function createPaymentLinkOrder(session: Stripe.Checkout.Session): Promise
   if (!meta.courseId && !meta.courseSlug) return null;
   const db = await getDb();
   const courseColumns = { id: schema.courses.id, slug: schema.courses.slug, title: schema.courses.title, priceCents: schema.courses.priceCents };
-  let [course] = meta.courseId && UUID.test(meta.courseId) ? await db.select(courseColumns).from(schema.courses).where(eq(schema.courses.id, meta.courseId)).limit(1) : [];
-  if (!course && meta.courseSlug) [course] = await db.select(courseColumns).from(schema.courses).where(eq(schema.courses.slug, meta.courseSlug)).limit(1);
+  // By id when the link names one: if that course was deleted, a newer course that took over its slug isn't what
+  // was paid for. By slug only for links made by hand with just a courseSlug.
+  const [course] = meta.courseId
+    ? UUID.test(meta.courseId)
+      ? await db.select(courseColumns).from(schema.courses).where(eq(schema.courses.id, meta.courseId)).limit(1)
+      : []
+    : await db.select(courseColumns).from(schema.courses).where(eq(schema.courses.slug, meta.courseSlug)).limit(1);
 
   const email = normalizeEmail(session.customer_details?.email ?? session.customer_email ?? "");
   if (!isValidEmail(email)) {
@@ -841,13 +858,21 @@ async function createPaymentLinkOrder(session: Stripe.Checkout.Session): Promise
   return row.id;
 }
 
+/** True when a session's payment was refunded in full (needs `payment_intent.latest_charge` expanded to tell). */
+export function sessionFullyRefunded(session: Stripe.Checkout.Session): boolean {
+  const pi = session.payment_intent;
+  if (!pi || typeof pi === "string") return false;
+  const charge = pi.latest_charge;
+  return Boolean(charge && typeof charge !== "string" && charge.refunded);
+}
+
 /**
  * Safety net for missed webhooks on Payment Link checkouts (createCheckout's orders are covered by the reconcile
  * job's order scan): fulfils paid payment-link sessions completed since `since` that have no paid order yet.
  */
 export async function recoverPaymentLinkCheckouts(stripe: Stripe, since: Date): Promise<{ checked: number; recovered: number; failed: number }> {
   const sessions = await stripe.checkout.sessions
-    .list({ status: "complete", created: { gte: Math.floor(since.getTime() / 1000) }, limit: 100 })
+    .list({ status: "complete", created: { gte: Math.floor(since.getTime() / 1000) }, limit: 100, expand: ["data.payment_intent.latest_charge"] })
     .autoPagingToArray({ limit: 1000 });
   const db = await getDb();
   let checked = 0;
@@ -863,6 +888,8 @@ export async function recoverPaymentLinkCheckouts(stripe: Stripe, since: Date): 
         .where(eq(schema.orders.stripeSessionId, session.id))
         .limit(1);
       if (existing && existing.status !== "pending" && existing.status !== "expired") continue;
+      // Refunded before the webhook (or this job) caught up: there's nothing to deliver.
+      if (sessionFullyRefunded(session)) continue;
       const orderId = existing?.id ?? (await orderIdForCheckoutSession(session, { create: true }));
       if (orderId && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
         await fulfillOrder(orderId, {

@@ -46,7 +46,9 @@ export const adminNav = [
   { href: "/admin/conversations", label: "AI Conversations", icon: "MessageSquare" },
   { href: "/admin/courses", label: "Courses", icon: "GraduationCap" },
   { href: "/admin/orders", label: "Orders", icon: "Receipt" },
+  { href: "/admin/sales", label: "Sales Team", icon: "Trophy" },
   { href: "/admin/emails", label: "Email Log", icon: "Inbox" },
+  { href: "/admin/team", label: "Admin Team", icon: "ShieldCheck" },
   { href: "/admin/settings", label: "Settings", icon: "Settings" },
 ] as const;
 

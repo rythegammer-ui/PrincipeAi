@@ -13,6 +13,7 @@ import {
   MousePointerClick,
   Phone,
   Receipt,
+  Trophy,
   Workflow,
 } from "lucide-react";
 import { DateTime } from "luxon";
@@ -51,6 +52,7 @@ import { BookingStatusBadge } from "@/components/booking/booking-status-badge";
 import { meetingColor } from "@/components/booking/meeting-colors";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, Select } from "@/components/ui/form";
 import { Markdown } from "@/components/ui/markdown";
 import { Avatar } from "@/components/ui/misc";
 import { getDb, schema } from "@/db";
@@ -58,8 +60,12 @@ import type { OrderStatus } from "@/db/schema";
 import { aiEnabled } from "@/lib/ai";
 import { requireAdmin } from "@/lib/auth";
 import { getContact360 } from "@/lib/crm-queries";
+import { getSalesProgram } from "@/lib/sales/program";
+import { agentForContact, assignableAgents } from "@/lib/sales/stats";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { cn, formatDate, formatDateTime, formatMoney, timeAgo } from "@/lib/utils";
+import { ActionForm } from "../../sales/forms";
+import { assignContactAgentAction } from "./agent-actions";
 
 const ORDER_TONES: Record<OrderStatus, BadgeTone> = { paid: "green", pending: "neutral", refunded: "amber", failed: "red", expired: "neutral" };
 const EMAIL_TONES: Record<string, BadgeTone> = { sent: "green", simulated: "blue", failed: "red", skipped: "neutral" };
@@ -100,7 +106,13 @@ export default async function ContactPage({ params }: Params) {
   await requireAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const [data, tz] = await Promise.all([getContact360(id), getBusinessTimezone()]);
+  const [data, tz, salesAgent, agentOptions, salesProgram] = await Promise.all([
+    getContact360(id),
+    getBusinessTimezone(),
+    agentForContact(id),
+    assignableAgents(),
+    getSalesProgram(),
+  ]);
   if (!data) notFound();
 
   const { contact: ct } = data;
@@ -263,6 +275,39 @@ export default async function ContactPage({ params }: Params) {
         <div className="flex min-w-0 flex-col gap-6">
           <Section title="Notes" icon={ClipboardCheck}>
             <NotesForm contactId={ct.id} notes={ct.notes} />
+          </Section>
+
+          <Section title="Sales agent" icon={Trophy}>
+            {salesAgent ? (
+              <p className="mb-3 text-sm text-zinc-700">
+                <Link href={`/admin/sales/${salesAgent.agent.id}`} className="font-medium text-zinc-900 hover:text-brand-700">
+                  {salesAgent.agent.name}
+                </Link>
+                {salesAgent.agent.code && <span className="ml-1.5 font-mono text-xs text-zinc-500">{salesAgent.agent.code}</span>}
+                <span className="block text-xs text-zinc-500">
+                  {salesAgent.source === "manual" ? "Assigned" : "Came through their link"} {formatDate(salesAgent.since, {}, tz)}. Purchases earn them commission
+                  for {salesProgram.attributionDays} days from then.
+                </span>
+              </p>
+            ) : (
+              <Empty>Not referred by a sales agent.</Empty>
+            )}
+            {(agentOptions.length > 0 || salesAgent) && (
+              <ActionForm action={assignContactAgentAction} hidden={{ contactId: ct.id }} submit="Save" variant="outline" size="sm" className="mt-3">
+                <Field label={salesAgent ? "Change agent" : "Assign to an agent"} htmlFor="contact-agent">
+                  <Select id="contact-agent" name="agentId" defaultValue={salesAgent?.agent.id ?? ""}>
+                    <option value="">No agent</option>
+                    {agentOptions.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                        {a.code ? ` (${a.code})` : ""}
+                        {a.status === "paused" ? " · paused" : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </ActionForm>
+            )}
           </Section>
 
           <Section title="Tasks" icon={ClipboardCheck} count={openTasks.length}>

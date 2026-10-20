@@ -10,6 +10,7 @@ import { getDb, schema } from "@/db";
 import type { OrderStatus } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { checkoutMode, livePaymentsBlocked } from "@/lib/payments";
+import { agentsForOrders } from "@/lib/sales/stats";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { stripeDashboardUrl, stripeTestMode } from "@/lib/stripe";
 import { cn, formatDateTime, formatMoney, pluralize } from "@/lib/utils";
@@ -111,6 +112,8 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
         ).map((b) => b.id)
       : [],
   );
+  // Which sales agent each course sale is credited to.
+  const agentByOrder = await agentsForOrders(orders.map((o) => o.id));
   const mode = checkoutMode();
   // Stripe test-mode payments are flagged isTest; with test keys configured, every payment lives in test mode.
   const testKeys = stripeTestMode();
@@ -224,6 +227,15 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
                     <TD className="max-w-xs">
                       <span className="line-clamp-2 text-zinc-800">{o.description}</span>
                       <span className="text-xs text-zinc-500">{o.itemType === "course" ? "Course" : "Paid session"}</span>
+                      {agentByOrder.get(o.id) && (
+                        <span className="block text-xs text-zinc-500">
+                          Sold by{" "}
+                          <Link href={`/admin/sales/${agentByOrder.get(o.id)!.agentId}`} className="font-medium text-brand-700 hover:underline">
+                            {agentByOrder.get(o.id)!.name}
+                          </Link>
+                          {agentByOrder.get(o.id)!.status === "void" && " (commission cancelled)"}
+                        </span>
+                      )}
                     </TD>
                     <TD className="text-right font-medium whitespace-nowrap text-zinc-900 tabular-nums">{formatMoney(o.amountCents, o.currency)}</TD>
                     <TD>

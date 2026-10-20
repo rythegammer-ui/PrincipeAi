@@ -16,6 +16,8 @@ import {
   MessageSquare,
   Receipt,
   Settings,
+  ShieldCheck,
+  Trophy,
   Users,
   X,
   type LucideIcon,
@@ -42,6 +44,8 @@ const ICONS: Record<AdminIconName, LucideIcon> = {
   GraduationCap,
   Receipt,
   Inbox,
+  Trophy,
+  ShieldCheck,
   Settings,
 };
 

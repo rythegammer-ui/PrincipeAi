@@ -465,10 +465,36 @@ https://principeai.com/courses?utm_source=bluesky&utm_medium=social&utm_campaign
 
 The dates for TP-09 to TP-38 are on each post and in section 7.
 
-**What to send when someone asks for the link.** One short message with the post's DM link, and no pitch:
+**What to send when someone asks for the link.** One short message with the post's DM link, and no pitch. Pick the version that matches where the DM link goes. Only the first one calls the linked page free, because course pages show a price.
+
+**Free page** (the Starter Kit, the assessment or a free preview lesson: TP-09 to TP-11, TP-13, TP-14, TP-18 to TP-22, TP-24, TP-34 to TP-36, and any KIT, READY or WORKFLOW request). For the assessment, replace "Start with the first section; it takes about 10 minutes." with "It takes about 3 minutes."
 
 ```text
 Here you go: [PASTE THE POST'S DM LINK]. It's free. Start with the first section; it takes about 10 minutes. Tell me how it goes.
+```
+
+**Course page** (TP-15, TP-17, TP-23 and TP-26 to TP-33):
+
+```text
+Here you go: [PASTE THE POST'S DM LINK]. That's the course page, with what's inside and the price. If you'd like to try it first, there's a free lesson linked on the page, no signup needed. Happy to answer any questions.
+```
+
+**Course catalog** (TP-07):
+
+```text
+Here you go: [PASTE THE POST'S DM LINK]. That page lists the courses and their prices. Each course page links a free lesson you can read with no signup. Tell me where you're starting from and I'll point you to the one that fits.
+```
+
+**Consulting page** (TP-25):
+
+```text
+Here you go: [PASTE THE POST'S DM LINK]. Done-with-you work starts with a free discovery call, and you get a written plan and quote before any work begins. Happy to answer any questions first.
+```
+
+**About page** (TP-12):
+
+```text
+Here you go: [PASTE THE POST'S DM LINK]. That's the story behind Principe AI.
 ```
 
 ### TP-09 · LinkedIn profile · Prompt breakdown: the 5-part prompt
@@ -515,7 +541,7 @@ The reusable template is Day 2 of my free AI Starter Kit. It's the first link in
 
 - **When:** L+8 · Wed Nov 18 · 14:30 ET LinkedIn profile; L+9 · Thu Nov 19 · 10:00 ET LinkedIn Page reshare.
 - **Format:** document (PDF) carousel, 10 slides. Recommended size 1080 × 1350 px, portrait (a common choice, not a LinkedIn rule). Up to 300 pages and 100 MB are allowed [L8]. Carousels had the highest median engagement of any LinkedIn format in Buffer's data [B1].
-- **Link:** none in the post. This is the week's one keyword CTA: reply to each "KIT" comment, then DM the link.
+- **Link:** none in the post. This is the week's one keyword CTA. Reply to each "KIT" comment. If they're a 1st-degree connection, DM the link. If not (a free account can only message 1st-degree connections), reply "It's the first link in my Featured section, and I've sent you a connection request so I can message it too", send the request, and DM the link once they accept.
 - **DM link:** `https://principeai.com/free-guide?utm_source=linkedin&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-kit`
 - **Source:** `src/content/starter-kit.ts`. Day titles and goals are quoted, and the prompt lines are quoted from each day's prompt with cuts only. Slide 9 uses tips 3, 5 and 8.
 
@@ -536,11 +562,11 @@ Day 7: Build your AI toolkit
 
 No tech skills, jargon or paid tools required. It works with the free versions of AI assistants like Claude, ChatGPT and Gemini.
 
-The slides have the key line from each day's prompt. If you'd like the full plan plus 50 copy-paste prompts, comment KIT and I'll send it to you. It's also the first link in my Featured section.
+The slides have the key line from each day's prompt. If you'd like the full plan plus 50 copy-paste prompts, comment KIT and I'll send it to you (or grab it now: it's the first link in my Featured section).
 
 #AI #Productivity
 ```
-*Count: LinkedIn 711/3,000*
+*Count: LinkedIn 723/3,000*
 
 **Slide outline:**
 
@@ -1075,11 +1101,13 @@ That second one matters more than it looks. If people fear blame, small problems
 
 Keep the whole policy to one or two pages, name an owner and set a review date.
 
+In a regulated field (healthcare, finance, legal, insurance or work with children), there are extra rules. Get professional advice for your sector before you finalize it.
+
 The full policy template and the traffic-light rules are part of AI for Business Owners: The Implementation Playbook. Message me if you'd like to see what's inside.
 
 #SmallBusiness #AI #Leadership
 ```
-*Count: LinkedIn 1,719/3,000*
+*Count: LinkedIn 1,891/3,000*
 
 ### TP-24 · LinkedIn profile · Automation blueprint: lead qualification
 
@@ -2943,7 +2971,7 @@ Replies on your own posts come first in the block. On LinkedIn, stay for 30 minu
 | Minutes | Platform | Do this |
 |---|---|---|
 | 0-4 | All | Reply to every new comment and DM on your own posts, Bluesky included. Accept connection requests from real people in your two lanes. Answer KIT, READY and WORKFLOW messages with the DM links in [profile setup](01-profile-setup.md), section 8. |
-| 4-12 | LinkedIn | Leave **3 or 4 substantive comments**, of 2-4 sentences each, with one concrete tip (formula in 4.3). Make 2 of them on accounts from your saved list and the rest in your 2nd- and 3rd-degree network. Stay inside your two lanes: commenting off-topic confuses LinkedIn about what you're about [L15]. Then send **5 personalized connection requests** to people whose posts you just commented on, or to owners and professionals in your lanes (templates in 4.4). Work up to 10 a day once it's quick [L15]. |
+| 4-12 | LinkedIn | Leave **3 or 4 substantive comments**, of 2-4 sentences each, with one concrete tip (formula in 4.3). Make 2 of them on accounts from your saved list and the rest in your 2nd- and 3rd-degree network. Stay inside your two lanes: commenting off-topic confuses LinkedIn about what you're about [L15]. Then send **5 connection requests** to people whose posts you just commented on, or to owners and professionals in your lanes. Work up to 10 a day once it's quick [L15]. A free account can add a note to only 3 to 5 requests a month (LinkedIn Help, see 4.4), so save the note templates in 4.4 for your most valuable requests and send the rest without a note. |
 | 12-18 | Community slot | The calendar rotates this slot by day. **Fridays are Threads and X:** reply under 2 Threads posts in AI tips, small business or productivity, and under 2-3 posts from mid-size X accounts (5k-100k followers) in AI for business, small business and productivity [research §3.6]. Every reply should add something, because X scores reply quality, and accounts under 1,000 followers get an extra spam check [X9]. The other days (Instagram and TikTok, Facebook groups, Reddit) are in the calendar. |
 | 18-20 | Your log | One line: the date, comments, requests sent and any conversation worth following up. |
 
@@ -3011,7 +3039,7 @@ Never put a link in a comment unless someone asks for it. Never mention your cou
 
 ### 4.4 Connection requests
 
-Free LinkedIn accounts have been reported to limit personalized notes: a 200-character note, and a monthly cap on personalized invitations. Both figures are third-party and **unverified** in the research. If you can't add a note, send the request without one and say hello once they accept.
+Free LinkedIn accounts can personalize only a few invitations a month. LinkedIn Help says 3 a month, with notes of up to 200 characters (linkedin.com/help/linkedin/answer/46662); its "Invitation limit reached" page says 5 (linkedin.com/help/billing/answer/a550555). Premium removes the cap. Use these templates for your best 3 requests each month. Send every other request without a note and say hello once they accept.
 
 Replace `[NAME]`, `[TOPIC]`, `[ONE SPECIFIC POINT]` and `[CITY]` for each person.
 
@@ -3020,16 +3048,16 @@ Replace `[NAME]`, `[TOPIC]`, `[ONE SPECIFIC POINT]` and `[CITY]` for each person
 ```text linkedin-note
 Hi [NAME], I enjoyed your post on [TOPIC], especially [ONE SPECIFIC POINT]. I share practical, plain-English AI tips for small businesses. Glad to connect.
 ```
-*Count: LinkedIn connection note (200 is a third-party figure) 155/200*
+*Count: LinkedIn connection note (200 per LinkedIn Help) 155/200*
 
 **A local business owner:**
 
 ```text linkedin-note
 Hi [NAME], fellow [CITY] business person here. I write about using AI for everyday business tasks, without the hype. Would be glad to connect.
 ```
-*Count: LinkedIn connection note (200 is a third-party figure) 142/200*
+*Count: LinkedIn connection note (200 per LinkedIn Help) 142/200*
 
-**After they accept:** no pitch and no link. If they later ask what you do, or comment "KIT" on a post, send the DM template from section 2.1 with that post's DM link.
+**After they accept:** no pitch and no link. If they later ask what you do, or comment "KIT" on a post, send the matching DM template from section 2.1 with that post's DM link.
 
 ### 4.5 Rules that protect the account
 

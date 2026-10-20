@@ -193,22 +193,22 @@ When you're ready to go further, we'll build automations that run reliably in pr
 
 [OPTIONAL: [YOUR STORY: one true sentence about why you started Principe AI]]
 
-[ON SCREEN TEXT: "New tutorials on Tuesdays · Free AI Starter Kit"]
-New tutorials go up on Tuesdays. Start with the free AI Starter Kit: 50 copy-paste prompts and a 7-day plan, about ten minutes a day. The link is at the top of this channel page. Subscribe, and I'll see you Tuesday.
+[ON SCREEN TEXT: "New tutorials every other Tuesday · Free AI Starter Kit"]
+A new tutorial goes up every other Tuesday. Start with the free AI Starter Kit: 50 copy-paste prompts and a 7-day plan, about ten minutes a day. The link is at the top of this channel page. Subscribe, and I'll see you then.
 ```
-*Length: 1,462 characters, 263 words including cues; about 200 spoken words, roughly 85 seconds at the scripts' 140 words per minute. Cut the business paragraph's last sentence if you need it under 80 seconds.*
+*Length: 1,478 characters, 266 words including cues; about 200 spoken words, roughly 85 seconds at the scripts' 140 words per minute. Cut the business paragraph's last sentence if you need it under 80 seconds.*
 
 **Trailer description:**
 
 ```text
-Practical AI in plain English, for your life and your business. New tutorials on Tuesdays.
+Practical AI in plain English, for your life and your business. New tutorials every other Tuesday.
 
 → Free AI Starter Kit (50 copy-paste prompts + a 7-day plan): https://principeai.com/free-guide?utm_source=youtube&utm_medium=social&utm_campaign=launch&utm_content=lc-04
 → Free AI Readiness Assessment (about 3 minutes): https://principeai.com/assessment?utm_source=youtube&utm_medium=social&utm_campaign=launch&utm_content=lc-04
 
 Principe AI is independent and not affiliated with Anthropic, OpenAI or Google. Product names are trademarks of their respective owners.
 ```
-*Length: 559 characters, 57 words.*
+*Length: 567 characters, 58 words.*
 
 ### 1.3 Playlists (LC-05 to LC-07)
 
@@ -284,8 +284,8 @@ One free preview lesson every second Tuesday at 11:00 ET; the [launch calendar](
 **Read this once, it applies to all eight.**
 
 - **Chapter times are the scripts' estimates** (140 words per minute). Replace them with your real edit timings. YouTube's rules: the first timestamp is 00:00, at least three in ascending order, each chapter at least 10 seconds (checked). Chapters only work once advanced features are on (checked).
-- **Titles:** YouTube's limit is 100 characters (UNVERIFIED); every option here keeps the search phrase in the first 60. Once advanced features are on, run **Test & Compare** on the thumbnail (and the title, if Studio offers it) (checked and reported).
-- **Thumbnails:** 1280 × 720 (UNVERIFIED spec). Royal violet background, 2–4 words in bold Geist with one gold word, you on camera or a cropped screenshot of your own chat. No AI company logos, no result numbers, nothing the video doesn't deliver.
+- **Titles:** YouTube's limit is 100 characters (checked, YouTube Help 57404); every option here keeps the search phrase in the first 60. Once advanced features are on, run **Test & Compare** on the thumbnail (and the title, if Studio offers it) (checked and reported).
+- **Thumbnails:** 16:9, at least 1280 × 720 (minimum width 640 px), JPG or PNG under 2 MB, which uploads from a phone or a computer (checked, YouTube Help 72431). YouTube now also takes larger designs, up to 3840 × 2160 and 50 MB from a computer (reported). Royal violet background, 2–4 words in bold Geist with one gold word, you on camera or a cropped screenshot of your own chat. No AI company logos, no result numbers, nothing the video doesn't deliver.
 - **No-face option for every video:** the scripts are written for a talking head plus screen recordings. You can record any of them as a screen recording with your voice-over, or with on-screen text in place of narration, and use a cropped screenshot of your own chat as the thumbnail.
 - **One ask per video, said twice at most.** The CTA line at the end of each plan replaces the course's "next lesson" line. Say it once at the end. The pinned comment repeats it.
 - **End screen** (last 5–20 seconds; the video must be at least 25 seconds; up to 4 elements) (checked): Subscribe, the video's playlist, and the next video once it's live. **Website links in end screens and cards need YPP** (checked), so don't plan on them.
@@ -371,7 +371,7 @@ About Principe AI: practical AI education and implementation for business owners
 
 #AIforBeginners #LearnAI #AIprompts
 ```
-*Length: 2,307 characters, 332 words. Description limit about 5,000 characters (UNVERIFIED).*
+*Length: 2,307 characters, 332 words. Description limit 5,000 characters (checked, YouTube Help 57404).*
 
 **Pinned comment**
 
@@ -900,7 +900,7 @@ What's the first task you'd want to automate?
 - **Repurposes:** `deliverables/video-scripts/ai-automation-accelerator/07-blueprint-lead-qualification.md` (5–7 min, ~790 words) · lesson `blueprint-lead-qualification` in `src/db/seed-content/course-ai-automation-accelerator.ts` (**free preview**)
 - **Free preview page:** `https://principeai.com/courses/ai-automation-accelerator/preview/blueprint-lead-qualification?utm_source=youtube&utm_medium=social&utm_campaign=evergreen&utm_content=lc-14`
 - **Shorts that point here:** SV-21 and SV-23 (move them here from LC-10 and LC-13 once this is live).
-- **No angle brackets in YouTube text.** YouTube Studio has rejected `<` and `>` in titles and descriptions (UNVERIFIED for 2026), so the description carries the prompt's output rules and links to the free lesson for the full prompt with its tags. Show the full prompt on screen in the video.
+- **No angle brackets in YouTube text.** YouTube doesn't allow `<` or `>` in titles or descriptions (checked, YouTube Help 6080480), so the description carries the prompt's output rules and links to the free lesson for the full prompt with its tags. Show the full prompt on screen in the video.
 - **Recording notes from the script:** test mode only, a test sheet or sandbox CRM, "never live customer records", and made-up or anonymized sample enquiries. Put **"EXAMPLE ONLY"** on screen over the ideal client profile in §3: it lists "group coaching", which Principe AI doesn't sell.
 
 **Title options**
@@ -1094,11 +1094,11 @@ Tell me which day you're on, and what you tried.
 ```text
 Principe AI is live: practical AI in plain English, for your life and your business.
 
-First tutorial: What AI Actually Is (and Isn't), a plain-English guide for complete beginners. New tutorials go up on Tuesdays.
+First tutorial: What AI Actually Is (and Isn't), a plain-English guide for complete beginners. New tutorials go up every other Tuesday.
 
 Free starting point, the AI Starter Kit (50 copy-paste prompts + a 7-day plan): https://principeai.com/free-guide?utm_source=youtube&utm_medium=social&utm_campaign=launch&utm_content=lc-16
 ```
-*Length: 403 characters, 50 words.*
+*Length: 411 characters, 51 words.*
 
 **Version B (poll, to choose upcoming topics)**
 
@@ -1784,9 +1784,9 @@ Fair, a lot of it is. What holds up is narrower: brainstorming, rewording, draft
 **"This is an ad"**
 
 ```text
-Fair question. There's no link in the post on purpose, and everything is above. I do teach this for a living (Principe AI), which is why it's on my profile.
+Fair question. Disclosure: I run Principe AI, so I'm biased, and that's why it's on my profile. Everything you need is in the post itself.
 ```
-*Length: 156 characters, 30 words.*
+*Length: 138 characters, 25 words.*
 
 
 ---
@@ -2164,7 +2164,7 @@ THREE RULES
 
 NEXT STEP
 Take the free 3-minute AI Readiness Assessment: a readiness score and a personalized AI action plan. [QR CODE: assessment link] principeai.com/assessment
-50 more copy-paste prompts and a 7-day plan, free: [QR CODE: Starter Kit link] principeai.com/free-guide
+45 more copy-paste prompts and a 7-day plan, free: [QR CODE: Starter Kit link] principeai.com/free-guide
 ```
 *Length: 2,250 characters, 370 words.*
 
@@ -2184,7 +2184,7 @@ Hi [THEIR NAME],
 
 Thanks for coming to today's session at [THEIR ORGANIZATION]. As promised, here are the slides: [YOUR SLIDES LINK].
 
-The five prompts are on the handout. If you'd like 50 more and a 7-day plan, the free AI Starter Kit is here: https://principeai.com/free-guide?utm_source=local&utm_medium=referral&utm_campaign=evergreen&utm_content=lc-53-orgname
+The five prompts are on the handout. If you'd like the other 45 and a 7-day plan, the free AI Starter Kit is here: https://principeai.com/free-guide?utm_source=local&utm_medium=referral&utm_campaign=evergreen&utm_content=lc-53-orgname
 
 And if you'd like to talk through where AI could help in your business, you can book a free 30-minute AI Strategy Call: https://principeai.com/book/ai-strategy-call?utm_source=local&utm_medium=referral&utm_campaign=evergreen&utm_content=lc-53-orgname
 
@@ -2194,7 +2194,7 @@ Principe AI · principeconsults@gmail.com
 [YOUR BUSINESS POSTAL ADDRESS]
 This is a one-off email because you asked for the slides. Reply "no thanks" and I won't email again.
 ```
-*Length: 888 characters, 111 words.*
+*Length: 893 characters, 112 words.*
 
 ### LC-54 · Library or adult-education variant: a free "AI for Everyday Life" class
 
@@ -2331,7 +2331,7 @@ At the Monday review (calendar, section 3.3) and above all at the monthly retros
 9. **Business postal address** for promotional emails (missing from the site's email footer too). It's a must-fix before LC-53 or any other promotional email ([tools, measurement and compliance](08-tools-measurement-compliance.md), section 4.1).
 10. **A regular newsletter:** how will it be sent? No admin broadcast screen was found. Newsletter swaps (LC-48, LC-49) wait on this, or on four issues of the LinkedIn newsletter.
 11. **Your credential and story:** anything true to put in `[YOUR CREDENTIAL IF ANY]` and `[YOUR STORY: …]`? If not, those lines get deleted everywhere.
-12. **Unverified limits:** YouTube title (100), description (5,000) and channel description (about 1,000) characters; Reddit title (300) and post (40,000); LinkedIn invitation notes (about 200). Every item is well under them, but they weren't re-checked today.
+12. **Unverified limits:** YouTube channel description (about 1,000 characters); Reddit title (300) and post (40,000); LinkedIn invitation notes (about 200). Every item is well under them, but they weren't re-checked today.
 13. **Paid lesson videos:** the scripts README says to upload them to YouTube as Unlisted, and unlisted links can be shared freely. Keep that, or use a host that can lock videos to the site's domain?
 14. **A "Where did you hear about us?" question** on the strategy-call booking form would catch podcast and talk referrals the first-touch cookie misses. Add it?
 15. **Your YouTube channel URL** goes into `site.social` in `src/config/site.ts` with the other profiles, so the footer and `/links` show it ([profile setup](01-profile-setup.md), section 7).

@@ -2,13 +2,15 @@
 
 > **What this file is:** the start-here playbook. It answers "What can I do to launch and push Principe AI on all my social media?"
 >
-> **When to use it:** read it first, today (L-21 · Tue Oct 20), in about 10 minutes. Come back whenever you need the map. The detail lives in the files in section 9.
+> **When to use it:** read it first, in about 10 minutes, and come back whenever you need the map. The detail lives in the files in section 9.
+>
+> **Today (L-21 · Tue Oct 20), in this order:** (1) read this page; (2) pick the scheduling stack (section 6); (3) reserve the handles on every Tier 1 to 3 platform, with two-factor sign-in ([01](01-profile-setup.md), section 3); (4) start the TikTok, YouTube and LinkedIn verifications and the DNS records; (5) decide your public name and whether you'll show your face (section 6). **Tomorrow (L-20), before any bio link:** have `claude/sweet-edison-ne5duy` merged, switch off "Free Guide Nurture" and "Assessment Follow-up" in Admin → Email Automations, and order a PO box ([08](08-tools-measurement-compliance.md), 4.1). Then work through the [calendar](02-launch-calendar.md), section 4, one row a day.
 
 ---
 
 ## 1. The plan in one paragraph
 
-You launch everywhere on one day, **Tue Nov 10, 2026 (L+0)**, after two weeks of setup and one week of value-only warm-up posts. Every post teaches one useful thing and points to a free first step: the AI Starter Kit, the AI Readiness Assessment or a free preview lesson. The site's emails, calls and courses do the rest. You batch the week's posts every Monday, reply to everyone, and review what worked. Setup is about 46 hours over three weeks; then about 8 hours a week, or 3 at a minimum ([calendar](02-launch-calendar.md), section 2).
+You launch everywhere on one day, **Tue Nov 10, 2026 (L+0)**, after two weeks of setup and one week of value-only warm-up posts. Every post teaches one useful thing and points to a free first step: the AI Starter Kit, the AI Readiness Assessment or a free preview lesson. The site's emails, calls and courses do the rest. You batch the week's posts every Monday, reply to everyone, and review what worked. Setup is about 53 hours over three weeks; then about 9.5 hours a week, or 3 at a minimum ([calendar](02-launch-calendar.md), section 2).
 
 | Phase | L-days | Default dates |
 |---|---|---|
@@ -27,11 +29,11 @@ You launch everywhere on one day, **Tue Nov 10, 2026 (L+0)**, after two weeks of
 
 | Tier | Platforms | Why | Time a week |
 |---|---|---|---|
-| **1 · Now** | Instagram (Reels, carousels, Stories), TikTok, YouTube (Shorts now, long-form from the free preview lessons), LinkedIn (your profile, then the Company Page), Facebook Page (Reels shared from Instagram, plus link posts) | Short video reaches non-followers; Instagram has the most free link spots; YouTube is searchable; LinkedIn reaches business owners; Facebook is nearly free to add | About 6.5 h |
+| **1 · Now** | Instagram (Reels, carousels, Stories), TikTok, YouTube (Shorts now, long-form from the free preview lessons), LinkedIn (your profile, then the Company Page), Facebook Page (Reels shared from Instagram, plus link posts) | Short video reaches non-followers; Instagram has the most free link spots; YouTube is searchable; LinkedIn reaches business owners; Facebook is nearly free to add | About 8 h |
 | **2 · Cross-post** | Threads (from Instagram), X, Pinterest | Copies, not new work. Evergreen Pins bring search traffic to `/free-guide` and `/assessment` | About 0.5 h |
 | **3 · Later** | Bluesky; Reddit (comments only for 3 weeks, posts from Thu Dec 3); your own Facebook Group (Mon Jan 4, if go); podcast, partner and local outreach (5 pitches a week from Mon Nov 23) | Each needs an audience, a comment history or a rule check first | About 1 h |
 
-Hours split the calendar's 8-hour week. The Jan 11 and Feb 1 retros keep, cut or promote platforms by your own lead numbers ([08](08-tools-measurement-compliance.md), 3.4).
+Hours split the calendar's 9.5-hour week. The Jan 11 and Feb 1 retros keep, cut or promote platforms by your own lead numbers ([08](08-tools-measurement-compliance.md), 3.4).
 
 **Create once, post everywhere.** Monday's 2-hour batch makes the next week:
 
@@ -53,7 +55,7 @@ Hours split the calendar's 8-hour week. The Jan 11 and Feb 1 retros keep, cut or
 
 DM keywords: **KIT** (comment `#prompts`) → Starter Kit, **READY** (`#aiready`) → assessment, **WORKFLOW** (`#aiworkflow`) → the free lesson "Anatomy of an AI Workflow". Starter Kit links go to `/free-guide`, never `/guide`. Never share `/assessment/results/…`, `/booking/…` or `/book/confirmed/…` pages.
 
-**How tracking works.** Every link carries UTM tags: platform (`utm_source`), placement (`utm_medium`), campaign by posting date (`launch`, `evergreen`, `bf-2026`, `ny-2027`) and post ID (`utm_content`, e.g. `sv-07`). The site keeps a visitor's first tagged click for 90 days and copies it onto the contact when they give an email. **Admin → Funnels → Attribution → "Channel (UTM source)"** shows leads, calls, customers and revenue per platform; each contact's page shows the post. Every main bio link goes to the `/links` page (Starter Kit first): `https://principeai.com/links?utm_source=<platform>&utm_medium=bio&utm_campaign=evergreen&utm_content=bio`. Copy links from the kits; never retype them ([08](08-tools-measurement-compliance.md), section 2).
+**How tracking works.** Every link carries UTM tags: platform (`utm_source`), placement (`utm_medium`), campaign by posting date (`launch`, `evergreen`, `bf-2026`, `ny-2027`) and post ID (`utm_content`, e.g. `sv-07`). **Admin → Funnels → Attribution → "Channel (UTM source)"** shows leads, calls, customers and revenue per platform; each contact's page shows the post. Every main bio link goes to the `/links` page (Starter Kit first): `https://principeai.com/links?utm_source=<platform>&utm_medium=bio&utm_campaign=evergreen&utm_content=bio`. Copy links from the kits; never retype them ([08](08-tools-measurement-compliance.md), section 2).
 
 ---
 
@@ -65,7 +67,7 @@ Tick all of these by L-1 · Mon Nov 9.
 - [ ] **AI key:** if `ANTHROPIC_API_KEY` isn't live by L-1, delete every **[CONFIRM: AI key live in production]** line.
 - [ ] **Prices** checked in Admin → Courses (coaching: Admin → Availability), and again the morning of any **PRICE** post.
 - [ ] **CAN-SPAM postal address** (a PO box is fine) in the email footer before any link sends people to `/free-guide` or `/assessment`, by L-8 · Mon Nov 2. Until then, pause the two prospect email automations ([08](08-tools-measurement-compliance.md), 4.1).
-- [ ] **Branch `claude/sweet-edison-ne5duy` merged** into the branch Vercel deploys.
+- [ ] **Branch `claude/sweet-edison-ne5duy` merged** into the branch Vercel deploys (L-20 · Wed Oct 21, before any bio link).
 - [ ] **`src/config/site.ts` → `social`** filled with full `https://` URLs and redeployed (L-12 · Thu Oct 29; [01](01-profile-setup.md), section 7).
 - [ ] **Handles reserved:** `@principeai`, else `@principe.ai`, `@principe_ai`, `@getprincipeai`; two-factor login on (L-21 · today).
 - [ ] **Slow verifications started:** TikTok business, YouTube ID, LinkedIn identity, DNS records for Pinterest, Meta and Bluesky (L-21 · today).
@@ -81,13 +83,13 @@ Tick all of these by L-1 · Mon Nov 9.
 
 | Week | Main jobs |
 |---|---|
-| **1 · L-21 to L-15 · Oct 20 to 26** | Today: pick tools, reserve handles, start verifications. Then Tier 1 profiles (Wed to Fri), **film batch A** (Sat), record LC-04 and LC-08 (Sun), Tier 2 and 3 profiles (Mon) |
+| **1 · L-21 to L-15 · Oct 20 to 26** | Today: the steps at the top. Wed: the merge and the email stop-gap first, then Tier 1 profiles (Wed to Fri), **film batch A** (Sat), record LC-04 and LC-08 (Sun), Tier 2 and 3 profiles (Mon) |
 | **2 · L-14 to L-8 · Oct 27 to Nov 2** | Canva templates (Tue), DM automations (Wed), `site.social` (Thu), Highlights and first Pins (Fri), **film batch B** (Sat), post Highlights (Sun), **test every link** and schedule the warm-up (Mon) |
 | **3 · L-7 to L-1 · Nov 3 to 9** | Election Day: no posts, film batch C. From Wed: warm-up posts and the daily engagement block. Mon: schedule launch week and week 2, then go/no-go |
 
 Then **launch week** (Tue Nov 10): announce everywhere, pin the launch posts, run 14 days of Stories, reply to everyone. **Week 2** settles into the rhythm; Mon Nov 23 brings the first podcast pitches. **Week 3** is Thanksgiving: lighter, nothing on Thu Nov 26. Every slot: [calendar](02-launch-calendar.md), sections 4 to 7.
 
-**Weekly rhythm (Growth).** **Mon:** 9:00 review (30 min), 9:30 batch (2 h). **Tue:** outreach, LinkedIn, long-form video every second week. **Wed:** edit videos. **Thu:** schedule next week. **Fri:** carousel. **Sat:** long-form recording every second week. **Sun:** off. Plus 20 minutes of engagement each weekday: replies first, then comments on other people's posts ([calendar](02-launch-calendar.md), section 3).
+**Weekly rhythm (Growth).** **Mon:** 9:00 review (30 min), 9:30 batch (2 h). **Tue:** outreach, LinkedIn, long-form video every second week. **Wed:** edit videos. **Thu:** schedule next week. **Fri:** carousel. **Sat:** long-form recording every second week. **Sun:** off. Plus 20 minutes of engagement each weekday: replies first, then comments on other people's posts ([calendar](02-launch-calendar.md), section 3). Track everything in one sheet ([08](08-tools-measurement-compliance.md), 3.2).
 
 ---
 
@@ -95,13 +97,13 @@ Then **launch week** (Tue Nov 10): announce everywhere, pin the launch posts, ru
 
 | Decision | Default until you decide | Decide by |
 |---|---|---|
-| **Face on camera** | Nothing assumed. Every script has a no-face version: screen recording plus your voice-over or on-screen text | L-17 · Sat Oct 24 |
-| **Name, story, credentials** | `[YOUR NAME]`, `[YOUR STORY: …]`, `[YOUR CREDENTIAL IF ANY]`: fill with true details or delete the line | Before TP-01 (L+0) |
+| **Face on camera** | Nothing assumed. Every script has a no-face version: screen recording plus your voice-over or on-screen text | L-20 · Wed Oct 21 (the LinkedIn photo goes up on L-19; batch A films SV-01 on L-17) |
+| **Name, story, credentials** | `[YOUR NAME]`, `[YOUR STORY: …]`, `[YOUR CREDENTIAL IF ANY]`: fill with true details or delete the line | L-20 · Wed Oct 21 (used by the LinkedIn profile L-19, the YouTube description L-18, SV-01 L-17, LC-04 L-16 and the DM auto-replies L-13) |
 | **Launch date** | Tue Nov 10 | Go/no-go L-1 · Mon Nov 9 |
 | **Black Friday promo** | None: value posts and TP-16 version B. A promo needs a real Stripe promotion code with a real end date | L+10 · Fri Nov 20 (code by Mon Nov 23) |
 | **Facebook Group** | Opens Mon Jan 4 only if you can personally invite 25+ people who've engaged | L+34 · Mon Dec 14 |
 | **X Premium** | Free account; X stays Tier 2 | Only if X brings leads by L+27 · Mon Dec 7 |
-| **Scheduling tool** | The $0 stack: native schedulers plus Buffer Free or Metricool Free. Upgrade: Postiz and Canva Pro ([08](08-tools-measurement-compliance.md), 1.1) | Postiz trial from Sun Nov 1; decide by Sun Nov 8 |
+| **Scheduling tool** | The $0 stack: native schedulers plus Buffer Free or Metricool Free. Upgrade: Postiz and Canva Pro ([08](08-tools-measurement-compliance.md), 1.1) | Postiz trial from L-8 · Mon Nov 2; decide by Sun Nov 8 |
 
 Smaller ones: [01](01-profile-setup.md), section 9; [08](08-tools-measurement-compliance.md), section 6.
 
@@ -120,13 +122,7 @@ The 60-second pre-post check: [08](08-tools-measurement-compliance.md), 4.2.
 
 ## 8. What changed on the website
 
-On branch `claude/sweet-edison-ne5duy` (commits `daad673`, `3468fa6`):
-
-| Change | To switch it on |
-|---|---|
-| **Footer social links** (`rel="me"`) and **Organization `sameAs`** on the home page, for each full `https://` URL in `site.social`; blank or non-https entries are skipped | Fill `site.social` ([01](01-profile-setup.md), 7.2), merge, redeploy, check (7.4) |
-| **`/links` bio page:** Starter Kit first, then the assessment, courses, strategy call, implementation and your profiles. Hidden from search | Deploy, then point every main bio link at it ([01](01-profile-setup.md), section 8) |
-| **Share cards for free preview lessons:** "Free lesson: {title}" plus its summary | Deploy with the correct `NEXT_PUBLIC_SITE_URL` |
+Branch `claude/sweet-edison-ne5duy` (commits `daad673`, `3468fa6`) adds footer social links (`rel="me"`) and Organization `sameAs` from `site.social` (blank or non-https entries are skipped), the `/links` bio page (Starter Kit first; hidden from search) and share cards for free preview lessons (they need the correct `NEXT_PUBLIC_SITE_URL`). Merge it on L-20, before any bio link; fill `site.social` on L-12 ([01](01-profile-setup.md), section 7).
 
 Still open: the email postal address, the independence line in the footer and `/terms`, and real testimonials (only with permission).
 
@@ -142,18 +138,14 @@ Still open: the email postal address, the independence line in the footer and `/
 | [03-short-video-kit.md](03-short-video-kit.md) | LD-01 to LD-03, SV-01 to SV-27: scripts, filming, no-face version, captions |
 | [04-linkedin-x-threads-bluesky.md](04-linkedin-x-threads-bluesky.md) | TP-01 to TP-66, the engagement routine, the LinkedIn newsletter |
 | [05-instagram-pinterest-facebook.md](05-instagram-pinterest-facebook.md) | VC-01 to VC-83: carousels, Stories, Highlights, Pins, Facebook Page and Group |
-| [06-youtube-reddit-outreach.md](06-youtube-reddit-outreach.md) | LC-01 to LC-60: YouTube channel and long-form, Reddit, outreach templates |
+| [06-youtube-reddit-outreach.md](06-youtube-reddit-outreach.md) | LC-01 to LC-16, LC-20 to LC-34, LC-40 to LC-54 and LC-60 (numbers in between are unused): YouTube channel and long-form, Reddit, outreach templates |
 | [07-content-bank.md](07-content-bank.md) | CB-01 to CB-83 ideas, the funnel map, website gaps, offer facts |
 | [08-tools-measurement-compliance.md](08-tools-measurement-compliance.md) | Tools, UTM rules, Monday scorecard, compliance, paid boosting |
 
-Short of time? Kits 03 to 06 each open with "Start with these 10". The [research/](research/) folder holds the sourced background research; you don't need it to post.
+Short of time? Cut in the calendar's order ([calendar](02-launch-calendar.md), 2.3). Within what you keep, each kit's "Start with these 10" says what to make first. The [research/](research/) folder holds the sourced background research; you don't need it to post.
 
 ---
 
 ## 10. How Claude can help next
 
-- **Schedule the calendar** through Postiz once you connect it (API key stored as a secret): Claude drafts each week with tagged links, you approve, Claude schedules.
-- **Make the site changes:** merge this branch, fill `site.social`, add the email postal address and the independence line.
-- **Make scripts record-ready:** your true details, teleprompter cuts, shot lists, and the missing LC-15 script (due Fri Dec 11).
-- **Design carousels and Pins** as image files in the brand colours and fonts, ready to post or finish in Canva.
-- **Run the Monday review** from your Admin → Contacts export and Funnels numbers: scorecard, winners, next experiment.
+Claude can schedule each week through Postiz once you connect it (you approve every post), make the site changes, put your true details into scripts, write the missing LC-15 script, design carousels and Pins, and run the Monday review from your exports.

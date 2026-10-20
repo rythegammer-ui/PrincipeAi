@@ -26,13 +26,16 @@
 
 | L-day | Default date | Do this | Section |
 |---|---|---|---|
-| L-21 | Tue Oct 20 (today) | Reserve every handle and turn on two-factor login. Start the checks that can take days: TikTok business verification, YouTube ID verification, LinkedIn identity (CLEAR), and the DNS records for Pinterest and Meta. Add the quick Bluesky DNS record at the same time. | 3, 4.2, 4.3, 4.4, 7.5 |
-| L-20 to L-17 | Wed Oct 21 to Sat Oct 24 | Make the avatar and banners in Canva. Set up the Tier 1 profiles. | 2.4, 4 |
-| L-16 to L-14 | Sun Oct 25 to Tue Oct 27 | Set up Threads, X, Pinterest (boards stay secret), Bluesky and Reddit. | 5, 6 |
-| L-13 to L-10 | Wed Oct 28 to Sat Oct 31 | Paste the profile URLs into the website and redeploy. Set up the DM automations and the Facebook inbox replies. | 7, 4.1, 4.6 |
+| L-21 | Tue Oct 20 (today) | Reserve every Tier 1 to 3 handle and turn on two-factor login. Start the checks that can take days: TikTok business verification, YouTube ID verification, LinkedIn identity (CLEAR), and the DNS records for Pinterest and Meta. Add the quick Bluesky DNS record at the same time. Set up TikTok's profile basics. | 3, 4.2, 4.3, 4.4, 7.5 |
+| L-20 | Wed Oct 21 | Before any bio link: merge the website branch and check that `/links` loads (7.3), and switch off the two prospect email automations (9, item 4). Make the avatar and banners in Canva. Set up Instagram and the Facebook Page. | 2.4, 4.1, 4.6, 7.3 |
+| L-19 | Thu Oct 22 | Set up your LinkedIn profile. | 4.4 |
+| L-18 | Fri Oct 23 | Set up YouTube and the LinkedIn Company Page. | 4.3, 4.5 |
+| L-15 | Mon Oct 26 | Set up Threads, X, Pinterest (boards stay secret), Bluesky and Reddit. | 5, 6 |
+| L-13 | Wed Oct 28 | Set up the DM automations and the Facebook inbox replies. | 4.1, 4.2, 4.6 |
+| L-12 | Thu Oct 29 | Paste the profile URLs into the website and redeploy. | 7 |
 | L-9 | Sun Nov 1 | Post the six Highlight sets (VC-30 to VC-35) as Stories and save each one to its Highlight. | 4.1 |
-| L-8 | Mon Nov 2 | Test every link in section 8 in a private window. Tick each "done when" list. | 8 |
-| L-7 to L-1 | Tue Nov 3 to Mon Nov 9 | Warm-up. Leave the profiles as they are and post value only, no launch announcement. **No posting on Tue Nov 3 (Election Day).** | — |
+| L-8 | Mon Nov 2 | If a test email shows the postal address in its footer, switch the two prospect email automations back on (9, item 4); if not, leave them off. Test every link in section 8 in a private window. Tick each "done when" list. | 8 |
+| L-7 to L-1 | Tue Nov 3 to Mon Nov 9 | Warm-up. Leave the profiles as they are and post value only, no launch announcement. **No posting on Tue Nov 3 (Election Day).** On L-2 (Sun Nov 8), claim the reserve-only handles. | 3, 6.4 |
 | L+0 | Tue Nov 10 | Launch. Pin the launch posts (table below). | 1.1 |
 
 ### 1.1 What to pin, and when
@@ -75,6 +78,8 @@ Profiles don't change for Black Friday or the New Year push: those campaigns (`b
 - **The main profile link always goes to the bio page**, `principeai.com/links`, tagged with that platform's `utm_source`. The page lists the Starter Kit, the assessment, the courses, the strategy call and implementation. The tag sets a 90-day first-touch cookie, so Admin → Funnels credits every lead from that bio to the right platform.
 - **Where a platform allows more than one link,** the extras go straight to `/free-guide`, `/assessment`, a free preview lesson and `/courses` (and `/book/ai-strategy-call` on YouTube and LinkedIn).
 - **Every profile link uses `utm_campaign=evergreen`**, including Highlights and DM automations. `utm_medium` is `bio` for profile links and buttons, and `dm` for messages.
+- **DM replies you send by hand** outside the three keywords (KIT, READY, WORKFLOW) use `utm_medium=dm`, `utm_campaign=evergreen` and, as `utm_content`, `dm-call` or `dm-courses` for general call or course questions, or the ID of the post they reply to (such as `tp-07`).
+- **`/links` exists only once the website branch is merged** (7.3, done on L-20 before any bio link). If it isn't live yet, use the temporary main link in the [launch calendar](02-launch-calendar.md) (L-20) and swap it on L-12.
 - **Copy links from section 8. Never retype them.** One wrong letter in `utm_source` creates a new row in Admin → Funnels.
 - **Starter Kit links always go to `/free-guide`, never `/guide`.** Never link a private page: `/assessment/results/…`, `/booking/…` or `/book/confirmed/…`.
 - Links between your own profiles (for example, Instagram listed on YouTube) carry no UTM tags.
@@ -112,19 +117,23 @@ Never use an AI-generated photorealistic image of a person, or an AI avatar, as 
 
 ### 2.5 Schedulers
 
-Connect each profile to a scheduler only after it's set up. The free default: Meta Business Suite for Facebook and Instagram, TikTok Studio, YouTube Studio and LinkedIn's own scheduler, plus Buffer Free or Metricool Free for X, Threads, Bluesky and Pinterest. The upgrade: Postiz (once it's connected, Claude can schedule posts through it) plus Canva Pro.
+Connect each profile to a scheduler only after it's set up. The free default: Meta Business Suite for Facebook and Instagram, TikTok Studio, YouTube Studio and LinkedIn's own scheduler, plus Buffer Free for X, Threads and Bluesky (its 3 free channels) and Pinterest's own scheduler for Pins (Metricool Free also covers Pinterest, Threads and Bluesky, but can't post to X). The upgrade: Postiz (once it's connected, Claude can schedule posts through it) plus Canva Pro.
 
 ### 2.6 Account security
 
 - Sign up with `principeconsults@gmail.com`, or with a domain mailbox such as `social@principeai.com` if you set one up. Use the same address everywhere so recovery emails all land in one place.
+- Secure `principeconsults@gmail.com` (or the domain mailbox) first: every platform recovers to it. Turn on two-factor login with an authenticator app and save its recovery codes in a password manager.
 - Turn on two-factor login with an authenticator app on every account. Save the recovery codes in a password manager.
+- By L-13 (Wed Oct 28), add a trusted person as a second admin on the Meta business portfolio (which holds the Facebook Page and Instagram) and on the LinkedIn Page. If there's nobody, keep a printed copy of every recovery code somewhere safe.
+- New business Pages get fake "your Page will be disabled" or "verify your account" messages. Treat them as scams: don't click their links or reply. Check Account Status or the Support Inbox inside the app instead.
+- If an account is restricted or a post is removed: appeal inside the app, note it in your log, and don't open a replacement account to get around it.
 - Write each handle and profile URL into the checklist in section 3 as you go. Section 7 needs them.
 
 ---
 
 ## 3. Handle reservation checklist (every platform)
 
-Claim every row on L-21 (Tue Oct 20), including the platforms you won't use yet. That stops someone else taking the name. Check availability in each app's sign-up or edit-profile screen. Free checkers (Namecheckr, Namechk) are fine for a first look but often get Instagram and TikTok wrong. Spot checks on 2026-10-20 found `youtube.com/@principeai` and `x.com/principeai` free. The others couldn't be checked automatically.
+Claim every Tier 1 to 3 row on L-21 (Tue Oct 20), including the platforms you won't use yet. That stops someone else taking the name. Claim the reserve-only rows on L-2 (Sun Nov 8), when the avatar file exists (6.4). Check availability in each app's sign-up or edit-profile screen. Free checkers (Namecheckr, Namechk) are fine for a first look but often get Instagram and TikTok wrong. Spot checks on 2026-10-20 found `youtube.com/@principeai` and `x.com/principeai` free. The others couldn't be checked automatically.
 
 If `principeai` is taken by an inactive account, don't buy it: buying accounts usually breaks platform terms. Claiming a handle through a trademark needs a registered mark (see section 9).
 
@@ -142,7 +151,7 @@ If `principeai` is taken by an inactive account, don't buy it: buying accounts u
 | [ ] | Bluesky | 3 | `principeai.bsky.social`, then switch to `principeai.com` | Go straight to `principeai.com`: only you can claim it | A domain name (checked) | `https://bsky.app/profile/principeai.com` |
 | [ ] | Reddit, brand | 3 | `u/principeai` (reserve only, never post from it) | `u/principe_ai`, `u/getprincipeai` | 3 to 20 characters: letters, numbers, hyphens, underscores (check in the app) | `https://www.reddit.com/user/principeai/` |
 | [ ] | Reddit, you | 3 | A personal account in your own name or a neutral handle | — | As above | Not linked from the site |
-| [ ] | Facebook Group | 3 | Nothing to reserve now. Create it just before L+55 (Mon Jan 4), if you open it (6.3) | — | — | — |
+| [ ] | Facebook Group | 3 | Nothing to reserve now. Create it on L+38 (Fri Dec 18) if the L+34 (Mon Dec 14) check passes (6.3) | — | — | — |
 | [ ] | Snapchat | Reserve | `principeai` | `principe.ai`, `principe_ai`, `getprincipeai` | Check in the app | Note it in your password manager |
 | [ ] | Medium | Reserve | `@principeai` | `@principe_ai`, `@getprincipeai` | Check in the app | Note it |
 | [ ] | Substack | Reserve | `principeai.substack.com` | `getprincipeai` | Letters, numbers, hyphens (check in the app) | Note it |
@@ -159,7 +168,7 @@ For each row: tick it, turn on two-factor login, save the recovery codes, and ad
 
 ### 4.1 Instagram
 
-**Role:** the main conversion hub, with Reels, carousels and Stories. **Time:** about 2 hours, L-20 (Wed Oct 21) to L-17 (Sat Oct 24). Highlights on L-9 (Sun Nov 1).
+**Role:** the main conversion hub, with Reels, carousels and Stories. **Time:** about 2 hours in all: the profile on L-20 (Wed Oct 21), with the Facebook Page; the automations on L-13 (Wed Oct 28); the Highlights on L-9 (Sun Nov 1).
 
 **Account type: Professional, then Business.** Business suits brands and service providers. It gives you a contact button, a category label, insights, Meta Business Suite (free scheduling and the free comment-to-message automation) and ads later (checked). Creator is for public figures. Switching later is free.
 
@@ -193,7 +202,7 @@ _128 / 150 characters, counted by script, line breaks included._
 | IG-4 | Links → link 4 | Free lesson: The 5-Part Prompt | `https://principeai.com/courses/ai-essentials/preview/the-five-part-prompt?utm_source=instagram&utm_medium=bio&utm_campaign=evergreen&utm_content=bio-free-lesson` |
 | IG-5 | Links → link 5 | Courses + free lessons | `https://principeai.com/courses?utm_source=instagram&utm_medium=bio&utm_campaign=evergreen&utm_content=bio-courses` |
 
-**Highlights (VC-30 to VC-35).** On L-9 (Sun Nov 1), post each set as Stories, then save it to a new Highlight in this order: Start Here, Free Kit, AI Quiz, Courses, For Business, FAQ. Covers are 1080 × 1920 px: a `#6938EF` fill with a centred gold `#FEC84B` line icon about 420 px wide (house, gift, checklist, book, briefcase, question mark), and no text. Instagram crops the centre into a circle. Highlights stay until you remove them, and search engines can show them (checked), so keep the frame text in plain words. VC-33 (Courses) has `[CONFIRM: …]` lines: fill or delete them before posting. Don't add a "Results" Highlight until you have real results that clients have agreed you can share. The link stickers:
+**Highlights (VC-30 to VC-35).** On L-9 (Sun Nov 1), post each set as Stories, then save it to a new Highlight in this order: Start Here, Free Kit, AI Quiz, Courses, For Business, FAQ. Covers are 1080 × 1920 px: a `#6938EF` fill with a centred gold `#FEC84B` line icon about 420 px wide (house, gift, checklist, book, briefcase, question mark), and no text. Instagram crops the centre into a circle. Highlights stay until you remove them, and search engines can show them (checked), so keep the frame text in plain words. VC-33 (Courses) has `[CONFIRM: …]` lines: keep them only if the AI key is live in production when you design the frames (L-11, Fri Oct 30). Otherwise delete them, and add them later as a new frame once it is. Don't add a "Results" Highlight until you have real results that clients have agreed you can share. The link stickers:
 
 | ID | Where it goes | Title to type | Link (copy all of it) |
 |---|---|---|---|
@@ -206,7 +215,7 @@ _128 / 150 characters, counted by script, line breaks included._
 | IG-15 | Highlight "For Business" (VC-34), frame 6 link sticker | Book a free call | `https://principeai.com/book/ai-strategy-call?utm_source=instagram&utm_medium=bio&utm_campaign=evergreen&utm_content=vc-34` |
 | IG-16 | Highlight "FAQ" (VC-35), frame 6 link sticker | Book a free call | `https://principeai.com/book/ai-strategy-call?utm_source=instagram&utm_medium=bio&utm_campaign=evergreen&utm_content=vc-35` |
 
-**Comment and DM automations.** Set these up on Wed Oct 28, in Meta Business Suite on a computer: Inbox → Automations → "Comment to message" (it only works on desktop). It replies once, privately, to a comment that contains a hashtag. Meta allows one private reply per comment, within 7 days (checked). If Automations also offers keyword replies for DMs, add KIT, READY and WORKFLOW with the same messages. If it doesn't, answer DMs by hand with saved replies (check in the app). The same three messages, with `utm_source=facebook`, go on the Facebook Page (4.6).
+**Comment and DM automations.** Set these up on L-13 (Wed Oct 28), in Meta Business Suite on a computer: Inbox → Automations → "Comment to message" (it only works on desktop). It replies once, privately, to a comment that contains a hashtag. Meta allows one private reply per comment, within 7 days (checked). If Automations also offers keyword replies for DMs, add KIT, READY and WORKFLOW with the same messages. If it doesn't, answer DMs by hand with saved replies (check in the app). The same three messages, with `utm_source=facebook`, go on the Facebook Page (4.6).
 
 | ID | Where it goes | Link (copy all of it) |
 |---|---|---|
@@ -295,7 +304,7 @@ Practical AI for life & business. Free 50-prompt AI Starter Kit below ↓
 ```
 _71 / 80 characters, counted by script._
 
-**Category:** Education. **Contact:** turn on the Email button with `principeconsults@gmail.com`. **Linked accounts:** add Instagram and YouTube to the profile (no UTM needed).
+**Category:** Education. **Contact:** turn on the Email button with `principeconsults@gmail.com`. **Linked accounts:** if Edit profile offers Instagram and YouTube, add them (no UTM needed). TikTok has reportedly dropped links that open other social apps (check in the app). If the option isn't there, skip it: `/links` lists your other profiles once TT-1 is live.
 
 **Links**
 
@@ -309,9 +318,9 @@ _71 / 80 characters, counted by script._
 **Welcome message and keyword replies.** In Business tools, under direct messages (menu names vary; this needs verification or Advanced Access; TikTok reviews new messages, which reportedly takes 1 to 5 days). Until then, answer by hand with the same text and links.
 
 ```text
-Thanks for messaging Principe AI! Reply KIT for the free AI Starter Kit, READY for the free AI Readiness Assessment, or WORKFLOW for a free lesson on AI workflows. [YOUR NAME] reads every message.
+Thanks for messaging Principe AI! This is an automated reply. Reply KIT for the free AI Starter Kit, READY for the free AI Readiness Assessment, or WORKFLOW for a free lesson on AI workflows. [YOUR NAME] reads every message.
 ```
-_196 characters, counted by script._
+_224 characters, counted by script._
 
 ```text
 Here's your free AI Starter Kit: 50 copy-paste prompts + a 7-day plan. https://principeai.com/free-guide?utm_source=tiktok&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-kit (Automated message. Reply HUMAN and [YOUR NAME] will answer personally.)
@@ -353,14 +362,14 @@ TikTok has no comment-to-DM automation for US accounts as of October 2026 (sourc
 **Done when**
 
 - [ ] `@principeai` is a Business account, category Education, with the avatar uploaded.
-- [ ] The name, bio version A, the Email button, and the Instagram and YouTube links are on the profile.
+- [ ] The name, bio version A and the Email button are on the profile (plus the Instagram and YouTube links, if TikTok offers them).
 - [ ] Business verification is submitted, with the date noted, or the fallback is written down.
 - [ ] Comment filters and the keyword list are on.
 - [ ] When the website field appears: TT-1 is added, the bio is switched to version B, and the welcome message and keyword replies (TT-2 to TT-4) are live.
 
 ### 4.3 YouTube
 
-**Role:** Shorts now; long-form videos cut from the seven free preview lessons. **Time:** about 2 hours, L-21 (Tue Oct 20) to L-18 (Fri Oct 23).
+**Role:** Shorts now; long-form videos cut from the seven free preview lessons. **Time:** about 2 hours: phone and ID verification on L-21 (Tue Oct 20), the rest on L-18 (Fri Oct 23).
 
 **Account type: a Brand Account channel named "Principe AI".** When you create the channel, choose to use a business or custom name. That makes a Brand Account, so you can add a manager later without sharing your password (the menu wording may differ; check in the app).
 
@@ -430,7 +439,7 @@ _929 / 1,000 characters, counted by script, line breaks included. Replace [YOUR 
 
 ### 4.4 LinkedIn: your personal profile (first)
 
-**Role:** the main professional channel. On LinkedIn, the founder's profile reaches far more people than a Company Page (reported). **Time:** about 2 hours, L-20 (Wed Oct 21) to L-18 (Fri Oct 23).
+**Role:** the main professional channel. On LinkedIn, the founder's profile reaches far more people than a Company Page (reported). **Time:** about 2 hours on L-19 (Thu Oct 22), plus the identity check (CLEAR) on L-21 (Tue Oct 20).
 
 **Account type:** your own personal profile in your real name. LinkedIn profiles must be real people, so the brand lives in your headline, Experience and Featured section. Use the free account. Premium isn't needed at launch: the custom profile button is Premium-only (checked), and Featured links do the same job for free.
 
@@ -523,7 +532,7 @@ _317 / 500 characters, counted by script. The limit isn't confirmed; this stays 
 **Verification and eligibility**
 
 - **Identity verification through CLEAR:** free in the US with a government ID and your phone (checked). Usually a few minutes. Do it on L-21 (Tue Oct 20). It's a trust signal for a brand with no testimonials yet.
-- **Newsletter, needed for TP-63 on L+56 (Tue Jan 5):** it needs more than 150 followers or connections, recent original posts and good standing (checked). Access rolls out gradually. Check Creator tools by L+40 (Sun Dec 20). If Newsletter isn't there yet, publish issue 1 as a LinkedIn article instead and check again in February.
+- **Newsletter, needed for TP-63 on L+56 (Tue Jan 5):** it needs more than 150 followers or connections, recent original posts and good standing (checked). Access rolls out gradually. Check Creator tools at Retro 1, L+27 (Mon Dec 7). If Newsletter isn't there yet, publish issue 1 (TP-63) as a normal LinkedIn post on L+56 (Tue Jan 5) and check again in February.
 
 **Done when**
 
@@ -595,7 +604,7 @@ _968 / 2,000 characters, counted by script, line breaks included._
 
 ### 4.6 Facebook Page
 
-**Role:** Reels cross-posted from Instagram, the occasional link post, Messenger, and ads later. **Time:** about 1.5 hours, L-19 (Thu Oct 22) to L-17 (Sat Oct 24). Inbox replies on L-13 (Wed Oct 28).
+**Role:** Reels cross-posted from Instagram, the occasional link post, Messenger, and ads later. **Time:** about 1.5 hours in all: the Page on L-20 (Wed Oct 21), with Instagram; the inbox replies on L-13 (Wed Oct 28).
 
 **Account type: a Page, not professional mode.** Professional mode adds creator tools to your personal profile. A Page keeps the brand separate and supports admin roles, Meta Business Suite and ads (reported). Create the Page from your personal account.
 
@@ -635,8 +644,10 @@ _668 characters, counted by script, line breaks included._
 | FB-3 | Inbox: instant reply, FAQ 1, comment #prompts, DM keyword KIT | — | `https://principeai.com/free-guide?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-kit` |
 | FB-4 | Inbox: FAQ 2, comment #aiready, DM keyword READY | — | `https://principeai.com/assessment?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-ready` |
 | FB-5 | Inbox: FAQ 3, comment #aiworkflow, DM keyword WORKFLOW | — | `https://principeai.com/courses/ai-automation-accelerator/preview/anatomy-of-an-ai-workflow?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-workflow` |
+| FB-6 | Inbox: your own reply to a question about a call | — | `https://principeai.com/book/ai-strategy-call?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-call` |
+| FB-7 | Inbox: your own reply to a question about courses | — | `https://principeai.com/courses?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-courses` |
 
-**Inbox replies.** Set them up on L-13 (Wed Oct 28) in Meta Business Suite → Inbox → Automations. Add the instant reply, then the three FAQs, then the three comment-to-message automations (`#prompts`, `#aiready`, `#aiworkflow`). The FAQ answers double as the comment replies. Questions about calls or courses: answer by hand (section 9 explains why).
+**Inbox replies.** Set them up on L-13 (Wed Oct 28) in Meta Business Suite → Inbox → Automations. Add the instant reply, then the three FAQs, then the three comment-to-message automations (`#prompts`, `#aiready`, `#aiworkflow`). The FAQ answers double as the comment replies. Questions about calls or courses: answer by hand, with FB-6 (calls) or FB-7 (courses).
 
 Instant reply:
 
@@ -698,7 +709,7 @@ _325 characters, counted by script._
 
 ### 5.1 Threads
 
-**Role:** cheap reach alongside Instagram. **Time:** 20 minutes, L-16 (Sun Oct 25).
+**Role:** cheap reach alongside Instagram. **Time:** 20 minutes, L-15 (Mon Oct 26).
 
 **Account type:** a Threads profile on your Instagram account. It shares the Instagram handle and name.
 
@@ -813,7 +824,7 @@ _144 / 160 characters, counted by script. You can delete "Run by [YOUR NAME]." i
 
 ### 5.3 Pinterest
 
-**Role:** long-lasting search traffic to the free offers, especially the "For your life" path. **Time:** about 3 hours, L-16 (Sun Oct 25) to L-14 (Tue Oct 27), including boards.
+**Role:** long-lasting search traffic to the free offers, especially the "For your life" path. **Time:** about 1.5 hours on L-15 (Mon Oct 26), including the ten boards (their names and descriptions are ready to paste in the Pinterest post kit). The website claim's DNS record goes in on L-21 (Tue Oct 20).
 
 **Account type: Business** (free; it must be public) (checked). It gives you analytics, the website claim and Pins with links.
 
@@ -851,7 +862,7 @@ _321 / 500 characters, counted by script._
 - Pinterest tag (conversion pixel): don't install it now. It only matters for ads, and it needs a privacy and cookie review first.
 - Privacy: let search engines show your profile.
 - Comments: allow them, and filter the Instagram word list if the setting is offered.
-- Scheduling: Pinterest's own scheduler, or Buffer Free or Metricool Free (2.5).
+- Scheduling: Pinterest's own scheduler, or Metricool Free (2.5). Buffer Free's 3 channels go to X, Threads and Bluesky.
 - Rich Pins: optional, not a launch blocker. A few days after claiming the site, check whether a Pin to `/free-guide` shows the page's own title and description.
 
 **Verification:** the website claim (7.5) takes up to 72 hours with the DNS method (checked).
@@ -872,7 +883,7 @@ Podcast, partner and local outreach start in the Growth phase and need no profil
 
 ### 6.1 Bluesky
 
-**Role:** optional cross-posts. Bluesky's audience is small, and many users are openly hostile to generative AI (reported), so expect pushback. Mute rather than argue. **Time:** 30 minutes, L-14 (Tue Oct 27), plus a DNS record on L-21 (Tue Oct 20).
+**Role:** optional cross-posts. Bluesky's audience is small, and many users are openly hostile to generative AI (reported), so expect pushback. Mute rather than argue. **Time:** 30 minutes, L-15 (Mon Oct 26), plus a DNS record on L-21 (Tue Oct 20).
 
 **Account type:** a standard account, then your website as your handle.
 
@@ -915,7 +926,7 @@ _243 / 256 characters, counted by script, line breaks included. You can delete "
 
 ### 6.2 Reddit
 
-**Role:** answering questions in the communities where your buyers are. Reddit rewards people, not brands. **Comment only for the first 3 weeks after you start.** After that, post only where a community's rules allow it. **Time:** 20 minutes, L-14 (Tue Oct 27).
+**Role:** answering questions in the communities where your buyers are. Reddit rewards people, not brands. **Comment only for the first 3 weeks after you start.** After that, post only where a community's rules allow it. **Time:** 20 minutes, L-15 (Mon Oct 26).
 
 **Two accounts**
 
@@ -951,7 +962,7 @@ _167 / 200 characters, counted by script._
 
 **Decide on L+34 (Mon Dec 14).** Open the group only if you can personally invite at least 25 people who have already engaged with you: commented, replied to a Story, messaged you or signed up. That number is a judgment call, so pick your own, but pick it before L+34 (Mon Dec 14). If you're short, run the 7-Day AI Starter Challenge on the Page and Instagram instead, and check again in March.
 
-**Setup.** Do it on Sat Jan 2 or Sun Jan 3, so the group is ready on L+55 (Mon Jan 4):
+**Setup.** Do it on L+38 (Fri Dec 18), in the holiday batch, if the L+34 check passed. Send your personal invitations on L+53 (Sat Jan 2) and L+54 (Sun Jan 3), so the group is ready on L+55 (Mon Jan 4):
 
 - Create the group **as the Page**, so the Page is the admin.
 - Privacy: **private** at first, because beginners ask basic questions more freely.
@@ -977,7 +988,7 @@ A group has no website field. Links live in posts, using the January campaign: `
 
 ### 6.4 Reserve-only accounts
 
-For Snapchat, Medium, Substack, Discord, Mastodon, Telegram and Product Hunt: claim the handle (section 3), use the name `Principe AI` and the avatar file, and paste the short bio below where there's a bio field. **Don't add a tagged link.** These channels have no `utm_source` value yet, so either leave the link empty or use plain `https://principeai.com`. Approve a new source value before you start posting on any of them. Turn on two-factor login and don't post.
+For Snapchat, Medium, Substack, Discord, Mastodon, Telegram and Product Hunt, on L-2 (Sun Nov 8): claim the handle (section 3), use the name `Principe AI` and the avatar file, and paste the short bio below where there's a bio field. **Don't add a tagged link.** These channels have no `utm_source` value yet, so either leave the link empty or use plain `https://principeai.com`. Approve a new source value before you start posting on any of them. Turn on two-factor login and don't post.
 
 ```text
 Practical AI for your life and business. Learn AI. Implement AI. Grow with AI. principeai.com
@@ -988,7 +999,7 @@ _93 / 150 characters, counted by script._
 
 ## 7. Connect your profiles to the website
 
-The site already has the code: once `src/config/site.ts` holds full `https://` profile URLs, they appear in the footer and on `/links` (with `rel="me"`), and as Organization `sameAs` on the home page. Blank entries and anything that isn't an `https://` URL are skipped. Do this on L-13 (Wed Oct 28), once every Tier 1 and Tier 2 profile exists.
+The site already has the code: once `src/config/site.ts` holds full `https://` profile URLs, they appear in the footer and on `/links` (with `rel="me"`), and as Organization `sameAs` on the home page. Blank entries and anything that isn't an `https://` URL are skipped. Merge the branch on L-20 (Wed Oct 21), before any bio link (7.3, step 1). Fill in the profile URLs on L-12 (Thu Oct 29), once every Tier 1 and Tier 2 profile exists.
 
 ### 7.1 Collect the profile URLs
 
@@ -1017,8 +1028,8 @@ The footer lists them in this order: YouTube, Instagram, TikTok, LinkedIn, X, Th
 
 ### 7.3 Merge and redeploy
 
-1. The footer, `/links` and share-card changes are on the branch `claude/sweet-edison-ne5duy` (commits `daad673` and `3468fa6`). Merge that branch into the branch Vercel deploys, or ask Claude or your developer to open a pull request and merge it.
-2. Make the `site.ts` edit (the GitHub web editor is fine) and commit it to that same branch. Vercel redeploys after the push `[CONFIRM: Vercel deploys automatically from GitHub]`.
+1. **On L-20 (Wed Oct 21), before you save any bio link:** the footer, `/links` and share-card changes are on the branch `claude/sweet-edison-ne5duy` (commits `daad673` and `3468fa6`). Merge that branch into the branch Vercel deploys, or ask Claude or your developer to open a pull request and merge it. Blank `site.social` entries are skipped, so merging before the profiles exist is safe. Then open `https://principeai.com/links` in a private window: every main bio link depends on it.
+2. **On L-12 (Thu Oct 29):** make the `site.ts` edit (the GitHub web editor is fine) and commit it to that same branch. Vercel redeploys after the push `[CONFIRM: Vercel deploys automatically from GitHub]`.
 3. While you're in Vercel, check Project → Settings → Environment Variables (Production) for `NEXT_PUBLIC_SITE_URL=https://principeai.com`. Without it, share cards and structured data point at the wrong address. If you change it, redeploy.
 
 ### 7.4 Check the site
@@ -1056,7 +1067,7 @@ Every link in this file was made by one script from one list. The script checks 
 
 1. Open each link in a **private window**. Your normal browser keeps your own first visit for 90 days and would credit your tests to the wrong place.
 2. Check that it lands on the right page. `/links` should show the Starter Kit first.
-3. For one link per platform, opt in on `/free-guide` with a test address. In Admin → Contacts, open that contact and check that the UTM block shows the right `utm_source`, `utm_medium=bio` (or `dm`) and `utm_content`. Then delete the test contact or mark it as a test.
+3. For one link per platform and every DM keyword link, opt in on `/free-guide` (or finish the assessment) with an email the site has never seen, such as `principeconsults+ig1@gmail.com`. The site accepts 8 opt-ins per 10 minutes, so pace yourself. In Admin → Contacts, open that contact and check that the UTM block shows the right `utm_source`, `utm_medium=bio` (or `dm`) and `utm_content`. Then delete the test contact ([tools, measurement and compliance](08-tools-measurement-compliance.md), 2.8).
 4. Tick the row.
 
 | ✓ | ID | Platform | Where it goes | Lands on | Link |
@@ -1102,6 +1113,8 @@ Every link in this file was made by one script from one list. The script checks 
 | [ ] | FB-3 | Facebook Page | Inbox: instant reply, FAQ 1, comment #prompts, DM keyword KIT | `/free-guide` | `https://principeai.com/free-guide?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-kit` |
 | [ ] | FB-4 | Facebook Page | Inbox: FAQ 2, comment #aiready, DM keyword READY | `/assessment` | `https://principeai.com/assessment?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-ready` |
 | [ ] | FB-5 | Facebook Page | Inbox: FAQ 3, comment #aiworkflow, DM keyword WORKFLOW | `/courses/ai-automation-accelerator/preview/anatomy-of-an-ai-workflow` | `https://principeai.com/courses/ai-automation-accelerator/preview/anatomy-of-an-ai-workflow?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-workflow` |
+| [ ] | FB-6 | Facebook Page | Inbox: your own reply to a question about a call | `/book/ai-strategy-call` | `https://principeai.com/book/ai-strategy-call?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-call` |
+| [ ] | FB-7 | Facebook Page | Inbox: your own reply to a question about courses | `/courses` | `https://principeai.com/courses?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-courses` |
 | [ ] | TH-1 | Threads | Edit profile → Links → link 1 (shown first) | `/links` | `https://principeai.com/links?utm_source=threads&utm_medium=bio&utm_campaign=evergreen&utm_content=bio` |
 | [ ] | TH-2 | Threads | Links → link 2 | `/free-guide` | `https://principeai.com/free-guide?utm_source=threads&utm_medium=bio&utm_campaign=evergreen&utm_content=bio-kit` |
 | [ ] | TH-3 | Threads | Links → link 3 | `/assessment` | `https://principeai.com/assessment?utm_source=threads&utm_medium=bio&utm_campaign=evergreen&utm_content=bio-assessment` |
@@ -1119,7 +1132,7 @@ Every link in this file was made by one script from one list. The script checks 
 | [ ] | BS-1 | Bluesky | Edit profile → Description (the link sits in the bio text) | `/links` | `https://principeai.com/links?utm_source=bluesky&utm_medium=bio&utm_campaign=evergreen&utm_content=bio` |
 | [ ] | RD-1 | Reddit | Your personal account → Edit profile → Social links → Custom URL | `/links` | `https://principeai.com/links?utm_source=reddit&utm_medium=bio&utm_campaign=evergreen&utm_content=bio` |
 
-57 links in total. Links to your own profiles (such as Instagram listed on YouTube) and the bare-domain options carry no tags and aren't in this table.
+59 links in total. Links to your own profiles (such as Instagram listed on YouTube) and the bare-domain options carry no tags and aren't in this table.
 
 ---
 
@@ -1127,11 +1140,11 @@ Every link in this file was made by one script from one list. The script checks 
 
 1. **Handle availability** on Instagram, TikTok, LinkedIn, Facebook, Pinterest and the reserve-only platforms. Only YouTube and X were spot-checked (free on 2026-10-20). If a fallback is used anywhere, update section 7.2.
 2. **TikTok business verification:** which registration documents Principe Consults can show `[CONFIRM]`. If there are none, use the fallback in 4.2.
-3. **Website:** merge `claude/sweet-edison-ne5duy`, set `NEXT_PUBLIC_SITE_URL=https://principeai.com` in Vercel, confirm the Stripe, Resend and Anthropic keys are set there, fill `site.social`, redeploy, and confirm where principeai.com's DNS is hosted. The Starter Kit emails need Resend working before any DM sends people to `/free-guide`.
-4. **Before emailing anyone these profiles bring in:** the marketing emails still need a physical postal address under CAN-SPAM (a PO box or a private mailbox is allowed). The Starter Kit and the assessment both start email sequences.
+3. **Website:** merge `claude/sweet-edison-ne5duy` on L-20 (Wed Oct 21), before any bio link, set `NEXT_PUBLIC_SITE_URL=https://principeai.com` in Vercel, confirm the Stripe, Resend and Anthropic keys are set there, fill `site.social`, redeploy, and confirm where principeai.com's DNS is hosted. The Starter Kit emails need Resend working before any DM sends people to `/free-guide`.
+4. **Before emailing anyone these profiles bring in:** the marketing emails still need a physical postal address under CAN-SPAM (a PO box or a private mailbox is allowed). The Starter Kit and the assessment both start email sequences. On L-20 (Wed Oct 21), before any bio link, switch off "Free Guide Nurture" and "Assessment Follow-up" in Admin → Email Automations. The address must be in the email footer by L-8 (Mon Nov 2); switch the two automations back on only when a test email shows it ([tools, measurement and compliance](08-tools-measurement-compliance.md), 4.1).
 5. **Limits still unconfirmed:** Pinterest name (30 or 65), Facebook bio (100, 101 or 155), TikTok bio (80 or 160), the YouTube description (about 1,000), Threads bio (150), LinkedIn headline, About and tagline, and the Reddit About (about 200). Every text in this file fits the smaller figure.
-6. **UTM gaps:** the convention has no `utm_content` value for DM replies about calls or courses, so this file answers those by hand. To automate them, approve values such as `dm-call` and `dm-courses`. LinkedIn's profile website (LI-1) and Page website (LP-1) both use `utm_content=bio`, so a contact's record can't show which of the two it came from. The reserve-only platforms have no `utm_source` value yet.
+6. **UTM gaps:** DM replies about calls or courses use `utm_medium=dm`, `utm_campaign=evergreen` and `utm_content=dm-call` or `dm-courses` (or the post ID they reply to); FB-6 and FB-7 are ready-made for the Facebook inbox. LinkedIn's profile website (LI-1) and Page website (LP-1) both use `utm_content=bio`, so a contact's record can't show which of the two it came from. The reserve-only platforms have no `utm_source` value yet.
 7. **Face or no face:** the LinkedIn profile photo and the YouTube trailer (LC-04) assume you. The no-face options are in 4.3 and 4.4.
 8. **Trademark:** should you file a USPTO trademark for "Principe AI"? It's the usual route for reclaiming a handle someone else is sitting on.
-9. **Newsletter access on LinkedIn** for TP-63 on L+56 (Tue Jan 5): check Creator tools by L+40 (Sun Dec 20).
-10. **Backup admins:** decide who, if anyone, should be a second admin on the Facebook Page and LinkedIn Page.
+9. **Newsletter access on LinkedIn** for TP-63 on L+56 (Tue Jan 5): check Creator tools on L+27 (Mon Dec 7). Without access, TP-63 goes out as a normal post on Jan 5.
+10. **Backup admins:** by L-13 (Wed Oct 28), decide who, if anyone, should be a second admin on the Meta business portfolio (Facebook Page and Instagram) and the LinkedIn Page (2.6).

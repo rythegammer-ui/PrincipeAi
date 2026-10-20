@@ -2,7 +2,7 @@
 
 > **What this file is:** the tools for running Principe AI's social accounts (a free stack and a low-cost upgrade), the final rules for tagging every link, how to read your results every Monday, and the legal and platform rules to check before you post, send email or pay for reach.
 >
-> **When to use it:** set up the tools and link tags in the Setup phase, L-21 to L-8 (Tue Oct 20 to Mon Nov 2). Fix the email problem in section 4.1 **this week**. Run the Monday review from L-1 (Mon Nov 9). Re-read sections 4 and 5 before any promotion or paid boost.
+> **When to use it:** set up the tools and link tags in the Setup phase, L-21 to L-8 (Tue Oct 20 to Mon Nov 2). Fix the email problem in section 4.1 **this week**. Run the Monday review from L+6 (Mon Nov 16). Re-read sections 4 and 5 before any promotion or paid boost.
 >
 > **How to read it:** L is launch day, Tue Nov 10, 2026. Every date shows the L-day with the default date beside it, so you can move the whole plan. Post IDs (LD-, SV-, TP-, VC-, LC-, CB-) point to the post kits listed in the [README](README.md). Every profile link is in [profile setup](01-profile-setup.md), section 8. The day-by-day plan is in the [launch calendar](02-launch-calendar.md).
 
@@ -11,7 +11,7 @@
 **The short version**
 
 1. **Add a postal address to your marketing emails before the first promotional email goes out** (4.1). Until you do, switch off the two prospect email automations.
-2. Start on the **$0 stack**. If you want Claude to schedule the calendar for you, try **Postiz** from L-9 (Sun Nov 1) (1.4).
+2. Start on the **$0 stack**. If you want Claude to schedule the calendar for you, try **Postiz** from L-8 (Mon Nov 2) (1.4).
 3. Tag every link exactly as the table in 2.1 says. Test the links on L-8 (Mon Nov 2) (2.8).
 4. Spend 30 minutes every Monday on the scorecard (3.2-3.3). Judge posts against **your own** median, not other people's numbers (3.4).
 5. No testimonials, earnings claims or "was" prices. Label realistic AI media. Name AI tools in plain text only, and add the non-affiliation line (4.2-4.9).
@@ -48,7 +48,7 @@
 | Results | Each platform's analytics plus Admin → Funnels | Same, plus Postiz analytics that Claude can pull for you |
 | **Monthly cost** | **$0** | **About $43** (Postiz Team at $31/month billed yearly, plus Canva Pro at about $12/month). **About $73** with Descript and ManyChat. Postiz billed monthly is $39 [S4] |
 
-**Time (Recommendation):** one 2-3 hour batch session a week, plus about 15 minutes a day replying to comments. Replying isn't optional when you start from zero followers.
+**Time (Recommendation):** one 2-3 hour batch session a week, plus the calendar's 20-minute engagement block each weekday ([calendar](02-launch-calendar.md), section 2). Replying isn't optional when you start from zero followers.
 
 ### 1.2 Native schedulers (all free)
 
@@ -70,7 +70,7 @@
 
 | Tool | Free tier | Cheapest paid tier | Notes for Principe AI | Source |
 |---|---|---|---|---|
-| **Buffer** | Free forever: **3 channels, 10 scheduled posts per channel at a time** (a slot frees up when a post publishes), 1 user, AI Assistant, community inbox, 30 days of insights | **Essentials: $5 per channel per month, billed yearly** ($60/year per channel). Monthly billing costs about 20% more. Team: $10 per channel per month billed yearly. 14-day trial. Prices last updated Nov 2025 | Publishes to Instagram business or creator accounts, Facebook Pages, LinkedIn profiles and Pages, Threads, TikTok **business** profiles, YouTube Shorts and X. Instagram **personal** profiles get reminders only. **No UTM builder**, but pasting a tagged link by hand works. Bluesky and Pinterest support were not confirmed in this research (**UNVERIFIED**): check when you connect | [S1] |
+| **Buffer** | Free forever: **3 channels, 10 scheduled posts per channel at a time** (a slot frees up when a post publishes), 1 user, AI Assistant, community inbox, 30 days of insights | **Essentials: $5 per channel per month, billed yearly** ($60/year per channel). Monthly billing costs about 20% more. Team: $10 per channel per month billed yearly. 14-day trial. Prices last updated Nov 2025 | Publishes to Instagram business or creator accounts, Facebook Pages, LinkedIn profiles and Pages, Threads, TikTok **business** profiles, YouTube Shorts and X. Instagram **personal** profiles get reminders only. **No UTM builder**, but pasting a tagged link by hand works. Bluesky (connect with a Bluesky app password) and Pinterest **business** accounts are supported (Buffer Help, "Supported channels"). The free plan allows 8 unique channel connections in its lifetime, disconnected ones included, so don't connect and disconnect channels to experiment | [S1] |
 | **Metricool** | Free: **1 brand, every network except LinkedIn and X, 20 posts a month**, 30 days of analytics, 5 competitor profiles | **Starter: from $20/month billed yearly** ($25 monthly), up to 5 brands. Adds LinkedIn, unlimited posts (fair use), full history, multiple link-in-bio pages. X is a paid add-on (price **UNVERIFIED**; third parties say about $5/month) | Whether one post sent to 5 networks counts as 1 or 5 of the 20 is **UNVERIFIED** | [S2] |
 | **Postiz** (hosted) | 7-day free trial on every plan. **No permanent free tier** | **Standard: $29/month** ($23 billed yearly), 5 channels, unlimited posts, no team members. **Team: $39/month** ($31 billed yearly), 10 channels. Pro $49, Ultimate $99. **Every plan includes the API, MCP server, CLI and webhooks** | Supports X, LinkedIn (profile and Page), Instagram, Facebook, TikTok, YouTube, Threads, Pinterest, Reddit, Bluesky and more. See 1.4 | [S4] |
 | **Postiz** (self-hosted) | Open source, no licence fee | Your own server and upkeep | You need **your own app approval from each network**. Postiz says Facebook, Instagram, Threads and YouTube "usually take more than a month". Not worth it for a solo founder | [S4] |
@@ -85,7 +85,7 @@
 
 **Steps (Recommendation):**
 
-1. **Start the 7-day trial on L-9 (Sun Nov 1) at the earliest,** once every Tier 1 profile exists. The trial then covers scheduling the warm-up week (Nov 4-9; nothing on Election Day, Tue Nov 3) and launch week. Decide by L-2 (Sun Nov 8).
+1. **Start the 7-day trial on L-8 (Mon Nov 2),** once every Tier 1 profile exists. Keep the warm-up (Nov 4-9; nothing on Election Day, Tue Nov 3) queued in the native tools while you test. Decide by L-2 (Sun Nov 8), before the trial ends, so that on L-1 (Mon Nov 9) you schedule launch week and week 2 in the tool you keep.
 2. In Postiz, connect each channel. Each platform asks you to log in and approve access.
 3. In Postiz's settings, create an API key. Where the setting sits is **UNVERIFIED**, so check in the app.
 4. Give the key to Claude, ideally as a **secret environment variable** named `POSTIZ_API_KEY` in your Claude environment's settings rather than pasted into a chat. Never put it in a repo file, a shared doc or a public post. Anyone with the key can post as you. Revoke it in Postiz if it leaks.
@@ -146,7 +146,7 @@ Use exactly these values, in lowercase. Never use variants such as `ig`, `insta`
 | `utm_medium` | `paid_social` | Boosts and ads |
 | `utm_medium` | `referral` | Podcasts, partners, talks and newsletter swaps |
 | `utm_campaign` | `launch` | Posts published L-7 to L+13 (Tue Nov 3 to Mon Nov 23; nothing posts on Nov 3) |
-| `utm_campaign` | `evergreen` | Everything else: library posts after L+13, bios, Pins, Highlights, DM automations, holiday posts (Dec 21-Jan 1) |
+| `utm_campaign` | `evergreen` | Whatever the date: bios, every Pin, Highlights, DM replies, playlist descriptions and outreach (`referral`) links. Otherwise everything outside the other windows: library posts after L+13, holiday posts (Dec 21-Jan 1) |
 | `utm_campaign` | `bf-2026` | Thanksgiving to Cyber Monday promotion posts (Thu Nov 26 to Mon Nov 30), **only if you set up a real Stripe promotion code** (4.6). Other posts that week stay `evergreen` |
 | `utm_campaign` | `ny-2027` | Posts published Jan 2-31, 2027 |
 | `utm_content` | The post ID in lowercase: `ld-01`, `sv-07`, `tp-12`, `vc-05`, `lc-03` (`cb-..` if you post a content-bank idea directly) | Posts, first comments, Story stickers (the Story's own ID) and Highlight frames (the Highlight's VC ID) |
@@ -154,6 +154,7 @@ Use exactly these values, in lowercase. Never use variants such as `ig`, `insta`
 | `utm_content` | `bio-kit` · `bio-assessment` · `bio-free-lesson` · `bio-courses` · `bio-call` | Extra profile links on platforms that allow several |
 | `utm_content` | `button` | Page call-to-action buttons (Facebook, LinkedIn Page) |
 | `utm_content` | `dm-kit` · `dm-ready` · `dm-workflow` | Replies to the KIT, READY and WORKFLOW keywords, automated or by hand |
+| `utm_content` | `dm-call` · `dm-courses`, or the post ID the DM is about | DM replies you write by hand outside the three keywords: a question about a call, a question about courses, or a reply about one post. Still `utm_medium=dm` and `utm_campaign=evergreen` |
 | `utm_content` | `<post-id>-<partnername>` | Podcasts, newsletters, partners and local organisations, for example `lc-43-showname` |
 
 ### 2.2 Rules that keep the data clean
@@ -188,10 +189,10 @@ Use exactly these values, in lowercase. Never use variants such as `ig`, `insta`
 |---|---|
 | Instagram main bio link | `https://principeai.com/links?utm_source=instagram&utm_medium=bio&utm_campaign=evergreen&utm_content=bio` |
 | Launch-day video LD-01 on TikTok (L+0) | `https://principeai.com/?utm_source=tiktok&utm_medium=social&utm_campaign=launch&utm_content=ld-01` |
-| A Pinterest Pin, VC-05, posted in December | `https://principeai.com/free-guide?utm_source=pinterest&utm_medium=social&utm_campaign=evergreen&utm_content=vc-05` |
+| A Pin cut from VC-05, posted in December | `https://principeai.com/assessment?utm_source=pinterest&utm_medium=social&utm_campaign=evergreen&utm_content=vc-05` |
 | KIT keyword reply on Facebook | `https://principeai.com/free-guide?utm_source=facebook&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-kit` |
 | LC-43 podcast show notes | `https://principeai.com/free-guide?utm_source=podcast&utm_medium=referral&utm_campaign=evergreen&utm_content=lc-43-showname` |
-| A boosted Reel, VC-05, in January | `https://principeai.com/free-guide?utm_source=instagram&utm_medium=paid_social&utm_campaign=ny-2027&utm_content=vc-05` |
+| A boosted carousel, VC-02, in January | `https://principeai.com/free-guide?utm_source=instagram&utm_medium=paid_social&utm_campaign=ny-2027&utm_content=vc-02` |
 
 ### 2.4 Build a link by hand (copy-paste template)
 
@@ -202,7 +203,7 @@ https://principeai.com<PATH>?utm_source=<PLATFORM>&utm_medium=<MEDIUM>&utm_campa
 ```
 
 - `<PATH>`: `/free-guide`, `/assessment`, `/links`, `/courses`, `/consulting`, `/book/ai-strategy-call`, a free preview lesson, or nothing for the home page.
-- `<CAMPAIGN>`: `launch` for posts dated Nov 3-23, `ny-2027` for Jan 2-31, `bf-2026` only for a real promotion, otherwise `evergreen`. Bios and DMs are always `evergreen`.
+- `<CAMPAIGN>`: bios, Highlights, every Pin, DMs, playlist descriptions and outreach (`referral`) are always `evergreen`. Otherwise `launch` for posts dated Nov 3-23, `ny-2027` for Jan 2-31, `bf-2026` only for a real promotion, else `evergreen`.
 - Open it once in a private window before you post (2.8).
 
 ### 2.5 Build links in a spreadsheet
@@ -214,9 +215,9 @@ Works in Google Sheets and Excel. Put the launch date in cell **K1** (`2026-11-1
 | A | Post ID | `VC-05` |
 | B | Platform (`utm_source`) | `instagram` |
 | C | Medium | `social` |
-| D | Publish date | `2026-11-12` |
-| E | Path | `/free-guide` |
-| F | Anchor (optional) | `#enroll` |
+| D | Publish date | `2026-11-21` |
+| E | Path | `/assessment` |
+| F | Anchor (optional) | blank here (`#enroll` on a course page) |
 | G | Campaign (formula) | `launch` |
 | H | Link (formula) | (the full link) |
 | I | Check (formula) | `ok` |
@@ -224,7 +225,7 @@ Works in Google Sheets and Excel. Put the launch date in cell **K1** (`2026-11-1
 **G2, campaign** (type `bf-2026` over it by hand only for a real Black Friday promotion):
 
 ```
-=IF(OR(C2="bio",C2="dm"),"evergreen",IF(AND(D2>=$K$1-7,D2<=$K$1+13),"launch",IF(AND(D2>=DATE(2027,1,2),D2<=DATE(2027,1,31)),"ny-2027","evergreen")))
+=IF(OR(C2="bio",C2="dm",C2="referral",LOWER(TRIM(B2))="pinterest"),"evergreen",IF(AND(D2>=$K$1-7,D2<=$K$1+13),"launch",IF(AND(D2>=DATE(2027,1,2),D2<=DATE(2027,1,31)),"ny-2027","evergreen")))
 ```
 
 **H2, link:**
@@ -322,8 +323,8 @@ Menu paths change often. Each one below is "check in the app".
 | Instagram | Views (the main metric across formats), reach (followers vs non-followers), follows, profile visits, link taps | **Sends (shares) per reach** and saves. Instagram ranks Reels partly on whether people reshare them and watch to the end | [S56][S70] |
 | Facebook Page | Views, follows, link clicks (expect few: link posts are rationed, 1.6) | Shares and comments | [S73] |
 | TikTok (TikTok Studio → Analytics) | Video views, new followers, profile views, share of views from For You | **Average watch time** and **% who watched the full video** | [S15] |
-| YouTube Shorts (Studio) | Views, subscribers gained | **Engaged views** and **"Viewed vs. swiped away"**. Since 2025-03-31 a Shorts view counts on any start or replay, so engaged views are the better signal (third-party, **UNVERIFIED** on YouTube Help) | [S71] |
-| YouTube long-form (Studio) | Impressions, subscribers per video | **Click-through rate** and **average view duration** | — |
+| YouTube Shorts (Studio) | Views, subscribers gained | **Engaged views** and **"Viewed vs. swiped away"**. Since 2025-03-31 a Shorts view counts on any start or replay, so engaged views are the better signal (YouTube Help 10059070) | [S71] |
+| YouTube long-form (Studio) | Impressions, subscribers per video | **Click-through rate** and **average view duration**. Since 2026-08-24 long-form views also count at play start (YouTube Help 2991785), so judge long-form on average view duration and CTR, not views | — |
 | LinkedIn (you, then the Page) | Impressions, members reached, followers, profile views | **Comments** (the strongest signal) and reposts | — |
 | Threads | Views, follows | Replies | — |
 | X | Impressions | Replies; link clicks show in Admin → Funnels. Native analytics may now need a paid tier (sources conflict, **UNVERIFIED**) | — |
@@ -334,7 +335,16 @@ TikTok shows analytics only after the account has at least one public post [S15]
 
 ### 3.2 The weekly scorecard (fill in)
 
-Copy these tables into a sheet, one tab per week. "Last week" is the previous tab.
+**Keep everything in one sheet,** made once (about 15 minutes) before your first warm-up post. Six tabs:
+
+1. **Posts:** `Date | ID | Platform | Format | URL | Views at 48 h | Views at 7 days | Link taps | Leads (from table D) | Winner? | Notes`. One row per post per platform, filled in at the Monday review. Your baseline (3.4) comes from this tab. Note the hook take you used ([video kit](03-short-video-kit.md), 1.8) in Notes.
+2. **Weekly:** tables A to E below, one block per week ("last week" is the block above), plus the one-line weekly log.
+3. **Engagement:** the one line you write at the end of each daily engagement block ([calendar](02-launch-calendar.md), section 3).
+4. **Conversations:** date, platform, who, what they need, link sent, next step and its date, outcome.
+5. **Outreach:** the LC-60 tracking sheet ([06](06-youtube-reddit-outreach.md)).
+6. **Community rules:** the Reddit verification log (06, 2.3) and each Facebook group's rules ([05](05-instagram-pinterest-facebook.md), 4.7).
+
+Handles, logins and two-factor recovery codes go in your password manager, never in this sheet.
 
 **A. Site numbers** (Admin → Funnels → 7 days)
 
@@ -399,7 +409,7 @@ Copy these tables into a sheet, one tab per week. "Last week" is the previous ta
 | Spam complaints? (Check Resend's dashboard. The site's Email Log doesn't record them) | |
 | Any comments or DMs still unanswered? | |
 
-**One-line weekly log** (paste into a running sheet):
+**One-line weekly log** (the Weekly tab):
 `Week | Posts by platform | Views | Follows | Link taps | Site visitors | Leads (IG/TT/YT/LI/FB/X/other) | Booked calls | Revenue | Top post | Experiment | Next action`
 
 ### 3.3 The Monday 30-minute review
@@ -412,7 +422,7 @@ Copy these tables into a sheet, one tab per week. "Last week" is the previous ta
 4. **Hygiene (5 min).** Run table E. Fix any untagged link the same day.
 5. **Decide and plan (5 min).** Apply the rules in 3.4. Pick next week's posts from the post kits and queue them with `utm_content` already filled in.
 
-**Monthly add-on** (the first Monday of each month: Dec 7, Jan 4, Feb 1):
+**Monthly add-on** (on the calendar's monthly retro days, 60 minutes: Mon Dec 7, Mon Jan 11, Mon Feb 1):
 - Switch Funnels to 30 days.
 - Export the CSV and count leads → customers by channel.
 - Check each tool against the limits in 1.3.
@@ -420,22 +430,22 @@ Copy these tables into a sheet, one tab per week. "Last week" is the previous ta
 
 | Review | L-day | Date | Focus |
 |---|---|---|---|
-| Dry run | L-1 | Mon Nov 9 | Warm-up numbers. Every link tested. Scorecard sheet set up |
 | 1 | L+6 | Mon Nov 16 | Launch week |
-| 2 | L+13 | Mon Nov 23 | The `launch` campaign ends. Final yes or no on the optional Black Friday promotion |
-| 3 | L+20 | Mon Nov 30 (Cyber Monday) | If you're running a promotion, move the review to Tue Dec 1 |
+| 2 | L+13 | Mon Nov 23 | The `launch` campaign ends. If the L+10 (Fri Nov 20) Black Friday go/no-go was yes, confirm the Stripe promotion code and its real end date exist today |
+| 3 | L+20 | Mon Nov 30 (Cyber Monday) | Monday review + batch, as the calendar sets |
 | 4 | L+27 | Mon Dec 7 | First monthly add-on. First platform checkpoint (3.4, rule 6). Paid-test yes or no (5.1) |
-| 5 | L+34 | Mon Dec 14 | Holiday posts scheduled? |
-| 6-7 | L+41, L+48 | Mon Dec 21, Mon Dec 28 | Holiday slow-down: a 10-minute version. Check the New Year posts are scheduled |
-| 8 | L+55 | Mon Jan 4 | Monthly add-on. `ny-2027` is running. Facebook Group opens if recommended |
-| 9-11 | L+62, L+69, L+76 | Mon Jan 11, 18, 25 | New Year push |
+| 5 | L+34 | Mon Dec 14 | Facebook Group go/no-go. Holiday filming and scheduling week: everything for Dec 21 to Jan 10 scheduled by Fri Dec 18 |
+| 6-7 | L+41, L+48 | Mon Dec 21, Mon Dec 28 | Holiday slow-down: a 15-minute check instead of the review. Check the New Year posts are scheduled |
+| 8 | L+55 | Mon Jan 4 | 15-minute review only (challenge day 1). `ny-2027` is running. Facebook Group opens if the Dec 14 check passed |
+| 9 | L+62 | Mon Jan 11 | Monthly retro #2 and monthly add-on: keep or cut each platform; X and Facebook tiers |
+| 10-11 | L+69, L+76 | Mon Jan 18, 25 | New Year push |
 | 12 | L+83 | Mon Feb 1 | Full platform review on 90 days of data (3.4, rule 7) |
 
 ### 3.4 Decision rules
 
 These are starting rules, not industry benchmarks. Every number below compares you with **your own** results. Change the rules once you know your data.
 
-**First, set your baselines.** For each platform and format (Reels, carousels, Shorts and so on), your baseline is the **median** views of your last 10 posts, or of all of them if you have fewer. Use the median, not the average: one breakout post drags an average up. In a sheet: `=MEDIAN(C2:C11)`.
+**First, set your baselines.** For each platform and format (Reels, carousels, Shorts and so on), your baseline is the **median** views of your last 10 posts, or of all of them if you have fewer. Use the median, not the average: one breakout post drags an average up. In the Posts tab, sort by platform, format and date, then take the median of that group's last 10 "Views at 7 days" cells, for example `=MEDIAN(G2:G11)`.
 
 1. **Winner.** A post with **at least 2× its baseline views**, or any post that brought a lead (its ID appears as UTM content on a new contact). Rule of thumb.
 2. **Double down.** When a format or hook produces a winner twice in 3 weeks, make 2 more next week: same format, new topic. Cut a version for each other Tier 1 platform.
@@ -499,6 +509,7 @@ These are averages across other people's accounts. Use them to choose formats an
 - [ ] Realistic AI image, video, voice or avatar? Label switched on (4.8).
 - [ ] TikTok post that promotes your own offer? Content disclosure switched on (4.7).
 - [ ] Music from the commercial library, or your own voice only (4.10).
+- [ ] Videos: captions burned in and proofread ("Claude", "Gemini"). Images, slides and Pins: alt text that is the image's own text. LinkedIn document carousels: the post text names each slide's key point.
 - [ ] The link is tagged and tested (2.8).
 
 ### 4.3 Endorsements and testimonials (FTC Endorsement Guides, revised 2023)
@@ -666,17 +677,17 @@ The FTC's position applies on top of every platform: the disclosure must be clea
 - **One post on one platform at a time.** Pick the platform that already sends you the most leads (table B).
 - **A post that already won** (3.4, rule 1) and points to the **Starter Kit** at `/free-guide`. A free offer is the easiest first step for a cold audience. Don't make your first boost a course sales post.
 - **No prices, claims, testimonials or "you"-attribute copy** in boosted posts (4.5, 4.12).
-- **Instagram:** a Reel or feed post. A Story with a link sticker **can't be boosted** [S69]. Boosting a Reel reportedly needs 90 seconds or less and 9:16 (**UNVERIFIED**).
+- **Instagram:** a feed post or carousel, or a Reel that was **not** shared to Facebook. Instagram Help says a boostable Reel must be 90 seconds or less, 9:16, with no licensed music or interactive stickers, and Reels already shared to Facebook can't be boosted [S80]. Reels auto-shared to the Page ([profile setup](01-profile-setup.md), 4.1) can't be boosted on Instagram, so boost the Facebook copy from the Page, or re-post the winning Reel Instagram-only first. A Story with a link sticker can't be boosted [S69].
 - **TikTok:** content disclosure on, CML music only (4.7, 4.10).
 - **LinkedIn:** only a **Company Page** post that has outperformed your other Page posts.
 - **Goal:** choose "website visits" (Meta) or "More website visits" (TikTok Promote [S53]), not followers or engagement.
-- **Tag the boost:** `utm_medium=paid_social`, the campaign of that window, and the post ID as `utm_content`. Example: `https://principeai.com/free-guide?utm_source=instagram&utm_medium=paid_social&utm_campaign=ny-2027&utm_content=vc-05`.
+- **Tag the boost:** `utm_medium=paid_social`, the campaign of that window, and the post ID as `utm_content`. Example: `https://principeai.com/free-guide?utm_source=instagram&utm_medium=paid_social&utm_campaign=ny-2027&utm_content=vc-02`.
 
 ### 5.4 Smallest sensible tests
 
 | Platform | Platform minimum | Suggested first test (Recommendation) | Source |
 |---|---|---|---|
-| **Meta boost** (Instagram Reel or Facebook post) | About $1 a day. Metricool's docs describe a 2-day, $2 minimum boost (third-party, **UNVERIFIED** on a Meta page) | **$5/day × 7 days = $35.** Goal: website visits, to `/free-guide`. US audience aged 25-65, automatic placements | [S54] |
+| **Meta boost** (Instagram feed post, carousel or un-shared Reel, or Facebook post) | About $1 a day. Metricool's docs describe a 2-day, $2 minimum boost (third-party, **UNVERIFIED** on a Meta page) | **$5/day × 7 days = $35.** Goal: website visits, to `/free-guide`. US audience aged 25-65, automatic placements | [S54] |
 | **TikTok Promote** | About $3 a day (Sprout Social, third-party, **UNVERIFIED**). TikTok Ads Manager needs much more: a **campaign daily budget above $50 and an ad group above $20** | **$5/day × 5 days = $25** in Promote, goal "More website visits". On iPhone, Promote may be paid in TikTok Coins with Apple's fee on top (third-party, **UNVERIFIED**), so pay on the web | [S53] |
 | **LinkedIn boost** | **$10 a day for at least 2 days** | **$10/day × 3 days = $30**, aimed at small-business owners and job functions such as operations and marketing | [S52] |
 | **YouTube, X** | — | Skip for now | — |
@@ -702,10 +713,10 @@ The FTC's position applies on top of every platform: the disclosure must be clea
 | 4 | The contact CSV has no `utm_content` (or `utm_term`) column, and the Contacts list can't filter by UTM. Adding `r.utm?.content` to `src/app/api/admin/contacts/export/route.ts` is a small change. Until then, use the formula in 2.7 | Engineering (optional) |
 | 5 | Your LinkedIn profile's website link and the Page's both use `utm_content=bio`, so you can't tell them apart (see [profile setup](01-profile-setup.md), section 9) | Known limitation |
 | 6 | Read Meta's "About links in organic Facebook Page posts and comments" inside your Page to learn your link-post limit (1.6) | Owner |
-| 7 | When connecting: does Buffer support Bluesky and Pinterest? Does Meta Business Suite still schedule Instagram Stories for free? Can free X accounts schedule? (1.2, 1.3) | Owner |
+| 7 | When connecting: does Meta Business Suite still schedule Instagram Stories for free? Can free X accounts schedule? (1.2, 1.3) | Owner |
 | 8 | Whether the FTC's proposed "money-making opportunity" rule (Jan 2025) has been finalised (4.5) | Lawyer |
 | 9 | A lawyer's review of section 4 before any paid push, any outcome claim or a Black Friday offer, plus whether your opt-in wording covers the "identify as an ad" item (4.11) | Owner + lawyer |
-| 10 | **Owner decisions:** Postiz or the $0 stack? Which PO box or CMRA? File a USPTO trademark for "Principe AI"? On camera, or no-face option A or B? A Black Friday promotion or not (decide by Mon Nov 23)? Which platform gets the first paid test? | Owner |
+| 10 | **Owner decisions:** Postiz or the $0 stack? Which PO box or CMRA? File a USPTO trademark for "Principe AI"? On camera, or no-face option A or B? A Black Friday promotion or not (decide at the L+10 · Fri Nov 20 go/no-go; create the code by L+13 · Mon Nov 23)? Which platform gets the first paid test? | Owner |
 | 11 | Collect real testimonials only with written permission, and add them to `site.testimonials` only after that | Owner |
 
 ---
@@ -715,7 +726,7 @@ The FTC's position applies on top of every platform: the disclosure must be clea
 All accessed 2026-10-20 unless a date is given.
 
 **Schedulers and tools**
-- [S1] Buffer Pricing (prices last updated Nov 2025). https://buffer.com/pricing
+- [S1] Buffer Pricing (prices last updated Nov 2025) https://buffer.com/pricing; Buffer Help, "Supported channels" https://support.buffer.com/en-us/articles/supported-channels-LM3P7Y4zsp and "Buffer pricing and features" (free plan: 8 unique channel connections in its lifetime) https://support.buffer.com/en-us/articles/buffer-pricing-and-features-6pJrOPuzIt
 - [S2] Metricool Pricing. https://metricool.com/pricing/
 - [S3] Later Pricing. https://later.com/pricing/
 - [S4] Postiz Pricing and FAQ. https://postiz.com/pricing
@@ -763,8 +774,9 @@ All accessed 2026-10-20 unless a date is given.
 - [S67] YouTube Help, "Understand three-minute YouTube Shorts" (Content ID block over 1 minute). https://support.google.com/youtube/answer/15424877
 - [S68] YouTube Help, "Sharing links with your audiences" (Shorts URLs not clickable). https://support.google.com/youtube/answer/13748639
 - [S69] Instagram Help, "Boost an Instagram story" (Stories with a link sticker can't be boosted). https://help.instagram.com/2281642782069520/
+- [S80] Instagram Help, "Boost an Instagram reel" (90 seconds or less, 9:16, no licensed music or interactive stickers; Reels shared to Facebook can't be boosted). https://help.instagram.com/570215404599013
 - [S70] Instagram, "Instagram Ranking Explained" (2023-05-31). https://about.instagram.com/blog/announcements/instagram-ranking-explained
-- [S71] RouteNote, "YouTube views vs engaged views" (2025-2026, third-party). https://routenote.com/radar/youtube-views-vs-engaged-views-what-musicians-need-to-know/
+- [S71] RouteNote, "YouTube views vs engaged views" (2025-2026, third-party) https://routenote.com/radar/youtube-views-vs-engaged-views-what-musicians-need-to-know/; YouTube Help, Shorts views (from 2025-03-31) https://support.google.com/youtube/answer/10059070 and "How engagement metrics are counted" (all formats from 2026-08-24) https://support.google.com/youtube/answer/2991785
 - [S72] TechCrunch, "Instagram puts new limits on undisclosed AI profiles" (2026-08-31). https://techcrunch.com/2026/08/31/instagram-puts-new-limits-on-undisclosed-ai-profiles/
 
 **Benchmarks (context only)**

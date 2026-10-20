@@ -155,7 +155,7 @@ Where each platform's per-post link goes:
 |---|---|---|
 | TikTok | The video's destination link (needs business verification; see [profile setup](01-profile-setup.md), section 4.2) | Paste it in the caption (not clickable). DM replies use the DM links in 2.2 |
 | Instagram | A Story link sticker when you share the Reel to your Story. From L+0 to L+13 the daily Story post (VC-16 to VC-29 in the [visual kit](05-instagram-pinterest-facebook.md)) carries its own link: use that one on those days | Paste it in the caption (not clickable without paid Meta One). Comment-to-DM replies use the DM links in 2.2 |
-| YouTube | Nowhere in the Short: Shorts links can't be clicked. Set the Short's **Related video** (each block names it, from calendar section 8); that long-form video's description carries the links. The YouTube link in each block is a spare for anywhere YouTube does make links clickable | Paste it in a Shorts description or comment |
+| YouTube | Nowhere in the Short: Shorts links can't be clicked. Once the channel has advanced features (YouTube Help: adding a Related video needs advanced feature access; see [profile setup](01-profile-setup.md), section 4.3), set the Short's **Related video** (each block names it, from calendar section 8); that long-form video's description carries the links. Until then, the spoken "link's in my profile" CTA and channel link YT-1 do the work. The YouTube link in each block is a spare for anywhere YouTube does make links clickable | Paste it in a Shorts description or comment |
 | Facebook | The **first comment** on the Reel (the text is in each block) | Make it a link post (Pages may be limited to about 2 link posts a month) |
 
 ### 2.2 Profile links and keyword DMs (set once, in Setup)
@@ -208,7 +208,7 @@ Rotate within each set. On Instagram the comment keyword (`#prompts`, `#aiready`
 ### 2.6 Toggles to set on every post
 
 - **TikTok:** Content disclosure → **"Your brand"** on every video in this kit (each one promotes a Principe AI offer, even the free ones). The label doesn't affect distribution. AI-generated content toggle **off** (real screen recordings and a real person on camera).
-- **YouTube:** "Altered or synthetic content" → **No** (screen recordings and AI-assisted scripts are exempt). Set a Related video once a long-form version exists.
+- **YouTube:** "Altered or synthetic content" → **No** (screen recordings and AI-assisted scripts are exempt). Set a Related video once a long-form version exists and the channel has advanced features (the option doesn't appear before).
 - **Instagram and Facebook:** no AI label needed for real footage and real screen recordings. If you ever use an AI avatar, a cloned voice or AI b-roll, label it on every platform.
 - **All:** no trending commercial songs on promotional posts.
 
@@ -291,7 +291,7 @@ No tech background needed. Practical, not hype.
 #aiforbeginners #aiforbusiness #learnai #aitips
 ```
 
-**Instagram Reels caption** · 601 characters · 5 hashtags
+**Instagram Reels caption** · 654 characters · 5 hashtags
 ```text
 Make AI work for you, in your life and your business.
 
@@ -302,7 +302,7 @@ How it works:
 2. Learn: short lessons, or 1:1 coaching on your real work
 3. Implement: use your new workflows, or have us build them with your team
 
-Courses: AI Essentials ($47) · AI for Business Owners ($297) · AI Automation Accelerator ($497)
+Courses: AI Essentials ($47) · AI for Business Owners ($297) · AI Automation Accelerator ($497; tool subscriptions and AI usage are paid separately)
 
 Start free: comment #prompts and I'll send you the AI Starter Kit, or tap the link in bio.
 
@@ -3809,7 +3809,7 @@ The [launch calendar](02-launch-calendar.md) decides every date. This table copi
 - [ ] Instagram: 5 hashtags or fewer (including the keyword hashtag); Facebook: link in the first comment
 - [ ] Per-post link copied from the block (never retyped). Its `utm_campaign` matches the calendar date; if you moved the video, change only the campaign (2.1)
 - [ ] Any **[CONFIRM: AI key live in production]** line kept only if the key is live; otherwise the alternative line is used (LD-01)
-- [ ] YouTube Related video set as the block says
+- [ ] YouTube Related video set as the block says (needs advanced features; until they're on, skip it and rely on the spoken CTA and link YT-1)
 - [ ] 15 minutes blocked after posting to reply to comments and send any manual DMs
 
 ---
@@ -3820,7 +3820,7 @@ The [launch calendar](02-launch-calendar.md) decides every date. This table copi
 2. **`ANTHROPIC_API_KEY` in production.** Check it on L-20 (Wed Oct 21). If it still isn't live by L-1 (Mon Nov 9), use LD-01's alternative line without "AI tutor". No video says the assessment plan is "written by Claude"; add that only with **[CONFIRM: AI key live in production]**.
 3. **TikTok business verification** review time is unknown. Until it's approved, use the TikTok CTA ending and answer KIT, READY and WORKFLOW DMs by hand with the links in [profile setup](01-profile-setup.md) (TT-2 to TT-4).
 4. **Meta comment-to-message** needs three hashtag triggers (`#prompts`, `#aiready`, `#aiworkflow`); the number of triggers allowed is reported by vendors, not verified.
-5. **YouTube Related videos** depend on the long-form plan (calendar, section 8). LC-08 goes live on L+0; until a Short's own match is live, point it at LC-08.
+5. **YouTube Related videos** need advanced feature access (YouTube Help) and depend on the long-form plan (calendar, section 8). Check Studio → Settings → Channel → Feature eligibility before L+0; until advanced features are on, no Short can carry a Related video, so the spoken CTA and link YT-1 do the work. Once they're on, go back and set it on every Short already posted. LC-08 goes live on L+0; until a Short's own match is live, point it at LC-08.
 6. **SV-01 placeholders:** `[YOUR NAME]`, `[YOUR STORY: …]`, `[YOUR CREDENTIAL IF ANY]`. Fill them with true details, delete the line, or film the no-face version.
 7. **Downloadable course app and PDF book** stay out of every video until delivery is automated and listed on the course pages.
 8. **Social profile URLs** go into `src/config/site.ts` → `social` on L-12 (Thu Oct 29), so the footer and `/links` show them ([profile setup](01-profile-setup.md), section 7).

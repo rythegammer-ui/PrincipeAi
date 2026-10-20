@@ -314,7 +314,7 @@ Hooks reuse or closely paraphrase lines from the lessons and scripts. Quotes are
 - Formats: TXT, SV
 - CTA: `/free-guide` · link: `https://principeai.com/free-guide?utm_source=<platform>&utm_medium=social&utm_campaign=<campaign>&utm_content=cb-09`
 
-**CB-10** · P1 · "'AI is a toy' vs 'AI saves me hours every week' usually comes down to the brief."
+**CB-10** · P1 · "'AI is a toy' vs 'AI actually saves me time every week' usually comes down to the brief."
 - Source: `course-ai-for-business.ts` → `business-prompt-framework` (preview); script `ai-for-business/05-business-prompt-framework.md` §1
 - Show: Before: "Write a follow-up email to a prospect." After: "GOAL: Draft a follow-up email to a prospect after a discovery call. Success = they book a 30-minute proposal review. CONTEXT: … INPUTS (my call notes) … CONSTRAINTS: Under 150 words. Warm, direct, no hype. Reference two specific things they told us." Takeaway: "Prompt like you delegate: goal, context, inputs, constraints, format and examples."
 - Formats: CAR (LinkedIn document), SV, TXT
@@ -385,7 +385,7 @@ Hooks reuse or closely paraphrase lines from the lessons and scripts. Quotes are
 - CTA: `/free-guide` · link: `https://principeai.com/free-guide?utm_source=<platform>&utm_medium=social&utm_campaign=<campaign>&utm_content=cb-20`
 - Season: 🦃 Thanksgiving week: `launch` up to L+13 (Mon Nov 23), `evergreen` from Tue Nov 24.
 
-**CB-21** · P2 · "Everything on your mind, sorted into a to-do list in 30 seconds of typing."
+**CB-21** · P2 · "Everything on your mind, sorted into a to-do list in one paste."
 - Source: `starter-kit.ts` → "Turn chaos into a to-do list"
 - Show: "Here's a brain dump of everything on my mind: [EVERYTHING, IN ANY ORDER] Organize it into a to-do list grouped by [WORK / HOME / ERRANDS]. Mark the 3 most important items, and point out anything I can do in under 5 minutes."
 - Formats: SV, TXT

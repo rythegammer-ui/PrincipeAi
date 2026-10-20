@@ -47,7 +47,7 @@ If you only make ten things from this kit, make these. They cover the always-on 
 
 **Hold back until true** (content bank, section 5, gaps 7 and 12)
 
-- **"AI tutor inside every lesson"** depends on `ANTHROPIC_API_KEY` being set in production. Only VC-01, VC-15 and the Courses Highlight (VC-33) mention it, each marked **[CONFIRM: AI key live in production]**. Check on L-20 · Wed Oct 21; if the key still isn't live by L-1 · Mon Nov 9, delete those lines. Nothing here says the assessment plan is "written by Claude"; add that only with the same tag.
+- **"AI tutor inside every lesson"** depends on `ANTHROPIC_API_KEY` being set in production. Only VC-01, VC-15 and the Courses Highlight (VC-33) mention it, each marked **[CONFIRM: AI key live in production]**. Check on L-20 · Wed Oct 21. Keep each line only if the key is live on the day that post goes live (check again that morning for anything scheduled ahead): VC-33 on L-9 · Sun Nov 1 (you design its frames on L-11 · Fri Oct 30), VC-01 on L+1 · Wed Nov 11 (its slides return in VC-60 on L+2 · Thu Nov 12), VC-15 on L+73 · Fri Jan 22 (and its Facebook cross-post on L+77 · Tue Jan 26). If it isn't live that day, delete the line. Nothing here says the assessment plan is "written by Claude"; add that only with the same tag.
 - **The downloadable offline course app and PDF course book** are sent by hand today and aren't listed on the site. No post mentions them.
 
 **No logos.** No Claude, ChatGPT or Gemini logos on any slide, Pin or cover; name the tools only as "AI assistants like Claude, ChatGPT and Gemini", in plain text.
@@ -126,7 +126,7 @@ The automations are set up once, on L-13 · Wed Oct 28, in Meta Business Suite (
 
 - **Sending a link by hand** (a DM, or a reply to a Story): copy the matching `dm-` link from profile setup. The Instagram Starter Kit one (IG-6) is `https://principeai.com/free-guide?utm_source=instagram&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-kit`.
 - Keep the ask a delivery mechanism ("comment #prompts and I'll send it"), never vote bait ("comment YES if you agree").
-- Questions about calls or courses get a personal reply: the convention has no `dm-` value for them yet (profile setup, section 9).
+- Questions about calls or courses get a personal reply. If it includes a link, tag it `utm_medium=dm`, `utm_campaign=evergreen` and `utm_content=dm-call` or `dm-courses` (or the ID of the post the person is replying to), e.g. `https://principeai.com/book/ai-strategy-call?utm_source=instagram&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-call`.
 
 ### 1.3 Limits used in this kit
 
@@ -204,7 +204,7 @@ Facebook posts in this kit carry no hashtags (their reach effect there is low an
 
 ### 2.1 Profile setup
 
-Done once in Setup (L-20 · Wed Oct 21): account type, name, bio, the profile links IG-1 to IG-5, the DM automations, settings and pinned posts are all in [profile setup](01-profile-setup.md), section 4.1. From L+7 · Tue Nov 17, consider swapping the LD-03 pin for VC-01.
+Done once in Setup: account type, name, bio, the profile links IG-1 to IG-5 and settings on L-20 · Wed Oct 21; the DM automations on L-13 · Wed Oct 28; the pinned posts on L+0 · Tue Nov 10. All are in [profile setup](01-profile-setup.md), section 4.1. From L+7 · Tue Nov 17, consider swapping the LD-03 pin for VC-01.
 
 ### 2.2 Feed carousels (VC-01 to VC-15)
 
@@ -1586,7 +1586,7 @@ A few days after the claim, check whether a Pin to `/free-guide` shows the page'
 
 ### 3.4 Boards
 
-Create all ten on L-15 · Mon Oct 26, with these exact names and descriptions, and put B10 first. **Keep a board secret until it holds at least 5 Pins**, then make it public; the 20 Pins below and the carousel cuts fill them over the weeks. Add Pinterest's suggested topics to each board whenever it offers them [R].
+Create all ten on L-15 · Mon Oct 26, with these exact names and descriptions, and put B10 first. **Keep a board secret only while it's empty**: Pins on a secret board are visible only to you and any collaborators [V], so they bring no search traffic. Make each board public before you schedule its first Pin: B3, B5 and B6 on L-8 · Mon Nov 2 (with the warm-up Pins VC-40, VC-46 and VC-49); B10, B4 and B1 on L-1 · Mon Nov 9 (with the launch-fortnight Pins); the rest before their first Pin is scheduled (section 5 has the dates). The 20 Pins below and the carousel cuts fill them over the weeks. Add Pinterest's suggested topics to each board whenever it offers them [R].
 
 | # | Board name | Pins from this section | Carousel cuts that also go here |
 |---|---|---|---|
@@ -1669,8 +1669,8 @@ _223 characters_
 
 - **Templates P1–P4** are in 1.4. Every Pin carries the ink footer band with "principeai.com" and the name of the free offer it links to, so the image matches the landing page [V].
 - **Prompt Pins** show the prompt exactly as quoted below. If it doesn't fit at 34 px, cut lines; never rewrite them.
-- **Alt text:** the image's own text, under 250 characters (Pinterest's spec page lists a 250-character text field [V]; whether that is the alt-text limit is UNVERIFIED).
-- **Design and schedule:** Pins are designed in the Monday batch session and scheduled in the Thursday sitting (calendar 2.2 and 3.2); the calendar names the Pins each batch makes. Schedule up to 30 days ahead [V]. Read Pinterest Analytics (outbound clicks, saves) in the Monday review.
+- **Alt text:** the image's own text, up to 500 characters [V]; keep it under 250 so it stays readable.
+- **Design and schedule:** Pins are designed in the Monday batch session and scheduled in the Thursday sitting (calendar 2.2 and 3.2); the calendar names the Pins each batch makes. Pinterest's own scheduler takes Pins up to 30 days ahead, one at a time, with at most 10 scheduled at once [V]; Buffer Free also queues at most 10 posts per channel. The calendar's biggest Pinterest batches (7 Pins on L-1 · Mon Nov 9, 4 for Dec 21 to Jan 10 on L+38 · Fri Dec 18) fit; if you batch more, use Metricool or Postiz. Read Pinterest Analytics (outbound clicks, saves) in the Monday review.
 - **When:** the calendar posts Pins at 20:00 ET, 2 or 3 a week. Time of day matters less on Pinterest than on Instagram, because discovery is search-led (UNVERIFIED).
 
 ---
@@ -3090,11 +3090,11 @@ The [launch calendar](02-launch-calendar.md) decides every date; this table copi
 ## 7. Confirm before launch (open items)
 
 1. **Prices** in Admin → Courses and Admin → Availability, the morning of VC-15 (Instagram L+73, Facebook L+77), before re-posting the VC-33 frames, and before the OPTIONAL VC-72.
-2. **`ANTHROPIC_API_KEY` in production** before VC-01, VC-15 or VC-33 mention the AI tutor (each marked **[CONFIRM: AI key live in production]**). Check on L-20 · Wed Oct 21; if it still isn't live by L-1 · Mon Nov 9, delete those lines. Nothing here says the assessment plan is "written by Claude".
+2. **`ANTHROPIC_API_KEY` in production** before VC-01, VC-15 or VC-33 mention the AI tutor (each marked **[CONFIRM: AI key live in production]**). Check on L-20 · Wed Oct 21. Keep each line only if the key is live on the day that post goes live: VC-33 on L-9 · Sun Nov 1, VC-01 on L+1 · Wed Nov 11 (and VC-60, its Facebook slides, on L+2 · Thu Nov 12), VC-15 on L+73 · Fri Jan 22 (and its Facebook cross-post on L+77 · Tue Jan 26). If it isn't live that day, delete the line. Nothing here says the assessment plan is "written by Claude".
 3. **Facebook's link cap for your Page.** Read "About links in organic Facebook Page posts and comments" in the Page and confirm the monthly count and that first-comment links are exempt. November has two planned link posts (VC-59 and the OPTIONAL VC-72).
 4. **Story link sticker** availability on the new Instagram account (fallback in 2.3).
 5. **Meta comment-to-message automation:** confirm three hashtag triggers are allowed and that each sends one private reply.
-6. **Pinterest:** board name and description limits, whether rich Pins apply automatically after claiming, and the scheduling window in the date picker.
+6. **Pinterest:** board name and description limits, and whether rich Pins apply automatically after claiming.
 7. **Free Story scheduling** in Business Suite. The calendar assumes Stories are posted live; if free scheduling is there, schedule the Highlight frames and the daily Stories.
 8. **Downloadable course app and PDF book** stay out of every post until delivery is automatic and listed on the course pages (content bank gap 7).
 9. **Profile URLs** go into `src/config/site.ts` → `social.instagram`, `social.facebook` and `social.pinterest` on L-12 · Thu Oct 29, so the footer, `/links` and the home page's structured data link them ([profile setup](01-profile-setup.md), section 7).

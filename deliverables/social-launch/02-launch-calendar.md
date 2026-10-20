@@ -82,7 +82,7 @@ These are starting points from the research, not promises. Change them after thr
 | **Setup** | L-21 to L-8 | Tue Oct 20 to Mon Nov 2 | Claim handles, start the slow verifications, write the profiles, fill the site's social links, make templates, film and design the first posts. No posting, apart from the Highlight Stories on L-9 |
 | **Warm-up** | L-7 to L-1 | Tue Nov 3 to Mon Nov 9 | A few value-only posts on each Tier-1 platform, so nobody lands on an empty profile. No launch announcement. **Nothing on Tue Nov 3 (Election Day)** |
 | **Launch week** | L+0 to L+6 | Tue Nov 10 to Mon Nov 16 | Announce everywhere on one day, pin the launch posts, run daily Stories, reply to everyone |
-| **Growth** | L+7 to L+40 | Tue Nov 17 to Sun Dec 20 | A steady weekly rhythm. Outreach starts (5 pitches a week). Thanksgiving (Thu Nov 26) off. Black Friday (Fri Nov 27) to Cyber Monday (Mon Nov 30): promotion posts are **OPTIONAL** and need a real Stripe promotion code. Everything for the holidays is scheduled by Fri Dec 18 |
+| **Growth** | L+7 to L+40 | Tue Nov 17 to Sun Dec 20 | A steady weekly rhythm. Outreach starts (5 pitches a week). Thanksgiving (Thu Nov 26) off. Black Friday (Fri Nov 27) to Cyber Monday (Mon Nov 30): promotion posts are **OPTIONAL** and need a real Stripe promotion code. Everything for the holidays is scheduled by Sun Dec 20 |
 | **Holiday slow-down** | L+41 to L+52 | Mon Dec 21 to Fri Jan 1 | About one post a week per platform, all pre-scheduled. Light check-ins only |
 | **New Year push** | L+53 to L+82 | Sat Jan 2 to Sun Jan 31, 2027 | Campaign `ny-2027`: "build a 30-day AI habit" with AI Essentials, starting free with the 7-day plan. 7-Day AI Challenge Jan 4 to 10. Facebook Group opens Mon Jan 4 (if the Dec 14 check passes). LinkedIn newsletter issue 1 on Tue Jan 5 |
 
@@ -96,17 +96,17 @@ These are starting points from the research, not promises. Change them after thr
 
 | Phase | Dates | About | What makes it that size |
 |---|---|---|---|
-| Setup, week 1 | Tue Oct 20 to Sun Oct 25 | 14 h | Handles, verifications, Tier 1 profiles, first filming, first long-form recording |
-| Setup, week 2 | Mon Oct 26 to Sun Nov 1 | 16 h | Tier 2 and 3 profiles, templates, automations, site config, Highlights, filming, editing |
-| Last setup day + warm-up (8 days) | Mon Nov 2 to Mon Nov 9 | 16 h | Link tests, filming and designing the launch fortnight, scheduling it, first posts |
+| Setup, week 1 | Tue Oct 20 to Sun Oct 25 | 18 h | Handles, verifications, Tier 1 profiles, first filming, first long-form recording |
+| Setup, week 2 | Mon Oct 26 to Sun Nov 1 | 17 h | Tier 2 and 3 profiles, templates, automations, site config, Highlights, filming, editing |
+| Last setup day + warm-up (8 days) | Mon Nov 2 to Mon Nov 9 | 18 h | Link tests and test opt-ins, filming and designing the launch fortnight, scheduling it, first posts, the reserve-only handles |
 | Launch week | Tue Nov 10 to Mon Nov 16 | 10 h | Daily Stories, replies to everyone, the first Monday batch, one long-form recording |
 | Week 2 | Tue Nov 17 to Mon Nov 23 | 10 h | Daily Stories end, outreach set-up (one-sheet and target lists) |
-| Growth, standard week | Nov 24 to Dec 13 | 8 h | See 2.2 |
-| Growth, last week | Mon Dec 14 to Sun Dec 20 | 11 to 12 h | Filming and scheduling everything for Dec 21 to Jan 10 |
+| Growth, standard week | Nov 24 to Dec 13 | 9.5 h | See 2.2. Tue Dec 1 and Tue Dec 8 add about 1 to 1.5 h of outreach |
+| Growth, last week | Mon Dec 14 to Sun Dec 20 | 14 to 15 h | Filming, editing and scheduling everything for Dec 21 to Jan 10 |
 | Holiday slow-down | Dec 21 to Jan 1 | 1 to 3 h a week | Check-ins, plus writing newsletter issue 1 (1.5 h) |
-| New Year push | Jan 2 to 31 | 8.5 h | Group and newsletter added; short videos drop to 2 a week from Jan 11 |
+| New Year push | Jan 2 to 31 | 10 h | Group and newsletter added; short videos drop to 2 a week from Jan 11 |
 
-Setup is the heavy part: about 46 hours over three weeks. If that isn't possible, move launch day back one week (see "Moving launch day"). A lighter setup (about 30 hours): film the no-face versions, design only VC-07 and VC-01 to VC-03 before launch, and set up X, Bluesky and Reddit after launch.
+Setup is the heavy part: about 53 hours over three weeks (about 18 a week). If that isn't possible, use the lighter setup, move launch day back one week (see "Moving launch day"), or both. A lighter setup (about 37 hours): film the no-face versions, design only VC-07 and VC-01 to VC-03 before launch, and set up X, Bluesky and Reddit after launch.
 
 ### 2.2 A standard Growth week, task by task
 
@@ -115,14 +115,16 @@ Setup is the heavy part: about 46 hours over three weeks. If that isn't possible
 | Monday review | 0.5 | Mon 9:00 to 9:30 (section 3.3) |
 | Weekly batch session | 2.0 | Mon 9:30 to 11:30: film 3 short videos (about 75 min), design 1 carousel, 2 or 3 Pins and any LinkedIn document carousel from templates (about 45 min) |
 | Edit 3 short videos | 1.0 | About 20 minutes each, Tue and Wed |
-| Schedule the week | 0.5 | One sitting on Thursday. Copy and links are ready in the kits |
-| Instagram Stories | 0.25 | Share each Reel and carousel on its day, with the link sticker |
+| Schedule the week | 0.75 | One sitting on Thursday: about 30 items across 5 or 6 tools. Copy and links are ready in the kits |
+| Live touches | 1.25 | What no free scheduler does: Facebook first comments, Story shares with the link sticker, Company Page reshares (section 3, "Live touches") |
 | Daily engagement block | 1.67 | 20 minutes × 5 weekdays, including first-hour replies on your own posts (section 3.1) |
 | YouTube long-form | 1.5 | One free preview lesson video every second week, about 3 hours each (record, edit, package). The course cut doubles as the lesson's video |
-| Outreach | 0.5 | 5 personalized pitches plus last week's follow-ups, Tuesdays |
-| **Total** | **7.9** | **About 8 hours** |
+| Outreach | 0.75 | 5 personalized pitches (about 8 minutes each) plus last week's follow-ups, Tuesdays |
+| **Total** | **9.4** | **About 9.5 hours** |
 
 What that buys each week: 3 short videos on 4 platforms, 1 Instagram carousel (later cross-posted to the Facebook Page), 2 Facebook Page posts, 3 LinkedIn posts plus Page reshares, 2 or 3 posts on Threads and X, 2 or 3 Pins, Stories on post days, a long-form video every second week, one Reddit post a week in Dec and Jan, and 5 pitches.
+
+Design beyond one carousel and 3 Pins in a week moves to Wednesday (about 30 minutes per extra carousel).
 
 ### 2.3 If you only have 3 hours a week
 
@@ -130,28 +132,40 @@ Cut in this order. Stop when the week fits.
 
 | Order | Cut | Saves | The week becomes |
 |---|---|---|---|
-| 1 | Pause outreach | 0.5 h | 7.4 h |
-| 2 | Pause YouTube long-form (Shorts keep the channel active) | 1.5 h | 5.9 h |
-| 3 | Stop X, Bluesky and Reddit; keep Threads | 0.2 h | 5.7 h |
-| 4 | Facebook Page: only the Reels shared from Instagram | 0.1 h | 5.6 h |
-| 5 | Carousels every second week; Stories only to share a post; Pins only from existing designs | 0.6 h | 5.0 h |
-| 6 | LinkedIn: 1 post a week plus the Page reshare | 0.2 h | 4.8 h |
-| 7 | Short videos: 2 a week instead of 3 | 0.75 h | 4.05 h |
-| 8 | Engagement block: 15 minutes, 3 days a week | 0.9 h | 3.15 h |
-| 9 | Monday review: 20 minutes | 0.15 h | 3.0 h |
+| 1 | Pause outreach | 0.75 h | 8.7 h |
+| 2 | Pause YouTube long-form (Shorts keep the channel active) | 1.5 h | 7.2 h |
+| 3 | Stop X, Bluesky and Reddit; keep Threads | 0.2 h | 7.0 h |
+| 4 | Facebook Page: only the Reels shared from Instagram, with no Page posts and no Facebook Reel first comments (so no 9:30 am live touches) | 0.7 h | 6.3 h |
+| 5 | Carousels every second week; Stories only to share a post; Pins only from existing designs | 0.6 h | 5.7 h |
+| 6 | LinkedIn: 1 post a week plus the Page reshare | 0.3 h | 5.4 h |
+| 7 | Short videos: 2 a week instead of 3 | 0.9 h | 4.5 h |
+| 8 | Engagement block: 15 minutes, 3 days a week | 0.9 h | 3.6 h |
+| 9 | Monday review: 20 minutes; scheduling in one short sitting | 0.6 h | 3.0 h |
 
 **The 3-hour week**
 
 | Task | Time |
 |---|---|
 | Monday review | 20 min |
-| Batch: film 2 short videos (plus a carousel every second week) | 55 min |
-| Edit 2 short videos | 40 min |
-| Schedule: 2 short videos on 4 platforms, 1 LinkedIn post, 2 Threads posts, 2 Pins | 20 min |
+| Batch: film 2 short videos (plus a carousel every second week) | 50 min |
+| Edit 2 short videos | 35 min |
+| Schedule: 2 short videos on 4 platforms, 1 LinkedIn post, 2 Threads posts, 2 Pins | 15 min |
+| Live touches: the Story share for each Reel at 7:00 pm, and the Page reshare | 15 min |
 | Engagement: 15 minutes × 3 days | 45 min |
 | **Total** | **3 h** |
 
 **Never cut:** replies to comments and DMs on your own posts, the Monday review, testing a new link in a private window before you use it, launch day, and any **FIXED** post you've already made. Posts you drop move to the Reserve (section 9) and can come back later.
+
+### 2.4 If you fall behind
+
+The pipeline runs one week ahead, so one missed Monday batch empties the next week. When that happens:
+
+1. **Never double up.** At most one short video and one LinkedIn post a day, even when catching up.
+2. **Protect, in this order:** replies and DMs on your own posts, **FIXED** posts you've already made, the short videos, LinkedIn.
+3. **Missed a batch:** post what's already filmed, and fill the gaps with posts that need no new work (share an earlier Reel to Stories, a Pin cut from an existing carousel, a Company Page reshare). Move each post you didn't make to the next open slot or to the Reserve (section 9). It keeps its ID; only `utm_campaign` changes, to match the new date.
+4. **A scheduled post failed:** post it by hand the same day. If it's **FIXED** and its date has passed, move it to the Reserve.
+5. **Two weeks behind:** run the 3-hour week (2.3) until the Monday batch is 8 days ahead again. Don't try to restore the skipped posts.
+6. **A post flopped:** leave it up. Judge formats only with the rules in the Monday review (3.3, step 4).
 
 ---
 
@@ -161,15 +175,23 @@ Cut in this order. Stop when the week fits.
 
 | Day | Rituals | Usual posts |
 |---|---|---|
-| Mon | 9:00 review · 9:30 batch session · 20-minute block | Short video |
-| Tue | 20-minute block (2:30 pm, with LinkedIn) · outreach (10:00 am) | LinkedIn, Threads and X, Facebook Page, a Pin, long-form every second week |
-| Wed | 20-minute block · edit short videos | Short video, LinkedIn, Threads and X |
-| Thu | 20-minute block · schedule next week (30 min) | LinkedIn, Threads and X, Facebook Page, a Pin |
-| Fri | 20-minute block | Carousel |
-| Sat | Long-form session every second week (3 h) | Short video |
-| Sun | Off. Everything is scheduled | None |
+| Mon | 9:00 review · 9:30 batch session · 20-minute block · 7:00 pm live touch | Short video |
+| Tue | 9:30 am live touch · outreach (10:00 am) · 20-minute block (2:30 pm, with LinkedIn) | LinkedIn, Threads and X, Facebook Page, a Pin, long-form every second week |
+| Wed | 10:00 am Page reshare · 20-minute block · edit short videos · 7:00 pm live touch | Short video, LinkedIn, Threads and X |
+| Thu | 9:30 am live touch · 10:00 am Page reshare · 20-minute block · schedule next week (45 min) | LinkedIn, Threads and X, Facebook Page, a Pin |
+| Fri | 10:00 am Page reshare · 12:30 pm carousel Story share · 20-minute block | Carousel |
+| Sat | 7:00 pm live touch · long-form session every second week (3 h) | Short video |
+| Sun | Off. A standard Growth Sunday has no posts (in the launch fortnight and the Jan 4 to 10 challenge, do that day's 7:00 pm live touch) | None |
 
 The pipeline is always one week ahead: film on Monday, edit Tuesday and Wednesday, schedule Thursday, and those posts go out from the following Tuesday.
+
+**Live touches (no free scheduler does these).** About 1.25 hours a week, in short slots:
+
+- **Tue and Thu, 9:30 am:** when the Facebook Page post goes out, post its first comment with the link, then reply to comments for 15 minutes.
+- **Each short-video day at 7:00 pm, Saturdays included:** post the Facebook Reel's first comment with the link, and share the Reel to Instagram Stories with its link sticker (5 to 10 minutes). Carousel days: the same Story share at 12:30 pm.
+- **10:00 am the day after each LinkedIn profile post:** the Company Page reshare with one line. Check whether LinkedIn lets you schedule a reshare; if it doesn't, do it live.
+- **LinkedIn days, 2:30 pm:** stay on the post and reply. This is the start of the 20-minute block, not extra time.
+- **Reddit post days:** check back a few times in the first 2 hours.
 
 ### 3.1 Daily 20-minute engagement block (weekdays)
 
@@ -177,12 +199,25 @@ Start it when your main post of the day goes live (2:30 pm on LinkedIn days). At
 
 | Minutes | Do this |
 |---|---|
-| 0 to 4 | Reply to every new comment and DM on your own posts: Meta Business Suite inbox (Instagram and Facebook), then TikTok, YouTube, LinkedIn, Threads and X. Answer KIT, READY and WORKFLOW DMs by hand wherever the automation isn't live yet (TikTok until business verification is approved) |
-| 4 to 12 | LinkedIn: 3 or 4 useful comments (add one thing, show one tip, ask one question) and 5 connection requests, as in the text kit's engagement routine |
+| 0 to 6 | Reply to every new comment and DM on your own posts: Meta Business Suite inbox (Instagram and Facebook), then TikTok, YouTube, LinkedIn, Threads and X. Answer KIT, READY and WORKFLOW DMs by hand wherever the automation isn't live yet (TikTok until business verification is approved) |
+| 6 to 12 | LinkedIn: 3 or 4 useful comments (add one thing, show one tip, ask one question) and 5 connection requests, as in the text kit's engagement routine |
 | 12 to 18 | Community slot, by day: **Mon** Instagram and TikTok comments in your niche · **Tue** other people's Facebook groups (VC-80 to VC-82) · **Wed** Reddit comments (LC-27 to LC-34) · **Thu** Facebook groups · **Fri** Threads and X replies. From Jan 4, if your group is open: your own group on Mon, Wed and Fri |
 | 18 to 20 | One line in your log: date, comments, requests sent, conversations to follow up |
 
 Rules: no links unless someone asks and the space allows it (LC-33, VC-83). Never pitch in someone else's comments, group or DMs. No engagement pods, auto-commenters or bought followers. LinkedIn commenting starts on Mon Oct 26 (10 minutes a weekday); the full block starts on Wed Nov 4. Skip it on the no-post days.
+
+**Replies and DMs on your own posts.**
+
+- Answer within the reply time you set in the Facebook instant reply (one business day is a sensible default). Messages that say HUMAN come first.
+- A question you can answer: answer it in the comment, with no link.
+- Wants the kit, the assessment or the workflow lesson: send that platform's `dm-kit`, `dm-ready` or `dm-workflow` link from the profile setup file.
+- A business owner describing a real problem, or asking to work together: one helpful reply, then the call link `https://principeai.com/book/ai-strategy-call?utm_source=<platform>&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-call`.
+- "Which course is right for me?": `https://principeai.com/courses?utm_source=<platform>&utm_medium=dm&utm_campaign=evergreen&utm_content=dm-courses`.
+- A link you send in reply to a specific post: `utm_medium=dm`, `utm_campaign=evergreen`, and that post's ID as `utm_content`.
+- A customer with a login, payment or refund problem: move it to email through `https://principeai.com/contact`. Never handle it in public.
+- A skeptic: one calm, factual reply in the style of LC-34, then stop.
+- Hide or delete only spam, scams, slurs or personal data. Block repeat offenders.
+- Every lead conversation goes in your log (minutes 18 to 20) with a follow-up date.
 
 ### 3.2 Weekly batch session (Mondays 9:30 to 11:30)
 
@@ -240,14 +275,15 @@ Record one free preview lesson (course takes and public takes), edit both cuts, 
 
 | L | Date | Decide or check |
 |---|---|---|
-| L-20 | Wed Oct 21 | Is `ANTHROPIC_API_KEY` live in production? If it still isn't by L-1, delete the **CONFIRM** lines (LD-01, VC-01, VC-15, VC-33, TP-16 version A) |
-| L-1 | Mon Nov 9 | Launch go/no-go: profiles complete, links tested, prices checked, footer shows the social links. If not ready, move launch day |
-| L+10 | Fri Nov 20 | Black Friday: a real Stripe promotion code with a real end date, or no promotion |
+| L-20 | Wed Oct 21 | Is `ANTHROPIC_API_KEY` live in production? If it still isn't by L-1, delete the **CONFIRM** lines (VC-01, VC-15, TP-16 version A) and schedule the LD-01 cut without the AI-tutor line. VC-33 is decided earlier, on L-11, because its Highlight goes up on L-9 |
+| L-8 | Mon Nov 2 | CAN-SPAM: the postal address is in the marketing-email footer, or "Free Guide Nurture" and "Assessment Follow-up" stay off ([08](08-tools-measurement-compliance.md), 4.1) |
+| L-1 | Mon Nov 9 | Launch go/no-go: profiles complete, links tested, prices checked, footer shows the social links, and the marketing-email footer shows the postal address with both prospect automations on (or both still deliberately off). If not ready, move launch day |
 | L+7 | Tue Nov 17 | Consider swapping the LD-03 pin on Instagram for the VC-01 carousel |
+| L+10 | Fri Nov 20 | Black Friday: a real Stripe promotion code with a real end date, or no promotion |
 | L+13 | Mon Nov 23 | Last `launch`-tagged post |
 | L+27 | Mon Dec 7 | Retro 1. LinkedIn newsletter access (Analytics & tools → Creator tools; needs 150+ followers or connections). Without access, publish TP-63 as a normal post on Jan 5 |
 | L+34 | Mon Dec 14 | Facebook Group go/no-go: open on Jan 4 only if you can personally invite at least 25 people who already engaged. Facebook action button: keep "Sign up" or test "Book now" |
-| L+38 | Fri Dec 18 | Everything from Dec 21 to Jan 10 is scheduled |
+| L+40 | Sun Dec 20 | Everything from Dec 21 to Jan 10 is scheduled |
 | L+62 | Mon Jan 11 | Retro 2: keep or cut each platform; X and Facebook tiers |
 | L+83 | Mon Feb 1 | Retro 3: plan February (LC-12 and TP-65 on Tue Feb 2, LC-14 and TP-66 on Tue Feb 16) |
 
@@ -259,27 +295,27 @@ Two verifications can take days and are started on L-21 so they finish before la
 
 | L | Date | Do this | Time |
 |---|---|---|---|
-| L-21 | Tue Oct 20 | **Read, decide, reserve, start the slow checks.** Read the README and this file. Pick the stack: the $0 default (Meta Business Suite for Instagram and Facebook, TikTok Studio, YouTube Studio, LinkedIn's own scheduler, plus Buffer Free or Metricool Free for X, Threads, Bluesky and Pinterest) or the upgrade (Postiz and Canva Pro). **Reserve every handle** on every platform, including the ones you won't use yet: `@principeai`, checked in each app's own sign-up screen; if it's taken, `@principe.ai` where periods are allowed, then `@principe_ai`, then `@getprincipeai`. Display name starts with "Principe AI" everywhere. Two-factor sign-in on every account. **Start the checks that take days:** TikTok business verification (Business account first), YouTube ID or video verification (after phone verification), LinkedIn identity (CLEAR), and the DNS TXT records for Pinterest and Meta domain verification, plus the Bluesky handle record. TikTok's profile basics (section 4 of the profile setup file) | 3 h |
-| L-20 | Wed Oct 21 | Avatar and banners in Canva (the site has no brand image files). **Instagram** (Professional, Business type) and the **Facebook Page**, connected in Accounts Center, with bios and links from [01-profile-setup.md](01-profile-setup.md). Every main bio link is `https://principeai.com/links?utm_source=<platform>&utm_medium=bio&utm_campaign=evergreen&utm_content=bio`, plus extra direct links where a platform allows several. **Owner or engineering:** in Vercel, confirm `NEXT_PUBLIC_SITE_URL=https://principeai.com` and the live Stripe, Resend and Anthropic keys. **CAN-SPAM:** order a PO box or registered mailbox now; its address must be in marketing emails before social leads arrive | 2 h |
+| L-21 | Tue Oct 20 | **Read, decide, reserve, start the slow checks.** Read the README and, in this file, "How to read this calendar" and sections 1 to 4. Pick the stack: the $0 default (Meta Business Suite for Instagram and Facebook, TikTok Studio, YouTube Studio, LinkedIn's own scheduler, plus Buffer Free for X, Threads and Bluesky (its 3 free channels) and Pinterest's own scheduler for Pins; Metricool Free also covers Pinterest, Threads and Bluesky, but not X) or the upgrade (Postiz and Canva Pro). **Reserve the handle** on every Tier 1 to 3 platform, including the ones you won't use yet (the reserve-only platforms wait until L-2): `@principeai`, checked in each app's own sign-up screen; if it's taken, `@principe.ai` where periods are allowed, then `@principe_ai`, then `@getprincipeai`. Display name starts with "Principe AI" everywhere. Two-factor sign-in on every account. **Start the checks that take days:** TikTok business verification (Business account first), YouTube ID or video verification (after phone verification), LinkedIn identity (CLEAR), and the DNS TXT records for Pinterest and Meta domain verification, plus the Bluesky handle record. TikTok's profile basics ([01-profile-setup.md](01-profile-setup.md), 4.2) | 4.5 h |
+| L-20 | Wed Oct 21 | **Before any bio link (owner or engineering):** merge `claude/sweet-edison-ne5duy` into the branch Vercel deploys and redeploy. Blank `site.social` entries are skipped, so this is safe today. Open `https://principeai.com/links` in a private window, and paste no bio link until it loads. If the merge can't happen today, use `https://principeai.com/free-guide?utm_source=<platform>&utm_medium=bio&utm_campaign=evergreen&utm_content=bio-kit` as the temporary main link and swap it on L-12. **CAN-SPAM stop-gap, also before any bio link:** in Admin → Email Automations, switch off "Free Guide Nurture" and "Assessment Follow-up", and send no broadcasts, until the postal address prints in the email footer ([08](08-tools-measurement-compliance.md), 4.1). Then: avatar and banners in Canva (the site has no brand image files). **Instagram** (Professional, Business type) and the **Facebook Page**, connected in Accounts Center, with bios and links from [01-profile-setup.md](01-profile-setup.md). Every main bio link is `https://principeai.com/links?utm_source=<platform>&utm_medium=bio&utm_campaign=evergreen&utm_content=bio`, plus extra direct links where a platform allows several. **Owner or engineering:** in Vercel, confirm `NEXT_PUBLIC_SITE_URL=https://principeai.com` and the live Stripe, Resend and Anthropic keys. **CAN-SPAM:** order a PO box or registered mailbox now; its address must be in marketing emails by L-8 | 3.5 h |
 | L-19 | Thu Oct 22 | **LinkedIn profile** (turn off sharing profile updates first, so edits don't announce themselves): headline, About, Featured links, Service Page, custom URL | 2 h |
-| L-18 | Fri Oct 23 | **YouTube** (LC-01 to LC-03: description, links, banner text, keywords, upload defaults) and the three playlists LC-05, LC-06, LC-07 (empty for now). **LinkedIn Company Page** "Principe AI", linked from your Experience | 2 h |
-| L-17 | Sat Oct 24 | **Batch-film A** (video kit filming steps): LD-01, LD-02, LD-03, SV-01. No-face option: screen recording with voice-over or on-screen text | 2.5 h |
+| L-18 | Fri Oct 23 | **YouTube** (LC-01 to LC-03: description, links, banner text, keywords, upload defaults) and the three playlists LC-05, LC-06, LC-07 (empty for now). **LinkedIn Company Page** "Principe AI", linked from your Experience | 2.75 h |
+| L-17 | Sat Oct 24 | **Batch-film A** (video kit filming steps): LD-01, LD-02, LD-03, SV-01. For LD-01, record both the AI-tutor line and the alternative line under it, so either cut is ready after the **CONFIRM** decision. No-face option: screen recording with voice-over or on-screen text | 2.5 h |
 | L-16 | Sun Oct 25 | **Long-form session 1:** record LC-04 (trailer) and LC-08, course and public takes. LC-04 assumes you on camera; the no-face version is a screen recording of principeai.com/links with your voice-over | 2.5 h |
-| L-15 | Mon Oct 26 | **Tier 2 and 3 profiles:** Threads, X (Professional account), Pinterest (About and the 10 boards, kept secret until each holds 5 Pins), Bluesky, Reddit (a personal account to post from; `u/principeai` reserved, LC-20). Start LinkedIn engagement: 10 minutes each weekday (3 comments, 5 connection requests) | 2 h |
+| L-15 | Mon Oct 26 | **Tier 2 and 3 profiles:** Threads, X (Professional account), Pinterest (About and the 10 boards, kept secret until each holds 5 Pins), Bluesky, Reddit (a personal account to post from; `u/principeai` reserved, LC-20). Start LinkedIn engagement: 10 minutes each weekday (3 comments, 5 connection requests) | 3.5 h |
 | L-14 | Tue Oct 27 | **Canva:** brand kit (royal violet and gold, Geist, Instrument Serif italic for accents) and templates: carousel (4:5), Story frames, Pins, Highlight covers, YouTube thumbnail, LinkedIn document carousel | 2.5 h |
-| L-13 | Wed Oct 28 | **DM automations** (desktop): Meta Business Suite "Comment to message" for `#prompts`, `#aiready` and `#aiworkflow` (Instagram and Facebook), the Facebook Inbox replies, and TikTok's KIT, READY and WORKFLOW auto-replies if business verification is through. Every DM link: `utm_medium=dm`, `utm_campaign=evergreen`, `utm_content=dm-kit`, `dm-ready` or `dm-workflow` | 1.5 h |
-| L-12 | Thu Oct 29 | **Site config:** paste each full `https://` profile URL into `src/config/site.ts` → `social` (youtube, instagram, linkedin, x, tiktok, threads, facebook, pinterest, bluesky; blank or non-https entries are skipped) and redeploy. Check that the footer links appear and that `/links` lists the profiles. Design VC-07 | 2 h |
-| L-11 | Fri Oct 30 | Edit batch A. Design the Highlight frames (VC-30 to VC-35; fill or delete VC-33's **CONFIRM** lines) and Pins VC-40, VC-46, VC-49 | 2.5 h |
+| L-13 | Wed Oct 28 | **DM automations** (desktop): Meta Business Suite "Comment to message" for `#prompts`, `#aiready` and `#aiworkflow` (Instagram and Facebook), the Facebook Inbox replies, and TikTok's KIT, READY and WORKFLOW auto-replies if business verification is through. Every DM link: `utm_medium=dm`, `utm_campaign=evergreen`, `utm_content=dm-kit`, `dm-ready` or `dm-workflow`. Add a trusted backup admin to the Meta business portfolio and the LinkedIn Page, if you have someone ([01-profile-setup.md](01-profile-setup.md), 2.6) | 1.5 h |
+| L-12 | Thu Oct 29 | **Site config:** on the merged branch, paste each full `https://` profile URL into `src/config/site.ts` → `social` (youtube, instagram, linkedin, x, tiktok, threads, facebook, pinterest, bluesky; blank or non-https entries are skipped) and redeploy. Check that the footer links appear and that `/links` lists the profiles. If you used the temporary `/free-guide` main link on L-20, swap every bio to its `/links` link now. **Engineering:** print the postal address in the footer of every email as soon as the box address arrives ([08](08-tools-measurement-compliance.md), 4.1, step 2); it must be live by L-8. Design VC-07 | 2 h |
+| L-11 | Fri Oct 30 | Edit batch A, with both LD-01 cuts (with and without the AI-tutor line). Design the Highlight frames (VC-30 to VC-35; delete VC-33's **CONFIRM** lines unless the AI key is live in production today, and add them later as a new frame once it is) and Pins VC-40, VC-46, VC-49 | 2.5 h |
 | L-10 | Sat Oct 31 | **Batch-film B:** SV-09, SV-15, SV-12, SV-02 | 2 h |
 | L-9 | Sun Nov 1 | Clocks go back an hour at 2:00 am: check every scheduler is set to America/New_York. Post the six Highlight frame sets as Stories and save each into its Highlight (VC-30 to VC-35). Edit LC-04 and LC-08 (public and course cuts) and add the course cut to the lesson's Video URL in Admin → Courses | 3 h |
-| L-8 | Mon Nov 2 | **Test every link in a private window** (the test checklist in the profile setup file): bio links, page buttons, DM auto-replies. Opt in once with a test address, check the contact's UTM block in Admin → Contacts, then delete the test contact (your normal browser keeps its first UTM for 90 days). Tick each "done when" list. Edit batch B. **Schedule every warm-up post** (Nov 4 to 9) and check that nothing is set for Tue Nov 3. Optional: start a Postiz trial if you're testing it | 3.5 h |
+| L-8 | Mon Nov 2 | **CAN-SPAM deadline (first thing):** send yourself a test email and read the footer ([08](08-tools-measurement-compliance.md), 4.1, step 3). If the postal address shows, switch "Free Guide Nurture" and "Assessment Follow-up" back on before the test opt-ins. If it doesn't, leave both off and send no broadcasts until it does. **Test every link in a private window** (the test checklist in the profile setup file): bio links, page buttons, DM auto-replies. For one link per platform and every DM keyword link, opt in with a new `+alias` address ([08](08-tools-measurement-compliance.md), 2.8; the site accepts 8 opt-ins per 10 minutes), check each contact's UTM block in Admin → Contacts, then delete the test contacts (your normal browser keeps its first UTM for 90 days). Tick each "done when" list. Edit batch B. **Schedule every warm-up post** (Nov 4 to 9) and check that nothing is set for Tue Nov 3. Optional: start a Postiz trial if you're testing it; decide by L-2 (Sun Nov 8), and keep the warm-up queued in the native tools until you decide | 4.5 h |
 | L-7 | Tue Nov 3 | **Election Day: no posts, no public commenting.** Production only: **batch-film C** (SV-03, SV-04, SV-13, SV-18, SV-27) | 2.5 h |
 | L-6 | Wed Nov 4 | Warm-up posts go out (table below). The 20-minute engagement block starts, including Reddit comments. Design VC-01 and VC-02 | 1.5 h |
 | L-5 | Thu Nov 5 | Warm-up posts. Design VC-03 and VC-04. Engagement block | 1.5 h |
 | L-4 | Fri Nov 6 | Warm-up post. Edit batch C (5 videos). Engagement block | 2.5 h |
 | L-3 | Sat Nov 7 | Warm-up post. Design VC-05 and VC-08 | 1 h |
-| L-2 | Sun Nov 8 | Design the launch-fortnight Pins: VC-50, VC-53, VC-39, VC-41, VC-42, VC-45, VC-52 | 1.25 h |
-| L-1 | Mon Nov 9 | Warm-up post. **Schedule launch week and week 2** in every scheduler (Stories are posted live). Final checks: prices for LD-01 and TP-02, the **CONFIRM** decision, every launch-day link opened in a private window, the footer showing the social links, LinkedIn profile-update sharing back on. Engagement block | 2.5 h |
+| L-2 | Sun Nov 8 | Design the launch-fortnight Pins: VC-50, VC-53, VC-39, VC-41, VC-42, VC-45, VC-52. **Reserve-only handles** ([01-profile-setup.md](01-profile-setup.md), 6.4): Snapchat, Medium, Substack, Discord, Mastodon, Telegram and Product Hunt, with the name, avatar and short bio, two-factor login on, no posts | 2 h |
+| L-1 | Mon Nov 9 | Warm-up post. **Schedule launch week and week 2** in every scheduler (Stories are posted live). Final checks: prices for LD-01 and TP-02, the **CONFIRM** decision (schedule the matching LD-01 cut), every launch-day link opened in a private window, the footer showing the social links, the marketing-email footer showing the postal address (or both prospect automations still off), LinkedIn profile-update sharing back on. Engagement block | 2.5 h |
 
 ### Warm-up posts (L-7 to L-1)
 
@@ -384,7 +420,7 @@ Every row is one post. "Kit" tells you which file holds the copy, link and desig
 | 12:30 pm | Instagram feed | VC-03 | Visual | launch | 7 days to make AI useful |
 | 1:00 pm | Instagram Stories | VC-22 | Visual | launch | Day 7; shares VC-03 |
 
-- 9:00 Monday review #1. 9:30 batch session: film SV-11, SV-16, SV-05; design VC-06, VC-11, the TP-10 and TP-14 document carousels, Pins VC-54 and VC-51.
+- 9:00 Monday review #1. 9:30 batch session: film SV-11, SV-16, SV-05; design VC-06 and the TP-10 document carousel (TP-10 posts Wed).
 
 
 ---
@@ -423,6 +459,7 @@ Growth starts. Daily Stories finish on L+13 (Day 14). Outreach starts with prepa
 | 2:30 pm | LinkedIn profile | TP-10 | Text | launch | Carousel 1 (document); the week's one "comment KIT" post |
 
 - Join 2 or 3 online communities; post LC-47 where introductions are welcome.
+- Design VC-11 and the TP-14 document carousel (about 1 h).
 
 #### L+9 · Thu Nov 19
 
@@ -460,6 +497,8 @@ Growth starts. Daily Stories finish on L+13 (Day 14). Outreach starts with prepa
 | 12:30 pm | Instagram feed | VC-05 | Visual | launch | where AI pays off in a small business |
 | 1:00 pm | Instagram Stories | VC-27 | Visual | launch | Day 12; shares VC-05 |
 | 8:00 pm | Pinterest | VC-52 | Visual | evergreen |  |
+
+- Design and schedule Pins VC-54 and VC-51 (about 30 min).
 
 #### L+12 · Sun Nov 22
 
@@ -515,7 +554,7 @@ Lighter on purpose. Campaign `evergreen`, except the OPTIONAL promotion posts (`
 
 ### Week 4 · L+21 to L+27 · Tue Dec 1 to Mon Dec 7
 
-First Reddit post (comments started Nov 4, so the 3-week comment-only period is over). First local outreach.
+First Reddit post (comments started Nov 4, so the 3-week comment-only period is over). First local outreach: this Tuesday's outreach takes about 1.5 hours (11 personalized messages plus follow-ups). If you can't personalize every one, send the 5 podcast pitches and move the rest to the next Tuesday, keeping their IDs.
 
 | Where | Posts and tasks (ET) |
 |---|---|
@@ -531,6 +570,8 @@ First Reddit post (comments started Nov 4, so the 3-week comment-only period is 
 | Rituals and checkpoints | Mon Dec 7: **Monthly retro #1** (60 min, replaces the review). Check LinkedIn newsletter access (Analytics & tools → Creator tools). Batch: film SV-23, SV-24, SV-08, SV-26; design VC-14, Pins VC-58 and VC-44. |
 
 ### Week 5 · L+28 to L+34 · Tue Dec 8 to Mon Dec 14
+
+The heaviest outreach Tuesday of the plan: about 2 hours (13 personalized messages, plus follow-ups and nudges). If you can't personalize every one, send the 5 podcast pitches and the 5 local talk pitches, and move LC-45 to the next Tuesday, keeping its ID.
 
 | Where | Posts and tasks (ET) |
 |---|---|
@@ -548,7 +589,7 @@ First Reddit post (comments started Nov 4, so the 3-week comment-only period is 
 
 ### Week 6 · L+35 to L+40 · Tue Dec 15 to Sun Dec 20 · the holiday pre-scheduling week
 
-The heaviest Growth week (about 11 to 12 hours): everything from Dec 21 to Jan 10 is filmed, designed and scheduled by Fri Dec 18. No carousel this week, to make room.
+The heaviest Growth week (about 14 to 15 hours): everything from Dec 21 to Jan 10 is filmed and designed by Sat Dec 19 and scheduled by Sun Dec 20. No carousel this week, to make room.
 
 | Where | Posts and tasks (ET) |
 |---|---|
@@ -559,8 +600,8 @@ The heaviest Growth week (about 11 to 12 hours): everything from Dec 21 to Jan 1
 | Pinterest 8:00 pm (always `evergreen`) | Tue Dec 15 **VC-58**<br>Thu Dec 17 **VC-44** |
 | Reddit 8:30 am | Wed Dec 16 **LC-24**: r/smallbusiness, only after 3+ weeks of comments there |
 | Outreach (from your own inbox, `utm_medium=referral`) | Tue Dec 15 **LC-41** 5 pitches aimed at January "new year, new skills" episodes<br>Tue Dec 15 **LC-42** follow-ups to the Dec 8 pitches |
-| Production | Fri Dec 18: **Holiday batch (2 h):** film the New Year re-cuts of SV-06 to SV-08 plus SV-14 and SV-10. Schedule everything from Dec 21 to Jan 10. If the group is a go, create it as the Page (private, rules, questions) and draft VC-73.<br>Sat Dec 19: Long-form session: record LC-15. |
-| Rituals and checkpoints | Sun Dec 20: Check every scheduler: Dec 21 to Jan 10 is queued, and nothing is set for Dec 24, Dec 25, Dec 31 or Jan 1. |
+| Production | Fri Dec 18: **Holiday batch (2 h):** film the New Year re-cuts of SV-06 to SV-08 plus SV-14 and SV-10. If the group is a go, create it as the Page (private, rules, questions) and draft VC-73 (30 min).<br>Sat Dec 19: Long-form session: record LC-15; then edit the five Dec 18 re-cuts (about 1.75 h).<br>Sun Dec 20: schedule everything from Dec 21 to Jan 10, LC-15 included (about 1.5 h). |
+| Rituals and checkpoints | Sun Dec 20: After scheduling, check every scheduler: Dec 21 to Jan 10 is queued, and nothing is set for Dec 24, Dec 25, Dec 31 or Jan 1. |
 
 ### Holiday slow-down, part 1 · L+41 to L+47 · Mon Dec 21 to Sun Dec 27
 

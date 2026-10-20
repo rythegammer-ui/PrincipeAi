@@ -32,7 +32,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
 import type { AgentCommission } from "@/db/schema";
 import { agentLinks, currentAgent } from "@/lib/sales/agents";
-import { describeTarget } from "@/lib/sales/commissions";
+import { describeTarget, DISPUTE_NOTE, livePayments } from "@/lib/sales/commissions";
 import { formatRate, type BadgeIcon } from "@/lib/sales/game";
 import { agentDashboard, type ChallengeView } from "@/lib/sales/stats";
 import { cn, firstName, formatDate, formatMoney, pluralize, timeAgo } from "@/lib/utils";
@@ -57,14 +57,19 @@ const BADGE_ICONS: Record<BadgeIcon, LucideIcon> = {
 /** "Oct 20" (formatDate's default dateStyle can't be combined with month/day options). */
 const SHORT_DATE: Intl.DateTimeFormatOptions = { dateStyle: undefined, month: "short", day: "numeric" };
 
-/** Admin notes on manual bonuses end with "(by admin@…)": agents see the reason only. */
+/** Older manual bonuses stored "(by admin@…)" after the reason: agents see the reason only. */
 const cleanNote = (note: string | null) => note?.replace(/\s*\(by [^)]*\)$/, "") ?? null;
+
+/** Notes the system writes on a sale itself (never an admin's words): a partial refund. */
+const saleNote = (row: AgentCommission) => (row.kind === "sale" && row.note?.startsWith("Partly refunded") ? row.note : null);
 
 export default async function AgentDashboardPage() {
   const agent = await currentAgent();
   if (!agent) return <NotAnAgent />;
   const d = await agentDashboard(agent);
   const { program, standing, balance, tz, now } = d;
+  // On a site taking real payments, test purchases are recorded but never paid.
+  const live = livePayments();
 
   // Course titles for the earnings table (never the customer).
   const orderIds = d.ledger.map((r) => r.orderId).filter((id): id is string => Boolean(id));
@@ -167,7 +172,9 @@ export default async function AgentDashboardPage() {
         <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>Your link</CardTitle>
-            <CardDescription>People who sign up or buy through it stay your customers for {program.attributionDays} days from then.</CardDescription>
+            <CardDescription>
+              New people who first sign up through it, and anyone who buys through it, stay your customers for {program.attributionDays} days from then.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col gap-4">
             {link ? (
@@ -256,7 +263,7 @@ export default async function AgentDashboardPage() {
             <CardTitle className="flex items-center gap-2">
               <Crown className="size-4 text-gold-600" aria-hidden /> Leaderboard
             </CardTitle>
-            <CardDescription>Sales this month. Ties go to whoever got there first.</CardDescription>
+            <CardDescription>Sales this month. Ties go to more sales volume, then whoever got there first.</CardDescription>
           </CardHeader>
           <CardContent>
             {d.board.length === 0 ? (
@@ -391,14 +398,21 @@ export default async function AgentDashboardPage() {
                         </Badge>
                       )}
                       {row.kind === "sale" && row.level && <span className="block text-xs text-zinc-500">{row.level} level</span>}
+                      {saleNote(row) && <span className="block text-xs text-zinc-500">{saleNote(row)}</span>}
                     </TD>
                     <TD className="text-right tabular-nums">{row.saleCents ? formatMoney(row.saleCents, row.currency) : "—"}</TD>
                     <TD className="text-right tabular-nums">{row.rateBps ? formatRate(row.rateBps) : "—"}</TD>
-                    <TD className={cn("text-right font-semibold tabular-nums", row.amountCents < 0 ? "text-red-700" : "text-zinc-900", row.status === "void" && "text-zinc-400 line-through")}>
+                    <TD
+                      className={cn(
+                        "text-right font-semibold tabular-nums",
+                        row.amountCents < 0 ? "text-red-700" : "text-zinc-900",
+                        (row.status === "void" || (row.isTest && live)) && "text-zinc-400 line-through",
+                      )}
+                    >
                       {formatMoney(row.amountCents, row.currency)}
                     </TD>
                     <TD>
-                      <LedgerStatus row={row} now={now} tz={tz} />
+                      <LedgerStatus row={row} now={now} tz={tz} live={live} />
                     </TD>
                   </TR>
                 ))}
@@ -472,19 +486,21 @@ export default async function AgentDashboardPage() {
 
 function ledgerLabel(row: AgentCommission, orderTitles: Map<string, string>): string {
   const title = row.orderId ? orderTitles.get(row.orderId) : undefined;
-  switch (row.kind) {
-    case "sale":
-      return title ?? "Course sale";
-    case "clawback":
-      return `Refund: ${title ?? "course sale"}`;
-    case "bonus":
-      return cleanNote(row.note) || "Bonus";
-    default:
-      return cleanNote(row.note) || "Adjustment";
-  }
+  if (row.kind === "sale") return title ?? "Course sale";
+  // Money taken back for a refunded (or partly refunded) sale.
+  if (row.kind === "clawback" || (row.kind === "adjustment" && row.orderId)) return `Refund: ${title ?? "course sale"}`;
+  if (row.kind === "bonus") return cleanNote(row.note) || "Bonus";
+  return cleanNote(row.note) || "Adjustment";
 }
 
-function LedgerStatus({ row, now, tz }: { row: AgentCommission; now: Date; tz: string }) {
+function LedgerStatus({ row, now, tz, live }: { row: AgentCommission; now: Date; tz: string; live: boolean }) {
+  if (row.isTest && live) {
+    return (
+      <Badge tone="neutral" className="whitespace-nowrap">
+        Test · never paid
+      </Badge>
+    );
+  }
   if (row.status === "void") {
     return (
       <span className="flex flex-col">
@@ -495,8 +511,35 @@ function LedgerStatus({ row, now, tz }: { row: AgentCommission; now: Date; tz: s
       </span>
     );
   }
-  if (row.status === "paid") return <Badge tone="green">Paid</Badge>;
-  if (row.amountCents < 0) return <Badge tone="red">Off next payout</Badge>;
+  if (row.amountCents < 0) {
+    return row.status === "paid" ? (
+      <Badge tone="neutral">Taken back</Badge>
+    ) : (
+      <Badge tone="red" className="whitespace-nowrap">
+        Taken back from next payout
+      </Badge>
+    );
+  }
+  if (row.status === "paid") {
+    if (row.kind === "sale" && row.voidedAt) {
+      return (
+        <span className="flex flex-col">
+          <Badge tone="amber" className="self-start whitespace-nowrap">
+            Paid, then refunded
+          </Badge>
+          {row.voidReason && <span className="mt-1 text-xs text-zinc-500">{row.voidReason}</span>}
+        </span>
+      );
+    }
+    return <Badge tone="green">Paid</Badge>;
+  }
+  if (row.note === DISPUTE_NOTE) {
+    return (
+      <Badge tone="amber" className="whitespace-nowrap">
+        <Hourglass aria-hidden /> On hold: payment disputed
+      </Badge>
+    );
+  }
   if (row.availableAt <= now) return <Badge tone="brand">Owed</Badge>;
   return (
     <Badge tone="amber" className="whitespace-nowrap">
@@ -528,7 +571,8 @@ function ChallengeCard({ challenge: c, now, tz }: { challenge: ChallengeView; no
       ? `Starts ${formatDate(c.startsAt, SHORT_DATE, tz)}`
       : c.phase === "live"
         ? `Ends ${timeAgo(c.endsAt, now)}`
-        : `Ended ${formatDate(c.endsAt, SHORT_DATE, tz)}`;
+        : // endsAt is the first moment after the last day.
+          `Ended ${formatDate(new Date(c.endsAt.getTime() - 1), SHORT_DATE, tz)}`;
   return (
     <li className={cn("rounded-2xl p-4 ring-1 sm:p-5", c.done ? "bg-emerald-50/60 ring-emerald-200" : c.phase === "ended" ? "bg-zinc-50 ring-zinc-200" : "bg-white ring-zinc-200")}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -561,8 +605,13 @@ function ChallengeCard({ challenge: c, now, tz }: { challenge: ChallengeView; no
       {c.done && (
         <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-emerald-800">
           <CheckCircle2 className="size-4" aria-hidden />
-          {c.phase === "ended" ? "You hit the target!" : "Target hit! Keep it up: refunds before the end could take you back below it."}
-          {c.bonusCents > 0 && ` The bonus is paid after the ${c.phase === "ended" ? "" : "challenge's "}refund window.`}
+          {c.phase === "ended"
+            ? c.bonusCents > 0
+              ? "You hit the target! The bonus is paid once the refund window after the challenge has passed, as long as refunds don't take you back below the target."
+              : "You hit the target!"
+            : c.bonusCents > 0
+              ? "Target hit! Keep it up: refunds before your bonus is paid could take you back below it."
+              : "Target hit! Keep it up: refunds before the end could take you back below it."}
         </p>
       )}
     </li>

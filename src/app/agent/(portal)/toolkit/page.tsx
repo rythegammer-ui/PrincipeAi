@@ -1,6 +1,7 @@
 import { CheckCircle2, Lightbulb, Link2, MessageSquareText, ShieldCheck, XCircle } from "lucide-react";
 import type { Metadata } from "next";
 import { CopyButton } from "@/components/marketing/copy-button";
+import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { site } from "@/config/site";
 import { listPublishedCourses } from "@/lib/courses";
@@ -12,7 +13,9 @@ import { NotAnAgent } from "../not-agent";
 export const metadata: Metadata = { title: "Toolkit" };
 
 const DOS = [
-  "Say you earn a commission every time you recommend a course: “I earn a commission if you buy through my link.” On social media, add #ad.",
+  "Say you earn a commission every time you recommend a course: “I earn a commission if you buy through my link.”",
+  "On social media, put #ad and the commission line at the start of the post, before the link and above any “more” cut-off.",
+  "In every promotional email, include a way to opt out (“reply stop”) and our mailing address, and honour opt-outs straight away (within 10 business days at the latest).",
   "Describe the courses accurately, using what's on the course pages.",
   "Reach out to people you know, or people who've asked to hear from you.",
   "Stop messaging anyone who says no or asks you to stop, straight away.",
@@ -37,6 +40,9 @@ const TIPS = [
   { title: "Make useful content", body: "Short videos or posts showing one practical AI tip. Point people to the free assessment or a course when they want more." },
 ];
 
+/** The postal address CAN-SPAM requires in promotional email (Settings: BUSINESS_POSTAL_ADDRESS). */
+const mailingAddress = () => site.postalAddress.trim() || "[mailing address: ask the team]";
+
 function scripts(name: string, link: string) {
   return [
     {
@@ -45,15 +51,16 @@ function scripts(name: string, link: string) {
     },
     {
       title: "Social media post",
-      body: `If you've been meaning to get practical with AI but don't know where to start, ${site.name} has short courses in plain English, for everyday life and for business. There's a free 3-minute AI readiness assessment too.\n\n${link}\n\n#ad I earn a commission if you buy through my link.`,
+      // Disclosure first (truncated captions hide the end); fits X's 280 characters, which counts a link as 23.
+      body: `#ad — I earn a commission if you buy through my link.\n\nWant to get practical with AI but not sure where to start? ${site.name} teaches it in short, plain-English lessons for everyday life and business.\n\n${link}`,
     },
     {
       title: "Email to a contact",
-      body: `Subject: A practical way to start using AI\n\nHi [name],\n\nYou mentioned recently that [their situation, e.g. you're short on time / curious about AI for your business]. I thought of ${site.name}: they teach practical AI skills in plain English, in short lessons you can use the same day.\n\nHave a look here: ${link}\n\nHappy to answer any questions. Just so you know, I earn a commission if you buy through my link.\n\nBest,\n${name}`,
+      body: `Subject: A practical way to start using AI\n\nHi [name],\n\nYou mentioned recently that [their situation, e.g. you're short on time / curious about AI for your business]. I thought of ${site.name}: they teach practical AI skills in plain English, in short lessons you can use the same day.\n\nHave a look here: ${link}\n\nHappy to answer any questions. Just so you know, I earn a commission if you buy through my link.\n\nBest,\n${name}\n\nNot interested? Reply "stop" and I won't email you about this again.\n${site.company}, ${mailingAddress()}`,
     },
     {
       title: "Friendly follow-up",
-      body: `Hi [name], just following up on the AI courses I sent over. No pressure at all; if it's not the right time, no worries. The link's here if you want it later: ${link}\n\n(As before: I earn a commission if you buy through it.)`,
+      body: `Hi [name], just following up on the AI courses I sent over. No pressure at all; if it's not the right time, no worries. The link's here if you want it later: ${link}\n\n(As before: I earn a commission if you buy through it. Reply "stop" and I won't follow up again.)`,
     },
   ];
 }
@@ -71,6 +78,13 @@ export default async function AgentToolkitPage() {
       <p className="eyebrow">Sales team</p>
       <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">Toolkit</h1>
       <p className="mt-1 text-zinc-600">Your links, ready-to-use messages, and the rules that keep the team trusted.</p>
+
+      {agent.status === "paused" && (
+        <Alert tone="warning" title="Your agent account is paused" className="mt-6">
+          Your links don&apos;t earn commission while your account is paused, including on sales made now once it&apos;s turned back on. Please hold off
+          sharing them until we let you know it&apos;s active again.
+        </Alert>
+      )}
 
       <Card className="mt-8">
         <CardHeader>
@@ -186,18 +200,22 @@ export default async function AgentToolkitPage() {
           <CardContent>
             <ul className="space-y-3 text-sm leading-relaxed text-zinc-700">
               <li>
-                Anyone who comes to the site through your link becomes your customer when they sign up or buy, and stays yours for{" "}
-                <strong>{program.attributionDays} days</strong> from when they first sign up or buy through your link.
+                Someone new to us who first signs up through your link (the free guide, the assessment, a booking…) becomes your customer. Anyone who buys
+                through your link does too, even if they&apos;d been in touch with us before.
               </li>
-              <li>The first agent to bring a customer keeps them for those {program.attributionDays} days, even if they later click another agent&apos;s link.</li>
+              <li>
+                They stay yours for <strong>{program.attributionDays} days</strong> from then: the first agent to bring a customer keeps them, even if they
+                later click another agent&apos;s link. Customers the team assigns to you stay yours until that&apos;s changed.
+              </li>
               <li>Your code works on any page: the home page, a course, the free assessment or the free guide.</li>
               <li>
-                Links rely on cookies: if someone switches device or clears their browser, ask them to use your link again before they buy. The &ldquo;Straight
-                to checkout&rdquo; links work on any device.
+                Your link is remembered in the visitor&apos;s browser for 90 days. If someone switches device or clears their browser, ask them to use your
+                link again before they buy. The &ldquo;Straight to checkout&rdquo; links work on any device.
               </li>
-              <li>Purchases you make yourself don&apos;t earn commission.</li>
+              <li>Purchases you make yourself, from any of your email addresses, don&apos;t earn commission. Nor do sales while your account is paused.</li>
               <li>
-                Commission is held for <strong>{program.holdDays} days</strong> in case of a refund, then paid: {program.payoutSchedule.replace(/\.$/, "")}.
+                Commission is held for <strong>{program.holdDays} days</strong> in case of a refund (until it&apos;s resolved if the payment is disputed),
+                then paid: {program.payoutSchedule.replace(/\.$/, "")}. A partial refund reduces the commission to match.
               </li>
             </ul>
           </CardContent>

@@ -54,11 +54,11 @@ const STEPS = [
 
 const GAME = [
   { icon: Rocket, title: "Levels", body: "Your commission rate rises as your monthly sales grow, and you keep a level through the end of the next month." },
-  { icon: Trophy, title: "Monthly leaderboard", body: "See where you rank on the team each month. You choose whether you appear on it." },
+  { icon: Trophy, title: "Monthly leaderboard", body: "See where you rank on the team each month, shown by first name, last initial and state. You can opt out any time." },
   { icon: Gift, title: "Challenges with cash bonuses", body: "Time-boxed goals like “3 sales this week”. Hit the target and the bonus is yours, on top of commission." },
   { icon: Medal, title: "Badges", body: "Unlock badges for milestones like your first sale, a 3-sale week or your first $1,000 in sales." },
   { icon: Flame, title: "Streaks", body: "Make a sale every week and watch your streak grow. Consistency beats bursts." },
-  { icon: MessageCircleHeart, title: "Team wins feed", body: "See the team's sales as they happen (first names only) and cheer each other on." },
+  { icon: MessageCircleHeart, title: "Team wins feed", body: "See the team's sales as they happen (first name, last initial and state; never who bought) and cheer each other on." },
 ];
 
 function faqs(program: ProgramSettings): FaqItem[] {
@@ -88,7 +88,7 @@ function faqs(program: ProgramSettings): FaqItem[] {
     },
     {
       q: "How do I know a sale is mine?",
-      a: `When someone comes to the site through your link (or any page with your code) and then signs up or buys, they become your customer. They stay yours for ${program.attributionDays} days from when they first sign up or buy through your link, and their course purchases in that time earn you commission. The first agent to bring a customer keeps them. Purchases you make yourself don't count.`,
+      a: `Someone new to us who first signs up through your link (or any page with your code) becomes your customer, and so does anyone who buys through your link. They stay yours for ${program.attributionDays} days from then, and their course purchases in that time earn you commission. The first agent to bring a customer keeps them. Your link is remembered in their browser for 90 days. Purchases you make yourself don't count.`,
     },
     {
       q: "Do I earn for recruiting other agents?",

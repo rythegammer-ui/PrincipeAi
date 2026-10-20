@@ -71,6 +71,13 @@ We **do not sell** your personal information. We share it only with service prov
 
 We may also disclose information if required by law, to protect our rights or the safety of others, or as part of a business transfer such as a merger or acquisition.
 
+## Our sales team
+
+Some customers are introduced to us by independent **sales agents** who earn a commission on the courses they sell (see the [Sales Agent Program Terms](/sales-team/terms)).
+
+- **If an agent introduced you:** when you sign up or buy after following their link, we record that you're their customer. For each sale they're credited with, the agent sees the course and the amount paid, never your name or email address.
+- **If you apply to join the sales team:** we collect your name, email, phone number, city and state, and your answers about your experience and availability, to review your application. If you join, we use your details to run the program: your dashboard, commissions and payouts (including how you'd like to be paid and, for tax purposes, a Form W-9). Your first name, last initial and state appear on the team leaderboard and wins feed for other agents unless you opt out in your dashboard. We never sell this information.
+
 ## Cookies
 
 We use a small number of first-party cookies:
@@ -80,7 +87,8 @@ We use a small number of first-party cookies:
 | \`pa_vid\` | An anonymous visitor ID used for analytics and to connect your visits once you share your details | 2 years |
 | \`pa_utm\`, \`pa_ref\`, \`pa_land\` | Remember how you first found us (campaign tags, referring site, landing page) | 90 days |
 | \`pa_guide\` | Remembers that you've unlocked the free AI Starter Kit | 1 year |
-| \`pa_student\`, \`pa_admin\` | Keep you signed in to the student portal or admin area | Session length |
+| \`pa_agent\` | If you followed an independent sales agent's link, their referral code, so the agent who introduced you is credited if you sign up or buy | 90 days |
+| \`pa_student\`, \`pa_admin\` | Keep you signed in to the student portal (or sales agent dashboard) or admin area | Session length |
 
 These cookies are set by us, not by third-party advertisers. You can block or delete cookies in your browser settings, although some features (such as staying signed in) may stop working. Stripe may set its own cookies on its checkout pages to prevent fraud.
 

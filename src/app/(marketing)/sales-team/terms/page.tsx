@@ -59,17 +59,24 @@ We may change the rates, levels, bonuses or any other part of the Program for **
 
 ## 5. Which customers are yours (attribution)
 
-- A customer is attributed to you when they come to our site through your referral link (any page with your code, or your short link) and then sign up or buy, or when we assign them to you.
-- **The first agent to bring a customer keeps them** for ${program.attributionDays} days from when they first sign up or buy through your link (or are assigned to you). Their course purchases in that time earn you commission. After that, another agent's link can bring them in again.
-- Purchases you make yourself, or for yourself, don't earn commission, and neither do purchases made with someone else's details to get around these rules.
-- Attribution relies on links and browser cookies. If a customer clears their cookies, uses another device, or buys without using your link, we may not be able to credit you. Tell us if you think a sale was missed and we'll look into it; our records decide.
+- A customer is attributed to you when:
+  - they're **new to us** and first sign up on our site (for example for the free guide, the assessment or a call) after coming through your referral link (any page with your code, or your short link); or
+  - they **buy a course through your referral link**, even if they'd been in touch with us before; or
+  - we **assign** them to you.
+- Someone already in touch with us becomes your customer only by buying through your link: signing up again through it isn't enough.
+- **The first agent to bring a customer keeps them** for ${program.attributionDays} days from when they first sign up or buy through your link. Their course purchases in that time earn you commission. After that, another agent's link can bring them in again. A customer we assign to you stays yours until we change it.
+- Your link is remembered in a visitor's browser for 90 days. If they clear their cookies, use another device, or buy without using your link, we may not be able to credit you. Tell us if you think a sale was missed and we'll look into it; our records decide.
+- Purchases you make yourself or for yourself (from any of your email addresses) don't earn commission, and neither do purchases made with someone else's details to get around these rules.
+- Sales made while your participation is paused don't earn commission, including after it's turned back on.
 
 ## 6. Refunds and chargebacks
 
-Each commission is held for **${program.holdDays} days** after the sale (the "hold period") so that refunds happen first. If an order is refunded or charged back:
+Each commission is held for **${program.holdDays} days** after the sale (the "hold period") so that refunds happen first. If an order is refunded in full:
 
-- during the hold period, its commission is cancelled; or
+- before its commission is paid, the commission is cancelled; or
 - after the commission was paid, the same amount is deducted from your next payout.
+
+If an order is **partly refunded**, its commission is recalculated on what the customer kept (and any difference already paid is deducted from your next payout). If a customer **disputes the payment** with their bank (a chargeback), the commission isn't paid until the dispute is resolved: if we win it, it's paid as usual; if we lose it, it's treated as a full refund. Refunded and charged-back sales don't count toward your level or challenges.
 
 ## 7. Payouts
 
@@ -86,10 +93,10 @@ This is a **single-level** program. You only earn on courses bought by your own 
 
 You represent our brand, so please promote it honestly and lawfully. You must:
 
-- **Always disclose that you earn a commission** whenever you recommend our courses, clearly and close to the recommendation (for example, "I earn a commission if you buy through my link", or #ad on social media), as required by the FTC's Endorsement Guides.
+- **Always disclose that you earn a commission** whenever you recommend our courses, clearly and close to the recommendation (for example, "I earn a commission if you buy through my link", or #ad on social media), as required by the FTC's Endorsement Guides. On social media, put the disclosure at the start of the post, before any link and where it can't be cut off by a "more" link.
 - **Never make income or results claims.** Don't promise that a course will save anyone a particular amount of time or money, or produce any particular result, and don't make claims about what anyone earns in this Program.
 - Describe our courses accurately, using the information on our site. Don't invent features, discounts, guarantees or deadlines.
-- **No spam.** Follow the CAN-SPAM Act: only email people in a way the law allows, identify yourself, and honour every request to stop.
+- **No spam.** Follow the CAN-SPAM Act: only email people in a way the law allows, identify yourself, and include in every promotional email a clear way to opt out and our mailing address (the email script in your toolkit has both). Honour every request to stop straight away, and within 10 business days at the latest.
 - **No unsolicited texts or calls.** Follow the Telephone Consumer Protection Act (TCPA) and the Do Not Call rules: don't send marketing texts or make robocalls or autodialed calls without the person's prior consent.
 - **No fake reviews** or testimonials, and no posing as a customer.
 - **Don't bid on our brand** (such as "${site.name}" or "${site.company}") or close misspellings in paid search or social ads, and don't create websites, social accounts or usernames that could be mistaken for ours.
@@ -108,7 +115,7 @@ While you're in the Program, you may use our name, the scripts and the links we 
 
 ## 12. Pausing or leaving the Program
 
-You can leave at any time by telling us. We can pause or end your participation at any time, including if you break these Terms. When your participation is paused or ends, your link stops earning commission on new sales. Commission you've already earned on valid sales is still paid after its hold period, unless it came from a breach of these Terms (such as self-purchases, misleading claims or spam), in which case we may withhold it.
+You can leave at any time by telling us. We can pause or end your participation at any time, including if you break these Terms. When your participation is paused or ends, your link stops earning commission on new sales (sales made during a pause don't earn commission later either). Commission you've already earned on valid sales is still paid after its hold period, unless it came from a breach of these Terms (such as self-purchases, misleading claims or spam), in which case we may withhold it.
 
 ## 13. Liability
 

@@ -162,7 +162,8 @@ export function SalesApplyForm({ contactEmail }: { contactEmail: string }) {
         Send my application <ArrowRight aria-hidden />
       </SubmitButton>
       <p className="text-xs leading-relaxed text-zinc-500">
-        We only use your answers to review your application and, if you join, to run the program. We never share them.
+        We only use your answers to review your application and, if you join, to run the program, and we never sell them. If you join, your first name,
+        last initial and state appear on the team leaderboard unless you opt out.
       </p>
     </form>
   );

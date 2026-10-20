@@ -10,6 +10,11 @@ export const site = {
     "Practical AI education and implementation for business owners, professionals, and everyday people. Courses, coaching, and done-with-you AI systems.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   contactEmail: process.env.CONTACT_EMAIL ?? "principeconsults@gmail.com",
+  /**
+   * The business's postal address (a P.O. box works). CAN-SPAM requires it in promotional email, including the emails
+   * sales agents send for us (their toolkit's email script shows it). Empty until BUSINESS_POSTAL_ADDRESS is set.
+   */
+  postalAddress: process.env.BUSINESS_POSTAL_ADDRESS ?? "",
   /** Default "from" address for outgoing email (must be a verified Resend domain in production). */
   emailFrom: process.env.EMAIL_FROM ?? "Principe AI <onboarding@resend.dev>",
   /** Owner's timezone — availability rules for scheduling are interpreted in this zone. */

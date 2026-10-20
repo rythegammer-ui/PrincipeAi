@@ -1,4 +1,4 @@
-import { expect, openLoggedEmail, openSignInLink, randomClientIp, test, uniqueEmail } from "./helpers";
+import { expect, openLoggedEmail, openSignInLink, randomClientIp, signInAsStudent, test, uniqueEmail } from "./helpers";
 
 const COURSE = { slug: "ai-essentials", title: "AI Essentials" };
 
@@ -129,7 +129,13 @@ test.describe("sales team", () => {
   test("agent pages need an agent: signed-out visitors and students who aren't agents are turned away", async ({ page }) => {
     await page.goto("/agent/toolkit");
     await expect(page).toHaveURL(/\/agent\/login$/);
-    await page.goto("/sales-team");
-    await expect(page.getByRole("link", { name: /terms/i }).first()).toBeVisible();
+
+    // A student (signed in, but not on the sales team) sees no agent data, and no sign-in link is sent to them.
+    await signInAsStudent(page, uniqueEmail("student-not-agent"), "/learn");
+    await page.goto("/agent");
+    await expect(page.getByRole("heading", { level: 1, name: /sales team/i })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Your numbers" })).toHaveCount(0);
+    await page.goto("/agent/toolkit");
+    await expect(page.getByText(/\/r\/[A-Z0-9]{4,16}/)).toHaveCount(0);
   });
 });

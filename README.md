@@ -62,6 +62,7 @@ Reset the local database with `npm run db:reset-local`.
    | `AUTH_SECRET` | yes | Signs login sessions (at least 16 characters): `openssl rand -base64 32`. Changing it signs **everyone** out, admin and students |
    | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | yes | Your admin dashboard login. The password must be at least 12 characters (use a long, unique one); admin login stays disabled until it and `AUTH_SECRET` are set. Changing the password signs out every admin session |
    | `ADMIN_SESSION_VERSION` | optional | Change it to any new value (e.g. `2`) and redeploy to sign out every admin session without changing the password, e.g. after a lost laptop |
+   | `BUSINESS_POSTAL_ADDRESS` | recommended (sales team) | Your business mailing address (a P.O. box is fine). The sales agents' email scripts include it, as CAN-SPAM requires for promotional email |
    | `ADMIN_TEAM_EMAILS` | optional | Comma-separated emails added to the admin team on the next deploy (full access, sign-in by emailed link). Usually you add people in **Admin → Admin Team** instead; someone removed there isn't added back by this |
    | `NEXT_PUBLIC_SITE_URL` | yes | e.g. `https://principe.ai` (used in emails, Stripe redirects, invites) |
    | `CRON_SECRET` | yes (scheduled jobs) | Any random string (`openssl rand -base64 32`). Vercel Cron sends it to `/api/cron`; **without it every cron run is refused in production**, so follow-up automation emails, booking reminders and hold/checkout cleanup never run |
@@ -161,12 +162,16 @@ at the last run before the call (up to 24 hours ahead). You can also trigger it 
    Team**. Approving one gives the agent a referral code (e.g. `JANE27`) and emails them their link and how to sign in
    at `/agent/login` (an emailed link, like students).
 2. An agent's links: `/r/CODE`, or `?ref=CODE` on any page (e.g. `/courses/ai-for-business?ref=CODE`), or a direct
-   checkout `/buy/<course>?ref=CODE`. The visitor becomes the agent's customer when they sign up or buy; the first
-   agent keeps them for the attribution window (90 days by default). Self-purchases don't earn. You can also assign a
-   contact to an agent on the contact's page.
+   checkout `/buy/<course>?ref=CODE`. The link is remembered in the visitor's browser for 90 days. A visitor who signs
+   up for the first time through it, or buys through it, becomes the agent's customer; someone already in your CRM
+   only by buying through it (a form can't move an existing contact). The first agent keeps the customer for the
+   attribution window (90 days by default). Self-purchases and sales made while an agent is paused don't earn. You can
+   also assign a contact to an agent on the contact's page; that stays until you change it.
 3. Each paid course sale by an agent's customer earns the agent's current rate. Levels go by sales in the calendar
    month (business time zone) and carry over through the next month. The commission is payable after the hold period
    (30 days by default); a refund or lost dispute before then cancels it, after a payout it's deducted from the next one.
+   An open dispute holds the commission until it's resolved, and a partial refund reduces it. Test payments never count
+   once the site uses a live Stripe key.
 4. Pay agents outside the app (PayPal, Venmo, Zelle, Cash App, bank), then **Record payout** on the agent's page; it
    covers everything owed and emails them. Ask for a W-9 before the first payout; you may need to file 1099s.
 5. Challenges (Admin → Sales Team → Program): a target (sales or sales volume) between two dates and a cash bonus for

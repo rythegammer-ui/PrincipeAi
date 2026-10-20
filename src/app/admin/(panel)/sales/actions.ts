@@ -8,7 +8,7 @@ import { getDb, schema } from "@/db";
 import { assertAdmin } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { approveAgent, rejectAgent, setAgentCode, setAgentStatus } from "@/lib/sales/agents";
-import { addAgentAdjustment, recordPayout, voidCommission } from "@/lib/sales/commissions";
+import { addAgentAdjustment, PayoutChangedError, recordPayout, voidCommission } from "@/lib/sales/commissions";
 import { MAX_RATE_BPS } from "@/lib/sales/game";
 import { getSalesProgram, saveSalesProgram } from "@/lib/sales/program";
 import { getBusinessTimezone } from "@/lib/scheduling";
@@ -103,15 +103,32 @@ const payoutSchema = z.object({
   method: z.string().max(60),
   reference: z.string().max(200),
   note: z.string().max(500),
+  /** The amount owed the page showed (what the admin sent): nothing is recorded if it has changed since. */
+  expectedCents: z.coerce.number().int().min(0).max(100_000_000),
 });
 
 export async function recordPayoutAction(_prev: SalesFormState, fd: FormData): Promise<SalesFormState> {
   const session = await assertAdmin();
-  const parsed = payoutSchema.safeParse({ agentId: str(fd, "agentId"), method: str(fd, "method"), reference: str(fd, "reference"), note: str(fd, "note") });
+  const parsed = payoutSchema.safeParse({
+    agentId: str(fd, "agentId"),
+    method: str(fd, "method"),
+    reference: str(fd, "reference"),
+    note: str(fd, "note"),
+    expectedCents: str(fd, "expectedCents"),
+  });
   if (!parsed.success) return { error: "Please check the payout details (method up to 60 characters, reference up to 200)." };
   const limit = await rateLimit(`admin-payout:${session.email}`, 30, 600);
   if (!limit.ok) return { error: "Too many payouts in a short time. Please wait a few minutes." };
-  const payout = await recordPayout({ ...parsed.data, by: session.email });
+  let payout;
+  try {
+    payout = await recordPayout({ ...parsed.data, by: session.email });
+  } catch (err) {
+    if (err instanceof PayoutChangedError) {
+      refresh(parsed.data.agentId);
+      return { error: `The amount owed changed to ${formatMoney(err.owedCents)} since this page loaded. Check it before recording.` };
+    }
+    throw err;
+  }
   refresh(parsed.data.agentId);
   if (!payout) return { error: "Nothing is owed to this agent right now." };
   return { ok: true, message: `Payout of ${formatMoney(payout.amountCents, payout.currency)} recorded. The agent was emailed.` };
@@ -171,6 +188,11 @@ export async function saveProgramAction(_prev: SalesFormState, fd: FormData): Pr
   const later = levels.data.slice(1).map((l) => l.minSales);
   if (later.some((n) => n < 1) || new Set(later).size !== later.length) {
     return { error: "Each level after the first needs its own number of sales per month (1 or more)." };
+  }
+  // Levels are matched by key: a repeated one would be dropped when saving, so refuse it instead of losing a level.
+  const keys = levels.data.map((l) => l.key.trim());
+  if (keys.some((k) => !k) || new Set(keys).size !== keys.length) {
+    return { error: "Two levels got mixed up. Reload the page and make your changes again." };
   }
   const holdDays = Number(str(fd, "holdDays"));
   const attributionDays = Number(str(fd, "attributionDays"));

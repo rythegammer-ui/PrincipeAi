@@ -1,4 +1,4 @@
-import { and, eq, gte, lt, ne, sql } from "drizzle-orm";
+import { and, gte, lt, sql } from "drizzle-orm";
 import { DollarSign, ExternalLink, Inbox, Settings2, Trophy, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -12,7 +12,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
 import { requireAdmin } from "@/lib/auth";
 import { agentLinks, agentLocation } from "@/lib/sales/agents";
-import { agentBalances, awardDueChallenges } from "@/lib/sales/commissions";
+import { agentBalances, awardDueChallenges, countingSale } from "@/lib/sales/commissions";
 import { formatRate, monthBounds } from "@/lib/sales/game";
 import { EXPERIENCE_OPTIONS, HOURS_OPTIONS, optionLabel, PAYOUT_METHODS } from "@/lib/sales/options";
 import { getSalesProgram } from "@/lib/sales/program";
@@ -47,14 +47,8 @@ export default async function SalesTeamPage({ searchParams }: { searchParams: Pr
     db
       .select({ n: sql<number>`count(*)`.mapWith(Number), volume: sql<number>`coalesce(sum(${schema.agentCommissions.saleCents}), 0)`.mapWith(Number) })
       .from(schema.agentCommissions)
-      .where(
-        and(
-          eq(schema.agentCommissions.kind, "sale"),
-          ne(schema.agentCommissions.status, "void"),
-          gte(schema.agentCommissions.createdAt, bounds.thisMonth),
-          lt(schema.agentCommissions.createdAt, bounds.nextMonth),
-        ),
-      ),
+      // Same rule as levels and the leaderboard: no refunded sales, and no test payments on a live site.
+      .where(and(countingSale(), gte(schema.agentCommissions.createdAt, bounds.thisMonth), lt(schema.agentCommissions.createdAt, bounds.nextMonth))),
   ]);
 
   const applications = rows.filter((r) => r.status === "applied").sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -135,12 +129,23 @@ export default async function SalesTeamPage({ searchParams }: { searchParams: Pr
                       </div>
                     )}
                     <div className="flex flex-wrap items-start gap-2 border-t border-zinc-100 pt-3">
-                      <ActionForm action={approveAgentAction} hidden={{ agentId: a.id }} submit="Approve" pendingText="Approving…" size="sm" />
+                      <ActionForm
+                        action={approveAgentAction}
+                        hidden={{ agentId: a.id }}
+                        submit={
+                          <>
+                            Approve<span className="sr-only"> {a.name}</span>
+                          </>
+                        }
+                        pendingText="Approving…"
+                        size="sm"
+                      />
                       <ConfirmAction
                         action={declineAgentAction}
                         hidden={{ agentId: a.id }}
                         label="Decline"
                         confirmLabel="Decline application"
+                        subject={a.name}
                         variant="ghost"
                         description={`Decline ${a.name}'s application?`}
                       >

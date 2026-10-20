@@ -82,6 +82,7 @@ export default async function AdminTeamPage() {
                       hidden={{ memberId: m.id }}
                       label="Remove"
                       confirmLabel="Remove and sign out"
+                      subject={m.email}
                       variant="ghost"
                       description={`${m.email} loses access to the dashboard right away.`}
                     />

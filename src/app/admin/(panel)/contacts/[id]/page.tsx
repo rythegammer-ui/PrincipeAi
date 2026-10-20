@@ -117,6 +117,8 @@ export default async function ContactPage({ params }: Params) {
 
   const { contact: ct } = data;
   const now = new Date();
+  // A link claim holds for the program's window from when it was made; an admin's assignment doesn't lapse.
+  const claimEnds = salesAgent && salesAgent.source !== "manual" ? new Date(salesAgent.since.getTime() + salesProgram.attributionDays * 86_400_000) : null;
   const name = displayName(ct);
   const website = safeWebsiteUrl(ct.website);
   const score = scoreBreakdown(ct, data.scoreActivities);
@@ -285,17 +287,34 @@ export default async function ContactPage({ params }: Params) {
                 </Link>
                 {salesAgent.agent.code && <span className="ml-1.5 font-mono text-xs text-zinc-500">{salesAgent.agent.code}</span>}
                 <span className="block text-xs text-zinc-500">
-                  {salesAgent.source === "manual" ? "Assigned" : "Came through their link"} {formatDate(salesAgent.since, {}, tz)}. Purchases earn them commission
-                  for {salesProgram.attributionDays} days from then.
+                  {salesAgent.source === "manual"
+                    ? `Assigned ${formatDate(salesAgent.since, {}, tz)}. Their purchases earn this agent commission until an admin changes it.`
+                    : claimEnds && claimEnds.getTime() > now.getTime()
+                      ? `Came through their link ${formatDate(salesAgent.since, {}, tz)}. Their purchases earn this agent commission until ${formatDate(claimEnds, {}, tz)}.`
+                      : `Came through their link ${formatDate(salesAgent.since, {}, tz)}. Lapsed${claimEnds ? ` on ${formatDate(claimEnds, {}, tz)}` : ""}: a purchase through another agent's link now goes to that agent, and one through this agent's link renews it.`}
+                  {salesAgent.agent.status === "paused" && " This agent is paused, so purchases don't earn them anything for now."}
                 </span>
               </p>
             ) : (
               <Empty>Not referred by a sales agent.</Empty>
             )}
             {(agentOptions.length > 0 || salesAgent) && (
-              <ActionForm action={assignContactAgentAction} hidden={{ contactId: ct.id }} submit="Save" variant="outline" size="sm" className="mt-3">
-                <Field label={salesAgent ? "Change agent" : "Assign to an agent"} htmlFor="contact-agent">
-                  <Select id="contact-agent" name="agentId" defaultValue={salesAgent?.agent.id ?? ""}>
+              <ActionForm
+                action={assignContactAgentAction}
+                hidden={{ contactId: ct.id }}
+                submit="Save"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                resetOnSuccess={false}
+              >
+                <Field
+                  label={salesAgent ? "Change agent" : "Assign to an agent"}
+                  htmlFor="contact-agent"
+                  hint="An assignment lasts until an admin changes it."
+                >
+                  {/* Remounts with the saved agent after a change (a select doesn't follow a new defaultValue). */}
+                  <Select key={salesAgent?.agent.id ?? "none"} id="contact-agent" name="agentId" defaultValue={salesAgent?.agent.id ?? ""}>
                     <option value="">No agent</option>
                     {agentOptions.map((a) => (
                       <option key={a.id} value={a.id}>

@@ -15,7 +15,7 @@ import { getDb, schema } from "@/db";
 import type { AgentCommission, CommissionKind } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { agentLinks, agentLocation } from "@/lib/sales/agents";
-import { agentBalance, agentLedger, monthlySales } from "@/lib/sales/commissions";
+import { agentBalance, agentLedger, DISPUTE_NOTE, livePayments, monthlySales } from "@/lib/sales/commissions";
 import { formatRate, standing } from "@/lib/sales/game";
 import { EXPERIENCE_OPTIONS, HOURS_OPTIONS, optionLabel, PAYOUT_METHODS, stateName } from "@/lib/sales/options";
 import { getSalesProgram } from "@/lib/sales/program";
@@ -36,7 +36,10 @@ import { STATUS_META } from "../status";
 
 type Params = { params: Promise<{ id: string }> };
 
-const KIND_LABELS: Record<CommissionKind, string> = { sale: "Sale", bonus: "Bonus", clawback: "Refund clawback", adjustment: "Correction" };
+const KIND_LABELS: Record<CommissionKind, string> = { sale: "Sale", bonus: "Bonus", clawback: "Taken back (refund)", adjustment: "Correction" };
+
+/** A clawback, or the adjustment row a refund adds once its clawback was already paid out: money taken back for a sale. */
+const kindLabel = (row: AgentCommission) => (row.kind === "adjustment" && row.orderId ? KIND_LABELS.clawback : KIND_LABELS[row.kind]);
 
 async function loadAgent(id: string) {
   if (!z.uuid().safeParse(id).success) return null;
@@ -60,10 +63,14 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function rowStatus(row: AgentCommission, now: Date, tz: string): { label: string; tone: BadgeTone; detail?: string } {
+function rowStatus(row: AgentCommission, now: Date, tz: string, live: boolean): { label: string; tone: BadgeTone; detail?: string } {
+  // A test payment on a site taking real payments: recorded, never owed or paid (see livePayments).
+  if (row.isTest && live && row.status !== "void") return { label: "Test · never paid", tone: "neutral" };
+  if (row.status === "paid" && row.voidedAt) return { label: "Paid, then refunded", tone: "red", detail: "Taken back from the next payout" };
   if (row.status === "paid") return { label: "Paid", tone: "green" };
   if (row.status === "void") return { label: "Cancelled", tone: "neutral", detail: row.voidReason ?? undefined };
-  if (row.availableAt > now) return { label: "On hold", tone: "amber", detail: `Payable ${formatDate(row.availableAt, {}, tz)}` };
+  if (row.note === DISPUTE_NOTE) return { label: "On hold: payment disputed", tone: "red", detail: "Payable only if the dispute is won" };
+  if (row.availableAt > now) return { label: `Pending until ${formatDate(row.availableAt, {}, tz)}`, tone: "amber" };
   return { label: "Owed", tone: "brand" };
 }
 
@@ -107,6 +114,7 @@ export default async function SalesAgentPage({ params }: Params) {
   const where = agentLocation(agent);
   const app = agent.application;
   const method = agent.payoutMethod ? optionLabel(PAYOUT_METHODS, agent.payoutMethod) : null;
+  const live = livePayments();
 
   return (
     <div>
@@ -156,7 +164,14 @@ export default async function SalesAgentPage({ params }: Params) {
                 />
               )}
               {agent.status === "applied" && (
-                <ConfirmAction action={declineAgentAction} hidden={{ agentId: agent.id }} label="Decline" confirmLabel="Decline application" variant="ghost">
+                <ConfirmAction
+                  action={declineAgentAction}
+                  hidden={{ agentId: agent.id }}
+                  label="Decline"
+                  confirmLabel="Decline application"
+                  subject={agent.name}
+                  variant="ghost"
+                >
                   <label className="flex min-h-11 items-center gap-2 text-xs text-zinc-700 sm:min-h-0">
                     <Checkbox name="notify" defaultChecked /> Send them a polite email
                   </label>
@@ -168,6 +183,7 @@ export default async function SalesAgentPage({ params }: Params) {
                   hidden={{ agentId: agent.id, status: "paused" }}
                   label="Pause"
                   confirmLabel="Pause agent"
+                  subject={agent.name}
                   confirmVariant="primary"
                   description="Their link stops earning on new sales until you resume them. Money they're owed stays owed. They'll get an email."
                 />
@@ -178,6 +194,7 @@ export default async function SalesAgentPage({ params }: Params) {
                   hidden={{ agentId: agent.id, status: "removed" }}
                   label="Remove"
                   confirmLabel="Remove from team"
+                  subject={agent.name}
                   variant="ghost"
                   description="Closes their agent account: their link stops earning and they lose dashboard access. Pay anything still owed first. They'll get an email."
                 />
@@ -226,7 +243,8 @@ export default async function SalesAgentPage({ params }: Params) {
               {/* Stays mounted when nothing is owed, so the confirmation of the payout just recorded stays on screen. */}
               <ActionForm
                 action={recordPayoutAction}
-                hidden={{ agentId: agent.id }}
+                // The amount shown: if more becomes owed (or is taken back) before the click, nothing is recorded.
+                hidden={{ agentId: agent.id, expectedCents: String(Math.max(0, balance.owedCents)) }}
                 submit={balance.owedCents > 0 ? `Mark ${formatMoney(balance.owedCents)} paid` : "Mark paid"}
                 pendingText="Recording…"
                 disabled={balance.owedCents <= 0}
@@ -274,15 +292,18 @@ export default async function SalesAgentPage({ params }: Params) {
                 </THead>
                 <TBody>
                   {ledger.map((row) => {
-                    const st = rowStatus(row, now, tz);
-                    const what = (row.orderId && orderDescription.get(row.orderId)) || row.note || KIND_LABELS[row.kind];
+                    const st = rowStatus(row, now, tz, live);
+                    const what = (row.orderId && orderDescription.get(row.orderId)) || row.note || kindLabel(row);
+                    // A partial refund's note on a sale ("Partly refunded ($X)"); a dispute shows in the status instead.
+                    const saleNote = row.kind !== "bonus" && row.orderId && row.note && row.note !== DISPUTE_NOTE ? row.note : null;
                     return (
                       <TR key={row.id}>
                         <TD className="whitespace-nowrap text-zinc-500">{formatDate(row.createdAt, {}, tz)}</TD>
                         <TD className="min-w-40">
-                          <span className="text-xs font-medium text-zinc-500">{KIND_LABELS[row.kind]}</span>
+                          <span className="text-xs font-medium text-zinc-500">{kindLabel(row)}</span>
                           <span className="line-clamp-2 block text-zinc-800">{what}</span>
-                          {row.isTest && <Badge tone="amber">Test</Badge>}
+                          {saleNote && <span className="block text-xs text-zinc-500">{saleNote}</span>}
+                          {row.isTest && !live && <Badge tone="amber">Test</Badge>}
                         </TD>
                         <TD className="text-right whitespace-nowrap text-zinc-500 tabular-nums">
                           {row.saleCents ? formatMoney(row.saleCents, row.currency) : "—"}
@@ -304,13 +325,20 @@ export default async function SalesAgentPage({ params }: Params) {
                                 hidden={{ id: row.id, agentId: agent.id }}
                                 label="Cancel"
                                 confirmLabel="Cancel entry"
+                                subject={`${kindLabel(row)} of ${formatMoney(row.amountCents, row.currency)} on ${formatDate(row.createdAt, {}, tz)}`}
                                 variant="ghost"
                                 description="Removes this unpaid entry (e.g. a mistake). Refunds are handled automatically."
                               >
                                 <label htmlFor={`void-${row.id}`} className="sr-only">
-                                  Reason
+                                  Reason the agent sees (optional)
                                 </label>
-                                <Input id={`void-${row.id}`} name="reason" placeholder="Reason (optional)" maxLength={150} className="h-11 text-xs sm:h-9" />
+                                <Input
+                                  id={`void-${row.id}`}
+                                  name="reason"
+                                  placeholder="Reason the agent sees (optional)"
+                                  maxLength={150}
+                                  className="h-11 text-xs sm:h-9"
+                                />
                               </ConfirmAction>
                             </div>
                           )}
@@ -421,7 +449,7 @@ export default async function SalesAgentPage({ params }: Params) {
               )}
               {agent.code && (
                 <ActionForm action={saveAgentCodeAction} hidden={{ agentId: agent.id }} submit="Change code" variant="outline" size="sm">
-                  <Field label="Code" htmlFor="agent-code" hint="4–16 letters and digits.">
+                  <Field label="Code" htmlFor="agent-code" hint="4–16 letters and digits, including at least one digit.">
                     <Input id="agent-code" name="code" defaultValue={agent.code} maxLength={16} pattern="[A-Za-z0-9]{4,16}" className="font-mono uppercase" required />
                   </Field>
                 </ActionForm>

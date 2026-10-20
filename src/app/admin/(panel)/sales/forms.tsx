@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
-import { useActionState, useId, useState, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -29,7 +29,11 @@ function Feedback({ state, className }: { state: SalesFormState; className?: str
   return null;
 }
 
-/** A form posting to a server action, with a submit button and the action's error / success message below it. */
+/**
+ * A form posting to a server action, with a submit button and the action's error / success message below it.
+ * It submits through a transition rather than `<form action>`, so React doesn't clear what the admin typed when the
+ * action returns an error; the fields are reset only after a success (unless `resetOnSuccess` is false).
+ */
 export function ActionForm({
   action,
   hidden,
@@ -41,6 +45,7 @@ export function ActionForm({
   className,
   buttonClassName,
   disabled = false,
+  resetOnSuccess = true,
 }: {
   action: FormAction;
   hidden?: Record<string, string>;
@@ -53,14 +58,36 @@ export function ActionForm({
   buttonClassName?: string;
   /** Keeps the form (and the last result message) on screen with the button off, e.g. once nothing is owed. */
   disabled?: boolean;
+  /** Off for forms whose fields show the saved value (a select of the current choice): a reset would show the old one. */
+  resetOnSuccess?: boolean;
 }) {
-  const [state, formAction] = useActionState<SalesFormState, FormData>(action, {});
+  const [state, formAction, isPending] = useActionState<SalesFormState, FormData>(action, {});
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (state.ok && resetOnSuccess) formRef.current?.reset();
+  }, [state, resetOnSuccess]);
   return (
-    <form action={formAction} className={cn("flex flex-col gap-3", className)}>
+    <form
+      ref={formRef}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (isPending || disabled) return;
+        const data = new FormData(e.currentTarget);
+        startTransition(() => formAction(data));
+      }}
+      className={cn("flex flex-col gap-3", className)}
+    >
       {hidden && Object.entries(hidden).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
       {children}
       <div className="flex flex-col gap-1.5">
-        <SubmitButton variant={variant} size={size} pendingText={pendingText} disabled={disabled} className={cn("min-h-11 sm:min-h-0 self-start", buttonClassName)}>
+        <SubmitButton
+          variant={variant}
+          size={size}
+          pendingText={pendingText}
+          pending={isPending}
+          disabled={disabled}
+          className={cn("min-h-11 sm:min-h-0 self-start", buttonClassName)}
+        >
           {submit}
         </SubmitButton>
         <Feedback state={state} />
@@ -76,6 +103,7 @@ export function ConfirmAction({
   label,
   confirmLabel,
   description,
+  subject,
   variant = "outline",
   confirmVariant = "danger",
   children,
@@ -85,6 +113,8 @@ export function ConfirmAction({
   label: ReactNode;
   confirmLabel: string;
   description?: ReactNode;
+  /** What it acts on, read to screen readers after the labels ("Remove avery@example.com"), so each row's button is distinct. */
+  subject?: string;
   variant?: ButtonVariant;
   confirmVariant?: ButtonVariant;
   /** Extra fields shown in the confirm step (e.g. a "send an email" checkbox). */
@@ -92,11 +122,31 @@ export function ConfirmAction({
 }) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState<SalesFormState, FormData>(action, {});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  // Where keyboard focus goes: the confirm button when the step opens, back to the trigger when it's dismissed.
+  const focusNext = useRef<"trigger" | "confirm" | null>(null);
+  useEffect(() => {
+    const target = focusNext.current === "confirm" ? confirmRef.current : focusNext.current === "trigger" ? triggerRef.current : null;
+    target?.focus();
+    focusNext.current = null;
+  }, [open]);
+  const about = subject ? <span className="sr-only"> {subject}</span> : null;
   if (!open) {
     return (
       <div className="flex flex-col gap-1">
-        <Button variant={variant} size="sm" className="min-h-11 self-start sm:min-h-8" onClick={() => setOpen(true)}>
+        <Button
+          ref={triggerRef}
+          variant={variant}
+          size="sm"
+          className="min-h-11 self-start sm:min-h-8"
+          onClick={() => {
+            focusNext.current = "confirm";
+            setOpen(true);
+          }}
+        >
           {label}
+          {about}
         </Button>
         <Feedback state={state} />
       </div>
@@ -110,11 +160,20 @@ export function ConfirmAction({
       {description && <p className="text-xs text-zinc-600">{description}</p>}
       {children}
       <div className="flex flex-wrap gap-1.5">
-        <Button variant="ghost" size="sm" className="min-h-11 sm:min-h-8" onClick={() => setOpen(false)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="min-h-11 sm:min-h-8"
+          onClick={() => {
+            focusNext.current = "trigger";
+            setOpen(false);
+          }}
+        >
           Keep
         </Button>
-        <SubmitButton variant={confirmVariant} size="sm" className="min-h-11 sm:min-h-8" pendingText="Working…">
+        <SubmitButton ref={confirmRef} variant={confirmVariant} size="sm" className="min-h-11 sm:min-h-8" pendingText="Working…">
           {confirmLabel}
+          {about}
         </SubmitButton>
       </div>
       <Feedback state={state} />
@@ -126,6 +185,14 @@ type LevelRow = { key: string; name: string; minSales: string; rate: string };
 
 const toRow = (l: Level): LevelRow => ({ key: l.key, name: l.name, minSales: String(l.minSales), rate: String(l.rateBps / 100) });
 
+/** A key no row has: levels are matched by key, so a new one must never reuse an existing (or removed-then-re-added) one. */
+function newKey(rows: LevelRow[]): string {
+  for (let n = rows.length + 1; ; n++) {
+    const key = `level-${n}`;
+    if (!rows.some((r) => r.key === key)) return key;
+  }
+}
+
 /** Program levels editor (1–5 rows): name, sales per month to reach it, commission %. Posts them as JSON in `levels`. */
 export function LevelsEditor({ levels }: { levels: Level[] }) {
   const [rows, setRows] = useState<LevelRow[]>(() => levels.map(toRow));
@@ -133,7 +200,7 @@ export function LevelsEditor({ levels }: { levels: Level[] }) {
   const update = (i: number, patch: Partial<LevelRow>) => setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)));
   const payload = JSON.stringify(
     rows.map((r, i) => ({
-      key: r.key || `level-${i + 1}`,
+      key: r.key,
       name: r.name,
       minSales: i === 0 ? 0 : Number(r.minSales),
       rateBps: Math.round(Number(r.rate) * 100),
@@ -155,7 +222,7 @@ export function LevelsEditor({ levels }: { levels: Level[] }) {
       </div>
       <ol className="flex flex-col gap-2">
         {rows.map((row, i) => (
-          <li key={i} className="grid grid-cols-2 gap-2 rounded-xl border border-zinc-200 p-2 sm:grid-cols-[1fr_8rem_7rem_2.75rem] sm:border-0 sm:p-0">
+          <li key={row.key} className="grid grid-cols-2 gap-2 rounded-xl border border-zinc-200 p-2 sm:grid-cols-[1fr_8rem_7rem_2.75rem] sm:border-0 sm:p-0">
             <div className="col-span-2 sm:col-span-1">
               <label htmlFor={`${id}-name-${i}`} className="text-xs font-medium text-zinc-500 sm:sr-only">
                 Level {i + 1} name
@@ -219,7 +286,7 @@ export function LevelsEditor({ levels }: { levels: Level[] }) {
             const last = rows[rows.length - 1];
             setRows((r) => [
               ...r,
-              { key: "", name: "", minSales: String((Number(last?.minSales) || 0) + 5), rate: String((Number(last?.rate) || 20) + 5) },
+              { key: newKey(r), name: "", minSales: String((Number(last?.minSales) || 0) + 5), rate: String((Number(last?.rate) || 20) + 5) },
             ]);
           }}
         >

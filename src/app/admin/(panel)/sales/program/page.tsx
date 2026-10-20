@@ -75,7 +75,8 @@ export default async function SalesProgramPage() {
                 </span>
               </label>
 
-              <LevelsEditor levels={program.levels} />
+              {/* Remounts with the saved levels after each save (the editor keeps its rows in state while you edit). */}
+              <LevelsEditor key={JSON.stringify(program.levels)} levels={program.levels} />
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
@@ -198,6 +199,7 @@ export default async function SalesProgramPage() {
                             hidden={{ challengeId: ch.id }}
                             label="Cancel challenge"
                             confirmLabel="Yes, cancel it"
+                            subject={ch.title}
                             variant="ghost"
                             description="Agents stop seeing it and nobody is awarded the bonus."
                           />

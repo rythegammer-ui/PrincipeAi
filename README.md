@@ -63,17 +63,31 @@ Reset the local database with `npm run db:reset-local`.
    | `AI_DAILY_LIMIT` | optional | Site-wide ceiling on AI replies in the website chat per day, which also covers the course tutor for students of a free course (default `2000`, `0` = none). Past it the chat answers with the built-in fallback until the count resets at midnight UTC. Also set a monthly spend limit in the Anthropic console |
    | `AI_TUTOR_DAILY_LIMIT` | optional | The same ceiling for the course tutor of students who paid (or whom you gave access), counted separately so website chat traffic and free sign-ups can never switch off the tutor your students paid for (default `2000`, `0` = none; each student is also limited to 150 questions a day) |
    | `STRIPE_SECRET_KEY` | yes (to sell) | Stripe secret key. Without it checkout is turned off in production (the built-in test checkout only runs locally and in demo mode) |
-   | `STRIPE_WEBHOOK_SECRET` | for payments | From the webhook endpoint below |
+   | `STRIPE_WEBHOOK_SECRET` | optional | Signing secret of a webhook endpoint you create yourself (step 4). Leave it unset and the site creates its own endpoint |
    | `RESEND_API_KEY`, `EMAIL_FROM` | yes (production) | Resend key and a verified sender, e.g. `Principe AI <hello@yourdomain.com>`. Without it no email is delivered in production: students (paying ones too) can't sign in, and receipts, booking confirmations and your notifications never arrive (locally and in demo mode the login page shows the sign-in link instead) |
    | `CONTACT_EMAIL` | optional | Public contact address (contact, booking, terms and privacy pages, footer, calendar invites) and the reply-to address of customer emails. Defaults to `principeconsults@gmail.com` |
    | `BUSINESS_TIMEZONE` | optional | Default `America/New_York` (also editable in Admin → Settings) |
    | `CRON_INTERVAL_HOURS` | optional | How often the cron runs, in hours (default `24`). Set `1` if you switch `vercel.json` to an hourly schedule |
    | `DEMO_MODE` | optional | `1` runs a deployment without a database as a throwaway demo (see step 2). Leave unset in production |
 
-4. **Stripe webhook**: in the Stripe dashboard, add an endpoint `https://YOUR-DOMAIN/api/stripe/webhook` with events
-   `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`,
-   `checkout.session.expired`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`. Copy its signing
-   secret into `STRIPE_WEBHOOK_SECRET`.
+4. **Stripe payment links and webhook**: nothing to do by hand. On every production deploy with `STRIPE_SECRET_KEY`
+   set, the build creates or updates a Stripe Product, Price and Payment Link for each paid, published course. It
+   also creates the webhook endpoint `https://YOUR-DOMAIN/api/stripe/webhook` and keeps its signing secret in the
+   database. **Admin → Courses → Payment links** lists the links and has a **Sync with Stripe** button that does the
+   same at any time. In an email, write `{{buy_link:course-slug}}` (automations and contact emails): each reader gets
+   `/buy/course-slug?email=…`, which opens that course's Stripe checkout with their email filled in. Buyers are
+   enrolled and emailed their access automatically, as with the site's own checkout.
+   To use a webhook endpoint of your own instead, add `https://YOUR-DOMAIN/api/stripe/webhook` in the Stripe dashboard
+   with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`, `charge.dispute.created`,
+   `charge.dispute.closed`, and copy its signing secret into `STRIPE_WEBHOOK_SECRET`. Once your endpoint receives every
+   one of those events and has delivered one, the site removes its own; until then both deliver and each event is
+   handled once.
+   The daily scheduled job re-syncs the links (and retries a sync that failed), and the first run after this feature
+   ships adds course buy links to the two default sales emails, unless you've edited them.
+   **Rolling back** to a deployment from before payment links: switch the links off in Stripe (Payment links →
+   deactivate) and delete the endpoint the site created (Developers → Webhooks, described as created automatically by
+   the site), and remove `{{buy_link:…}}` from your automation emails, since older code can't fill it in.
 5. **Redeploy**, then sign in at `/admin` and visit **Settings**: it shows which integrations are connected and walks
    you through anything missing.
 6. **Speed Insights** (optional): in the Vercel project, open **Speed Insights** and enable it. The site already includes

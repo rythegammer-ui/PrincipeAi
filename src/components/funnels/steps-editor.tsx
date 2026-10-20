@@ -34,7 +34,20 @@ function excerpt(markdown: string): string {
   return truncate(text, 170);
 }
 
-export function StepsEditor({ sequenceId, initialSteps, adminEmail }: { sequenceId: string; initialSteps: StepData[]; adminEmail: string }) {
+/** A paid course, offered as a {{buy_link:<slug>}} placeholder chip. */
+export type BuyLinkCourse = { slug: string; title: string };
+
+export function StepsEditor({
+  sequenceId,
+  initialSteps,
+  adminEmail,
+  buyLinkCourses = [],
+}: {
+  sequenceId: string;
+  initialSteps: StepData[];
+  adminEmail: string;
+  buyLinkCourses?: BuyLinkCourse[];
+}) {
   const [steps, setSteps] = useState(initialSteps);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
@@ -100,6 +113,7 @@ export function StepsEditor({ sequenceId, initialSteps, adminEmail }: { sequence
                 draft={draft}
                 total={steps.length}
                 adminEmail={adminEmail}
+                buyLinkCourses={buyLinkCourses}
                 onChange={setDraft}
                 onCancel={close}
                 onSaved={(next) => {
@@ -171,6 +185,7 @@ export function StepsEditor({ sequenceId, initialSteps, adminEmail }: { sequence
               draft={draft}
               total={steps.length + 1}
               adminEmail={adminEmail}
+              buyLinkCourses={buyLinkCourses}
               onChange={setDraft}
               onCancel={close}
               onSaved={(next) => {
@@ -203,6 +218,7 @@ function StepEditorPanel({
   draft,
   total,
   adminEmail,
+  buyLinkCourses,
   onChange,
   onCancel,
   onSaved,
@@ -211,6 +227,7 @@ function StepEditorPanel({
   draft: Draft;
   total: number;
   adminEmail: string;
+  buyLinkCourses: BuyLinkCourse[];
   onChange: (d: Draft) => void;
   onCancel: () => void;
   onSaved: (steps: StepData[]) => void;
@@ -389,7 +406,10 @@ function StepEditorPanel({
               <Braces className="size-3.5" aria-hidden /> Placeholders <span className="font-normal text-zinc-500">· click to insert at the cursor</span>
             </p>
             <ul className="flex flex-wrap gap-1.5">
-              {PLACEHOLDERS.map((p) => (
+              {[
+                ...PLACEHOLDERS,
+                ...buyLinkCourses.map((c) => ({ key: `buy_link:${c.slug}`, description: `Checkout link for ${c.title}, with the reader's email filled in` })),
+              ].map((p) => (
                 <li key={p.key}>
                   <button
                     type="button"

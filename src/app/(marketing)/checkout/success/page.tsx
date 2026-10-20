@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { AlertTriangle, ArrowRight, CalendarCheck, CalendarX, CheckCircle2, Clock, Mail, PartyPopper } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -5,7 +6,19 @@ import { z } from "zod";
 import { ButtonLink } from "@/components/ui/button";
 import { getStudent } from "@/lib/auth";
 import { PAID_UNAVAILABLE_REASON } from "@/lib/booking-service";
-import { fulfillOrder, getOrderDetails, isDuplicatePurchase, isStripeSessionId, withinClaimWindow, type OrderDetails } from "@/lib/payments";
+import { getDb, schema } from "@/db";
+import {
+  fulfillOrder,
+  getOrderDetails,
+  isDuplicatePurchase,
+  isStripeSessionId,
+  orderIdForCheckoutSession,
+  refundUndeliveredOrder,
+  sessionFullyRefunded,
+  withinClaimWindow,
+  type OrderDetails,
+} from "@/lib/payments";
+import { rateLimitByIp } from "@/lib/rate-limit";
 import { getStripe, paymentIntentId } from "@/lib/stripe";
 import { formatDateTime } from "@/lib/utils";
 import { AccessLinkForm } from "../checkout-forms";
@@ -13,7 +26,27 @@ import { OrderSummary } from "../order-summary";
 
 export const metadata: Metadata = { title: "Thank you", robots: { index: false, follow: false } };
 
-type Search = { order?: string; session_id?: string };
+type Search = { order?: string | string[]; session_id?: string | string[] };
+
+/**
+ * A Stripe Payment Link sends buyers back with only `session_id` (no order id): finds the order for that session,
+ * creating it from Stripe's copy of the session when the webhook hasn't arrived yet. The session id can't be guessed;
+ * lookups that have to ask Stripe are rate limited all the same.
+ */
+async function orderIdForSession(sessionId: string): Promise<string | null> {
+  const db = await getDb();
+  const [order] = await db.select({ id: schema.orders.id }).from(schema.orders).where(eq(schema.orders.stripeSessionId, sessionId)).limit(1);
+  if (order) return order.id;
+  const stripe = getStripe();
+  if (!stripe || !(await rateLimitByIp("checkout-session-lookup", 20, 600)).ok) return null;
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    return session.payment_link ? await orderIdForCheckoutSession(session, { create: true }) : null;
+  } catch (err) {
+    console.error("[checkout] could not look up Stripe session", err);
+    return null;
+  }
+}
 
 /**
  * Stripe redirects here after payment. When the session id matches the order we trust the URL as
@@ -22,12 +55,16 @@ type Search = { order?: string; session_id?: string };
  * checkout — so course access always goes through the magic link emailed to that address.
  */
 async function resolve(search: Search): Promise<{ details: OrderDetails | null; proof: boolean; processing: boolean }> {
-  const orderId = search.order;
+  // A repeated query parameter arrives as an array: treat it as missing.
+  let orderId = typeof search.order === "string" ? search.order : undefined;
+  const sessionId = typeof search.session_id === "string" ? search.session_id : undefined;
+  if (!orderId && sessionId && isStripeSessionId(sessionId) && sessionId.length <= 200) {
+    orderId = (await orderIdForSession(sessionId)) ?? undefined;
+  }
   if (!orderId || !z.uuid().safeParse(orderId).success) return { details: null, proof: false, processing: false };
   let details = await getOrderDetails(orderId);
   if (!details) return { details: null, proof: false, processing: false };
 
-  const sessionId = search.session_id;
   const proof = Boolean(sessionId && details.order.stripeSessionId && details.order.stripeSessionId === sessionId);
   let processing = false;
 
@@ -35,9 +72,14 @@ async function resolve(search: Search): Promise<{ details: OrderDetails | null; 
     const stripe = getStripe();
     if (stripe) {
       try {
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
-        const sameOrder = (session.metadata?.orderId ?? session.client_reference_id) === details.order.id;
-        if (sameOrder && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
+        const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent", "payment_intent.latest_charge"] });
+        // Our own checkouts carry the order id; a payment-link checkout's order was made for this session.
+        const sameOrder = session.payment_link ? session.id === details.order.stripeSessionId : (session.metadata?.orderId ?? session.client_reference_id) === details.order.id;
+        if (sameOrder && sessionFullyRefunded(session)) {
+          // Refunded in Stripe before it was delivered (the refund webhook may not have arrived yet).
+          await refundUndeliveredOrder(details.order.id);
+          details = (await getOrderDetails(details.order.id)) ?? details;
+        } else if (sameOrder && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
           await fulfillOrder(details.order.id, {
             stripePaymentIntentId: paymentIntentId(session.payment_intent),
             isTest: session.livemode === false,
@@ -92,6 +134,7 @@ function CheckEmail({ loginHref }: { loginHref?: string }) {
 export default async function CheckoutSuccessPage({ searchParams }: { searchParams: Promise<Search> }) {
   const search = await searchParams;
   const { details, proof, processing } = await resolve(search);
+  const sessionId = typeof search.session_id === "string" ? search.session_id : undefined;
   if (!details) return <CheckEmail />;
 
   const { order, course, booking } = details;
@@ -163,7 +206,7 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
         <div className="mt-6">
           <OrderSummary details={details} />
         </div>
-        <ButtonLink href={`/checkout/success?order=${order.id}${search.session_id ? `&session_id=${encodeURIComponent(search.session_id)}` : ""}`} variant="outline" className="mt-6">
+        <ButtonLink href={`/checkout/success?order=${order.id}${sessionId ? `&session_id=${encodeURIComponent(sessionId)}` : ""}`} variant="outline" className="mt-6">
           Refresh status
         </ButtonLink>
       </Shell>
@@ -190,8 +233,8 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
             <ButtonLink href={learnHref} size="lg" className="w-full sm:w-auto">
               Start learning <ArrowRight aria-hidden />
             </ButtonLink>
-          ) : canResend && search.session_id ? (
-            <AccessLinkForm orderId={order.id} sessionId={search.session_id} loginHref={loginHref} />
+          ) : canResend && sessionId ? (
+            <AccessLinkForm orderId={order.id} sessionId={sessionId} loginHref={loginHref} />
           ) : (
             <ButtonLink href={loginHref} size="lg" className="w-full sm:w-auto">
               Sign in to start learning <ArrowRight aria-hidden />

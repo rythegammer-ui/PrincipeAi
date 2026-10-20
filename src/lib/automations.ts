@@ -1,8 +1,9 @@
 import "server-only";
-import { and, asc, count, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { SequenceTrigger } from "@/db/schema";
-import { defaultTemplateVars, emailBusinessName, escapeMarkdown, fillTemplate, sendEmail, type TemplateVars } from "@/lib/email";
+import { seedSequences, sequenceCopyUpgrades } from "@/db/seed-content/sequences";
+import { buyLinkPattern, defaultTemplateVars, emailBusinessName, escapeMarkdown, fillTemplate, sendEmail, type TemplateVars } from "@/lib/email";
 import { firstName } from "@/lib/utils";
 
 const HOUR = 3_600_000;
@@ -22,9 +23,67 @@ export function recipientTemplateVars(
     firstName: firstName(person.name, person.email),
     name: fullName,
     email: person.email,
+    // {{buy_link:<course-slug>}}: checkout with the recipient's email already filled in.
+    "buy_link:*": buyLinkPattern(person.email),
   };
   const body: TemplateVars = { ...subject, name: escapeMarkdown(fullName), email: escapeMarkdown(person.email), businessName: escapeMarkdown(businessName) };
   return { subject, body };
+}
+
+/** Settings row listing the copy upgrades already applied, so each runs once and an owner's later edit is never undone. */
+export const COPY_UPGRADES_KEY = "seedCopyUpgradesApplied";
+
+/**
+ * Brings default email copy seeded before a feature existed up to date (e.g. course buy links): see
+ * `sequenceCopyUpgrades` in seed-content/sequences.ts. Each upgrade runs once, only on steps nobody has edited since
+ * they were seeded (so an owner's wording is never touched), where the old paragraph is still a whole paragraph, and
+ * only once the courses it pitches are for sale (until then it waits). Runs at the start of the scheduled automations
+ * job, i.e. on code that can render the new copy, before any of it is sent; never from a preview deployment, which
+ * shares the production database while production may still run code that can't. Returns how many steps changed.
+ */
+export async function upgradeSequenceCopy(): Promise<number> {
+  if (process.env.VERCEL && process.env.VERCEL_ENV !== "production") return 0;
+  const db = await getDb();
+  const [row] = await db.select({ value: schema.settings.value }).from(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY)).limit(1);
+  const applied = new Set(Array.isArray(row?.value) ? (row.value as unknown[]).filter((v): v is string => typeof v === "string") : []);
+  const pending = sequenceCopyUpgrades.filter((u) => !applied.has(u.id));
+  if (pending.length === 0) return 0;
+  let changed = 0;
+  for (const u of pending) {
+    const forSale = await db
+      .select({ slug: schema.courses.slug })
+      .from(schema.courses)
+      .where(and(inArray(schema.courses.slug, u.requires), eq(schema.courses.published, true), gt(schema.courses.priceCents, 0)));
+    if (forSale.length < u.requires.length) continue;
+    const steps = await db
+      .select({ id: schema.sequenceSteps.id, body: schema.sequenceSteps.body, createdAt: schema.sequenceSteps.createdAt, updatedAt: schema.sequenceSteps.updatedAt })
+      .from(schema.sequenceSteps)
+      .innerJoin(schema.emailSequences, eq(schema.emailSequences.id, schema.sequenceSteps.sequenceId))
+      .where(and(eq(schema.emailSequences.name, u.sequence), eq(schema.sequenceSteps.subject, u.subject)));
+    // The step exactly as the version before this upgrade seeded it (reordering emails bumps updated_at without an edit).
+    const seeded = seedSequences.find((q) => q.name === u.sequence)?.steps.find((st) => st.subject === u.subject)?.body.replace(u.to, u.from);
+    for (const step of steps) {
+      const untouched = step.updatedAt.getTime() - step.createdAt.getTime() < 1000 || step.body === seeded;
+      const at = step.body.indexOf(u.from);
+      const wholeParagraph = at >= 0 && (at === 0 || step.body[at - 1] === "\n") && /^(\n|$)/.test(step.body.slice(at + u.from.length));
+      if (!untouched || !wholeParagraph || step.body.includes(u.to)) continue;
+      // Only if nobody saved the step in the meantime.
+      const updated = await db
+        .update(schema.sequenceSteps)
+        .set({ body: step.body.slice(0, at) + u.to + step.body.slice(at + u.from.length) })
+        .where(and(eq(schema.sequenceSteps.id, step.id), eq(schema.sequenceSteps.body, step.body)))
+        .returning({ id: schema.sequenceSteps.id });
+      changed += updated.length;
+    }
+    applied.add(u.id);
+  }
+  if (applied.size === 0 || pending.every((u) => !applied.has(u.id))) return changed;
+  const value = [...applied];
+  await db
+    .insert(schema.settings)
+    .values({ key: COPY_UPGRADES_KEY, value, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: schema.settings.key, set: { value, updatedAt: new Date() } });
+  return changed;
 }
 
 /**

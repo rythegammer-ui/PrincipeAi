@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => {
             const pi = session.payment_intent as { id: string } | null;
             return params?.expand?.includes("payment_intent") ? session : { ...session, payment_intent: pi?.id ?? null };
           },
+          // No payment-link checkouts to recover.
+          list: () => ({ autoPagingToArray: async () => [] }),
         },
       },
     },

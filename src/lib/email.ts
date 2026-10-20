@@ -31,13 +31,47 @@ export { escapeMarkdown } from "@/lib/utils";
 
 export type TemplateVars = Record<string, string | number | null | undefined>;
 
-/** Replaces {{placeholders}}. Unknown placeholders are removed. Values are HTML-escaped when `escape` is true. */
-export function fillTemplate(template: string, vars: TemplateVars, escape = false): string {
-  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) => {
-    const v = vars[key];
-    if (v === undefined || v === null) return "";
+/** Lowercase-dash form of a placeholder argument: "AI_Essentials " → "ai-essentials" (matches course slugs). */
+function placeholderArg(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Replaces {{placeholders}}. Unknown placeholders are removed, or left as typed with `keepUnknown` (for text the
+ * owner wrote by hand, which may quote {{…}} on purpose). Values are HTML-escaped when `escape` is true.
+ * A placeholder can take an argument, `{{buy_link:ai-essentials}}`: it uses `vars["buy_link:ai-essentials"]`, else
+ * `vars["buy_link:*"]` with `{arg}` replaced. The argument is normalized like a slug, so `{{buy_link: AI_Essentials}}`
+ * works too. `{{word: text}}` whose word takes no argument is left as typed (e.g. a quoted prompt template).
+ */
+export function fillTemplate(template: string, vars: TemplateVars, escape = false, keepUnknown = false): string {
+  return template.replace(/\{\{\s*(\w+)(?:\s*:([^{}]*))?\s*\}\}/g, (match: string, key: string, rawArg: string | undefined) => {
+    let v: TemplateVars[string];
+    if (rawArg === undefined) {
+      v = vars[key];
+    } else {
+      const arg = placeholderArg(rawArg);
+      const pattern = vars[`${key}:*`];
+      if (pattern === undefined || pattern === null) {
+        v = arg ? vars[`${key}:${arg}`] : undefined;
+        if (v === undefined || v === null) return match;
+      } else if (arg) {
+        v = vars[`${key}:${arg}`] ?? String(pattern).replaceAll("{arg}", arg);
+      }
+    }
+    if (v === undefined || v === null) return keepUnknown ? match : "";
     return escape ? escapeHtml(String(v)) : String(v);
   });
+}
+
+/** `/buy/<course-slug>` link for {{buy_link:<course-slug>}}: the course's checkout, with `email` filled in when given. */
+export function buyLinkPattern(email?: string | null): string {
+  // encodeURIComponent leaves ( and ) alone, which would end a Markdown link early.
+  const query = email ? `?email=${encodeURIComponent(email).replace(/\(/g, "%28").replace(/\)/g, "%29")}` : "";
+  return `${absoluteUrl("/buy/")}{arg}${query}`;
 }
 
 /** Standard links available to every template, plus {{businessName}} (pass `emailBusinessName()`). */
@@ -49,6 +83,7 @@ export function defaultTemplateVars(businessName: string = site.name): TemplateV
     assessmentUrl: absoluteUrl("/assessment"),
     guideUrl: absoluteUrl("/guide?src=email"),
     loginUrl: absoluteUrl("/login"),
+    "buy_link:*": buyLinkPattern(),
     businessName,
   };
 }

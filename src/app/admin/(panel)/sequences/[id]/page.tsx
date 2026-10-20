@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, sql } from "drizzle-orm";
 import { ArrowLeft, Users, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -49,7 +49,7 @@ export default async function SequencePage({ params, searchParams }: Props) {
 
   const db = await getDb();
   const e = schema.sequenceEnrollments;
-  const [steps, statusCounts, enrollments, sentRow, session, tz] = await Promise.all([
+  const [steps, statusCounts, enrollments, sentRow, session, tz, buyLinkCourses] = await Promise.all([
     db
       .select({ id: schema.sequenceSteps.id, position: schema.sequenceSteps.position, delayHours: schema.sequenceSteps.delayHours, subject: schema.sequenceSteps.subject, body: schema.sequenceSteps.body })
       .from(schema.sequenceSteps)
@@ -80,6 +80,12 @@ export default async function SequencePage({ params, searchParams }: Props) {
       .where(and(eq(schema.activities.type, "email_sent"), sql`${schema.activities.meta}->>'sequenceId' = ${seq.id}`)),
     getAdminSession(),
     getBusinessTimezone(),
+    // Paid, published courses: offered as {{buy_link:<slug>}} placeholders.
+    db
+      .select({ slug: schema.courses.slug, title: schema.courses.title })
+      .from(schema.courses)
+      .where(and(eq(schema.courses.published, true), gt(schema.courses.priceCents, 0)))
+      .orderBy(asc(schema.courses.sortOrder)),
   ]);
   const counts: Record<EnrollmentStatus, number> = { active: 0, completed: 0, stopped: 0 };
   for (const r of statusCounts) counts[r.status] = Number(r.n);
@@ -128,7 +134,7 @@ export default async function SequencePage({ params, searchParams }: Props) {
               Sent in order. Each wait counts from the previous email. Edits never re-send an email someone already received.
             </p>
           </div>
-          <StepsEditor sequenceId={seq.id} initialSteps={steps} adminEmail={session?.email ?? "your admin email"} />
+          <StepsEditor sequenceId={seq.id} initialSteps={steps} adminEmail={session?.email ?? "your admin email"} buyLinkCourses={buyLinkCourses} />
         </section>
 
         <div className="flex min-w-0 flex-col gap-6">

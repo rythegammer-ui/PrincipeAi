@@ -8,9 +8,9 @@ import { getDb, schema } from "@/db";
 import { FOLLOW_UP_PURPOSES, SEGMENTS, STAGE_ORDER, parseDollarsToCents, safeWebsiteUrl, type FollowUpPurpose } from "@/components/admin/crm-utils";
 import { draftFollowUpEmail, summarizeContact } from "@/lib/ai-crm";
 import { assertAdmin } from "@/lib/auth";
-import { stopAutomations } from "@/lib/automations";
+import { recipientTemplateVars, stopAutomations } from "@/lib/automations";
 import { addTags, logActivity, recomputeScore, setStage, upsertContact } from "@/lib/crm";
-import { sendEmail } from "@/lib/email";
+import { emailBusinessName, fillTemplate, sendEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 import { PENDING_ORDER_TTL_MS } from "@/lib/jobs";
 import { isValidEmail, normalizeEmail, truncate } from "@/lib/utils";
@@ -339,16 +339,23 @@ export async function sendContactEmailAction(_prev: FormState, formData: FormDat
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid request.", fieldErrors: fieldErrors(parsed.error), values };
   const { id, subject, body } = parsed.data;
   const db = await getDb();
-  const [contact] = await db.select({ id: c.id, email: c.email }).from(c).where(eq(c.id, id)).limit(1);
+  const [contact] = await db.select({ id: c.id, email: c.email, name: c.name }).from(c).where(eq(c.id, id)).limit(1);
   if (!contact) return { error: "This contact no longer exists.", values };
 
-  const result = await sendEmail({ to: contact.email, subject, markdown: body, kind: "manual", contactId: contact.id });
+  // Only {{firstName}} and {{buy_link:<course-slug>}}, the two the composer mentions. Anything else in double braces
+  // (say, a prompt template quoted from a lesson, with its own {{name}}) is sent as typed.
+  const vars = recipientTemplateVars(contact, await emailBusinessName());
+  const pick = (v: typeof vars.body) => ({ firstName: v.firstName, "buy_link:*": v["buy_link:*"] });
+  const filledSubject = fillTemplate(subject, pick(vars.subject), false, true).replace(/\s+/g, " ").trim();
+  const filledBody = fillTemplate(body, pick(vars.body), false, true);
+  if (!filledSubject) return { error: "The subject is empty once its placeholders are filled in.", fieldErrors: { subject: "Add a subject line." }, values };
+  const result = await sendEmail({ to: contact.email, subject: filledSubject, markdown: filledBody, kind: "manual", contactId: contact.id });
   if (result.status === "failed") {
     revalidateCrm();
     return { error: "The email provider rejected the message. Check the Email Log for details.", values };
   }
-  await logActivity(contact.id, "email_sent", `Email sent: ${truncate(subject, 120)}`, {
-    body: truncate(body, 2000),
+  await logActivity(contact.id, "email_sent", `Email sent: ${truncate(filledSubject, 120)}`, {
+    body: truncate(filledBody, 2000),
     meta: { by: "admin", delivery: result.status },
   });
   revalidateCrm();

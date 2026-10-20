@@ -176,6 +176,33 @@ describe("retrying checkout without charging twice", () => {
     expect(await bookingStatus(booking.id)).toBe("confirmed");
   });
 
+  it("doesn't deliver an earlier checkout that was refunded in full before its webhook arrived", async () => {
+    const { contact, booking } = await heldBooking();
+    const order = await stripeOrder(booking.id, contact.email);
+    // Retrieved with payment_intent.latest_charge expanded, as closeCheckout asks for.
+    const refunded = {
+      ...session(order.stripeSessionId!, {}),
+      payment_intent: { id: `pi_${randomUUID().slice(0, 8)}`, object: "payment_intent", status: "succeeded", latest_charge: { id: "ch_r", object: "charge", refunded: true } },
+    };
+    const retrieve = vi.fn(async () => refunded);
+    mocks.stripe = {
+      checkout: {
+        sessions: {
+          expire: vi.fn(async () => {
+            throw new Error("Only Checkout Sessions with a status of open can be expired.");
+          }),
+          retrieve,
+        },
+      },
+    };
+
+    // The refunded checkout is closed, so the invitee can start a new one.
+    expect(await prepareCheckoutRetry(booking.id)).toBe("ok");
+    expect(retrieve).toHaveBeenCalledWith(order.stripeSessionId, { expand: ["payment_intent", "payment_intent.latest_charge"] });
+    expect((await orderStatus(order.id)).status).toBe("refunded");
+    expect(await bookingStatus(booking.id)).toBe("pending_payment");
+  });
+
   it("refuses a new checkout while an earlier delayed payment is still clearing", async () => {
     const { contact, booking } = await heldBooking();
     const order = await stripeOrder(booking.id, contact.email);

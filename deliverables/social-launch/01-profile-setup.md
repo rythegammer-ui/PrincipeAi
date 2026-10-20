@@ -617,21 +617,12 @@ Practical AI for your life and business. Learn AI. Implement AI. Grow with AI.
 ```
 _78 / 100 characters, counted by script._
 
-**Longer About (only if your Page shows a longer details field):**
+**Longer About (only if your Page shows a longer details field).** The field cuts off at 255 characters (seen on 2026-10-20), so this stays under it.
 
 ```text
-Principe AI, run by Principe Consults, offers practical AI education and implementation for business owners, professionals and everyday people: courses, coaching and done-with-you AI systems, all in plain English.
-
-Start free:
-- The AI Starter Kit: 50 copy-paste prompts + a 7-day plan to make AI genuinely useful in your life and work.
-- The AI Readiness Assessment: about 3 minutes, with a readiness score and a personalized AI action plan.
-- 7 free preview lessons, no signup.
-
-Everything works with AI assistants like Claude, ChatGPT and Gemini. Principe AI is independent and not affiliated with Anthropic, OpenAI or Google.
-
-Questions: principeconsults@gmail.com
+Practical AI courses, coaching and done-with-you AI systems for business owners, professionals and everyday people, in plain English. Start free with the AI Starter Kit. Principe AI is independent and not affiliated with Anthropic, OpenAI or Google.
 ```
-_668 characters, counted by script, line breaks included._
+_249 / 255 characters, counted by script._
 
 **Contact:** email `principeconsults@gmail.com`. Leave location and hours blank: it's an online business.
 

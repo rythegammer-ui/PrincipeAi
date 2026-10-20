@@ -10,8 +10,9 @@ import { normalizeEmail } from "@/lib/utils";
 /**
  * Which agent a customer belongs to. An agent's link (?ref=CODE on any page, or /r/CODE) leaves a cookie (src/proxy.ts);
  * the first time that visitor becomes a contact (opt-in, assessment, checkout…) or buys, the contact is claimed for the
- * agent. The first agent keeps the customer for the program's attribution window; after that another agent's link can
- * claim them. Payment-link checkouts carry the code in Stripe's client_reference_id (see /buy/[slug]).
+ * agent. The first agent keeps the customer for the program's attribution window, counted from that claim; after that
+ * another agent's link can claim them. A customer an admin assigned stays with that agent until an admin changes it.
+ * Payment-link checkouts carry the code in Stripe's client_reference_id (see /buy/[slug]).
  */
 
 /** Set by src/proxy.ts from ?ref=CODE, and by /r/CODE. */
@@ -64,8 +65,8 @@ export async function claimContactForAgent(contactId: string, code: string | nul
     if (existing) {
       const { attributionDays } = await getSalesProgram();
       const [holder] = await db.select({ status: schema.salesAgents.status }).from(schema.salesAgents).where(eq(schema.salesAgents.id, existing.agentId)).limit(1);
-      // Another agent's customer: theirs while the claim holds and they're still on the team.
-      if (holder?.status === "approved" && claimActive(existing.createdAt, attributionDays)) return false;
+      // Another agent's customer: theirs while the claim holds (an admin's assignment always does) and they're on the team.
+      if (holder?.status === "approved" && (existing.source === "manual" || claimActive(existing.createdAt, attributionDays))) return false;
       const [moved] = await db
         .update(schema.agentReferrals)
         .set({ agentId: agent.id, source: "link", createdAt: new Date() })
@@ -75,7 +76,8 @@ export async function claimContactForAgent(contactId: string, code: string | nul
     }
     const [created] = await db
       .insert(schema.agentReferrals)
-      .values({ contactId, agentId: agent.id, source: "link" })
+      // The app's clock, like orders.paid_at: a claim counts for purchases paid after it (recordAgentSale).
+      .values({ contactId, agentId: agent.id, source: "link", createdAt: new Date() })
       .onConflictDoNothing({ target: schema.agentReferrals.contactId })
       .returning();
     return Boolean(created);
@@ -100,6 +102,6 @@ export async function assignContactToAgent(contactId: string, agentId: string | 
   }
   await db
     .insert(schema.agentReferrals)
-    .values({ contactId, agentId, source: "manual" })
+    .values({ contactId, agentId, source: "manual", createdAt: new Date() })
     .onConflictDoUpdate({ target: schema.agentReferrals.contactId, set: { agentId, source: "manual", createdAt: new Date() } });
 }

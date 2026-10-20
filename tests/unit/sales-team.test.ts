@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
+import { DateTime } from "luxon";
 import { NextRequest } from "next/server";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 // next/headers outside a request: an in-memory cookie jar (the visitor's referral cookie, session cookies).
 const mocks = vi.hoisted(() => ({ jar: new Map<string, string>() }));
@@ -16,7 +17,7 @@ vi.mock("next/headers", () => ({
 
 import { getDb, schema } from "@/db";
 import type { SalesAgent } from "@/db/schema";
-import { addAdminMember, removeAdminMember } from "@/lib/admin-team";
+import { addAdminMember, createTeamSignInLink, removeAdminMember } from "@/lib/admin-team";
 import { ADMIN_COOKIE, consumeLoginToken, createLoginToken, getAdminSession, startAdminSession, startTeamAdminSession } from "@/lib/auth";
 import { captureLead } from "@/lib/crm";
 import { fulfillOrder, orderIdForCheckoutSession, refundOrder } from "@/lib/payments";
@@ -25,8 +26,11 @@ import {
   addAgentAdjustment,
   agentBalance,
   awardDueChallenges,
+  holdAgentSaleForDispute,
   monthlySales,
+  reconcileAgentSales,
   recordPayout,
+  releaseAgentSaleDispute,
   reverseAgentSale,
 } from "@/lib/sales/commissions";
 import {
@@ -41,7 +45,7 @@ import {
   weeklyStreak,
 } from "@/lib/sales/game";
 import { saveSalesProgram, getSalesProgram } from "@/lib/sales/program";
-import { AGENT_COOKIE, claimContactForAgent } from "@/lib/sales/referrals";
+import { AGENT_COOKIE, assignContactToAgent, claimContactForAgent } from "@/lib/sales/referrals";
 import { agentDashboard, leaderboard } from "@/lib/sales/stats";
 import { proxy } from "@/proxy";
 
@@ -227,8 +231,9 @@ describe("sales team", () => {
     const levelUp = (await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, jane.email))).filter((m) => m.html.includes("Level up"));
     expect(levelUp).toHaveLength(1);
 
-    // Move those sales into last month: this month's first sale still earns the Pro rate.
-    await db.update(schema.agentCommissions).set({ createdAt: new Date(Date.now() - 40 * DAY) }).where(eq(schema.agentCommissions.agentId, jane.id));
+    // Move those sales into last month (its 15th, business time zone): this month's first sale still earns the Pro rate.
+    const lastMonth15 = DateTime.now().setZone("America/New_York").startOf("month").minus({ months: 1 }).plus({ days: 14, hours: 12 }).toJSDate();
+    await db.update(schema.agentCommissions).set({ createdAt: lastMonth15 }).where(eq(schema.agentCommissions.agentId, jane.id));
     expect(await monthlySales(jane.id)).toMatchObject({ thisMonth: 0 });
     expect((await sale(jane)).commission.rateBps).toBe(2500);
   });
@@ -322,8 +327,78 @@ describe("sales team", () => {
     expect(commission).toMatchObject({ agentId: jane.id, kind: "sale" });
   });
 
+  it("only credits customers who were the agent's before they paid, and the daily sweep fills gaps", async () => {
+    const jane = await newAgent();
+    // Bought first, came through the agent's link afterwards (e.g. the success page saw the cookie, the webhook didn't).
+    const email = unique("late");
+    const { contact } = await captureLead({ email, source: "checkout", activity: { type: "form", title: "Started checkout" } });
+    const [order] = await db
+      .insert(schema.orders)
+      .values({ contactId: contact.id, email, itemType: "course", courseId: course.id, description: course.title, amountCents: course.priceCents })
+      .returning();
+    await fulfillOrder(order.id, { isTest: true });
+    expect(await claimContactForAgent(contact.id, jane.code)).toBe(true);
+    expect(await reconcileAgentSales()).toMatchObject({ credited: 0 });
+    expect(await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, order.id))).toHaveLength(0);
+
+    // A sale whose bookkeeping failed: the sweep credits it, dated when it sold.
+    const missed = await sale(jane);
+    await db.delete(schema.agentCommissions).where(eq(schema.agentCommissions.id, missed.commission.id));
+    expect((await reconcileAgentSales()).credited).toBe(1);
+    const [again] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, missed.order.id));
+    expect(again.createdAt.getTime()).toBe(missed.commission.createdAt.getTime());
+    // A refund the reversal missed.
+    await db.update(schema.orders).set({ status: "refunded" }).where(eq(schema.orders.id, missed.order.id));
+    expect((await reconcileAgentSales()).reversed).toBe(1);
+    expect((await reconcileAgentSales()).reversed).toBe(0);
+  });
+
+  it("keeps an admin's assignment until an admin changes it", async () => {
+    const jane = await newAgent();
+    const sam = await newAgent("Sam Third");
+    const { contact } = await captureLead({ email: unique("assigned"), source: "manual", activity: { type: "note", title: "Added" } });
+    await assignContactToAgent(contact.id, jane.id);
+    await db.update(schema.agentReferrals).set({ createdAt: new Date(Date.now() - 400 * DAY) }).where(eq(schema.agentReferrals.contactId, contact.id));
+    expect(await claimContactForAgent(contact.id, sam.code)).toBe(false);
+    const [order] = await db
+      .insert(schema.orders)
+      .values({ contactId: contact.id, email: contact.email, itemType: "course", courseId: course.id, description: course.title, amountCents: course.priceCents })
+      .returning();
+    await fulfillOrder(order.id, { isTest: true });
+    const [commission] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, order.id));
+    expect(commission.agentId).toBe(jane.id);
+    await assignContactToAgent(contact.id, null);
+    expect(await claimContactForAgent(contact.id, sam.code)).toBe(true);
+  });
+
+  it("holds a disputed sale's commission until the dispute is resolved", async () => {
+    const jane = await newAgent();
+    const { order, commission } = await sale(jane);
+    expect(await holdAgentSaleForDispute(order.id)).toBe(true);
+    const [held] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.id, commission.id));
+    expect(held.availableAt.getTime()).toBeGreaterThan(Date.now() + 80 * DAY);
+    expect(await releaseAgentSaleDispute(order.id)).toBe(true);
+    const [released] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.id, commission.id));
+    expect(released.availableAt.getTime()).toBe(commission.availableAt.getTime());
+    expect(released.note).toBeNull();
+  });
+
+  it("never owes or counts test payments once the site takes live payments", async () => {
+    const jane = await newAgent();
+    const { commission } = await sale(jane);
+    await db.update(schema.agentCommissions).set({ availableAt: new Date(Date.now() - DAY) }).where(eq(schema.agentCommissions.id, commission.id));
+    expect((await agentBalance(jane.id)).owedCents).toBe(commission.amountCents);
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_principe_unit_tests_only");
+    onTestFinished(() => vi.unstubAllEnvs());
+    expect((await agentBalance(jane.id)).owedCents).toBe(0);
+    expect(await recordPayout({ agentId: jane.id, by: "owner@example.com" })).toBeNull();
+    expect((await monthlySales(jane.id)).thisMonth).toBe(0);
+  });
+
   it("builds the agent dashboard and leaderboard", async () => {
-    await saveSalesProgram({ ...(await getSalesProgram()), holdDays: 14 });
+    const program = await getSalesProgram();
+    await saveSalesProgram({ ...program, holdDays: 14 });
+    onTestFinished(() => saveSalesProgram(program).then(() => undefined));
     const jane = await newAgent("Jane Board");
     await sale(jane);
     await sale(jane);
@@ -396,6 +471,17 @@ describe("admin team sign-in", () => {
     vi.stubEnv("ADMIN_PASSWORD", "a-different-owner-password-456");
     expect(passed(await proxy(adminPage(member)))).toBe(false);
     expect(passed(await proxy(adminPage(owner)))).toBe(false);
+  });
+
+  it("lets the owner hand a member a one-time link", async () => {
+    const added = await addAdminMember({ email: unique("linked"), addedBy: "owner@example.com" });
+    if (!added.ok) throw new Error(added.error);
+    const link = await createTeamSignInLink(added.member.id);
+    expect(link).toMatch(/\/auth\/verify\?token=.+&for=admin$/);
+    const token = decodeURIComponent(new URL(link!).searchParams.get("token")!);
+    expect(await consumeLoginToken(token)).toMatchObject({ kind: "admin", member: { id: added.member.id } });
+    await removeAdminMember(added.member.id);
+    expect(await createTeamSignInLink(added.member.id)).toBeNull();
   });
 
   it("never turns a student or agent link into an admin session", async () => {

@@ -5,6 +5,7 @@ import { logActivity } from "@/lib/crm";
 import { escapeMarkdown, notifyOwner } from "@/lib/email";
 import { markEnvWebhookVerified, readWebhookSecret } from "@/lib/payment-links";
 import { failPendingOrder, fulfillOrder, orderIdForCheckoutSession, refundOrder, refundUndeliveredOrder } from "@/lib/payments";
+import { holdAgentSaleForDispute, releaseAgentSaleDispute } from "@/lib/sales/commissions";
 import { getStripe, paymentIntentId, stripeDashboardUrl, stripeTestMode, type Stripe } from "@/lib/stripe";
 import { formatDate, formatMoney } from "@/lib/utils";
 
@@ -151,6 +152,8 @@ async function handleDispute(dispute: Stripe.Dispute, closed: boolean) {
     if (order.contactId) {
       await logActivity(order.contactId, "note", `Payment disputed: ${order.description} (${amount})`, { body: `Reason given: ${reason}`, meta });
     }
+    // A sales agent's unpaid commission on it waits until the dispute is resolved.
+    await holdAgentSaleForDispute(order.id).catch((err) => console.error("[stripe] agent commission hold failed", order.id, err));
     const dueBy = dispute.evidence_details?.due_by;
     const deadline = dueBy ? ` by **${formatDate(new Date(dueBy * 1000), { dateStyle: "medium", timeStyle: "short" }, "UTC")} UTC**` : "";
     const where = order.stripePaymentIntentId ? `[in Stripe](${stripeDashboardUrl(order.stripePaymentIntentId, order.isTest)})` : "in Stripe";
@@ -169,8 +172,11 @@ async function handleDispute(dispute: Stripe.Dispute, closed: boolean) {
 
   if (dispute.status === "lost") {
     await refundOrder(order.id, { revokeAccess: true, source: "stripe", reason: `Dispute lost (${reason})` });
-  } else if (order.contactId) {
-    await logActivity(order.contactId, "note", `Dispute closed (${dispute.status.replace(/_/g, " ")}): ${order.description}`, { meta });
+  } else {
+    await releaseAgentSaleDispute(order.id).catch((err) => console.error("[stripe] agent commission release failed", order.id, err));
+    if (order.contactId) {
+      await logActivity(order.contactId, "note", `Dispute closed (${dispute.status.replace(/_/g, " ")}): ${order.description}`, { meta });
+    }
   }
 }
 

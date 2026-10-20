@@ -49,7 +49,8 @@ export async function verifyMagicLinkAction(_prev: VerifyState, formData: FormDa
     redirect(isAdminRedirect(to) ? to : "/admin");
   }
   await startStudentSession(result.user);
-  if (result.user.contactId) {
+  // A sales agent signing in to /agent isn't a student logging in: no timeline entry or lead-score bump.
+  if (result.user.contactId && !result.redirectTo.startsWith("/agent")) {
     await logActivity(result.user.contactId, "login", "Signed in to the student portal").catch(() => {});
     // Logins count toward the lead score: keep the stored score in step with the timeline.
     await recomputeScore(result.user.contactId).catch(() => {});

@@ -22,7 +22,7 @@ export type ProgramSettings = {
   levels: Level[];
   /** Days a sale's commission waits before it can be paid, so refunds come first. */
   holdDays: number;
-  /** How long a customer stays with the agent who referred them (days from their first visit through the agent's link). */
+  /** How long a customer stays with the agent who referred them: days from when they first signed up or bought through the agent's link. */
   attributionDays: number;
   /** Agents are paid once they're owed at least this much (cents). Shown to agents; admins can pay any time. */
   minPayoutCents: number;

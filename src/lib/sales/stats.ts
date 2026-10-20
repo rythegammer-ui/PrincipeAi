@@ -3,14 +3,13 @@ import { and, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-or
 import { getDb, schema } from "@/db";
 import type { AgentChallenge, AgentCommission, AgentPayout, SalesAgent } from "@/db/schema";
 import { getBusinessTimezone } from "@/lib/scheduling";
-import { agentBalance, challengeScores, monthlySales, type AgentBalance } from "@/lib/sales/commissions";
+import { agentBalance, challengeScores, countingSale, monthlySales, realMoney, type AgentBalance } from "@/lib/sales/commissions";
 import { computeBadges, monthBounds, monthKey, publicName, standing, weeklyStreak, type Badge, type LevelStanding, type ProgramSettings } from "@/lib/sales/game";
 import { getSalesProgram } from "@/lib/sales/program";
 
 /** Read models for the agent portal and Admin → Sales Team: leaderboards, the team feed, challenges, badges. */
 
 const c = schema.agentCommissions;
-const countingSale = and(eq(c.kind, "sale"), ne(c.status, "void"));
 
 export type LeaderboardRow = {
   agentId: string;
@@ -43,7 +42,7 @@ export async function leaderboard(from: Date, to: Date, opts: { forAdmin?: boole
     })
     .from(c)
     .innerJoin(schema.salesAgents, eq(schema.salesAgents.id, c.agentId))
-    .where(and(countingSale, gte(c.createdAt, from), lt(c.createdAt, to)))
+    .where(and(countingSale(), gte(c.createdAt, from), lt(c.createdAt, to)))
     .groupBy(c.agentId, schema.salesAgents.name, schema.salesAgents.state, schema.salesAgents.status, schema.salesAgents.showOnLeaderboard);
   const visible = rows.filter((r) => opts.forAdmin || r.status === "approved");
   visible.sort((a, b) => b.sales - a.sales || b.volume - a.volume || new Date(a.last).getTime() - new Date(b.last).getTime());
@@ -65,7 +64,7 @@ export async function monthsWon(tz: string, now = new Date()): Promise<Map<strin
   const rows = await db
     .select({ agentId: c.agentId, at: c.createdAt, sale: c.saleCents })
     .from(c)
-    .where(and(countingSale, lt(c.createdAt, monthBounds(now, tz).thisMonth)));
+    .where(and(countingSale(), lt(c.createdAt, monthBounds(now, tz).thisMonth)));
   const byMonth = new Map<string, Map<string, { n: number; v: number }>>();
   for (const r of rows) {
     const key = monthKey(r.at, tz);
@@ -91,7 +90,7 @@ export async function teamFeed(limit = 8): Promise<FeedItem[]> {
     .select({ name: schema.salesAgents.name, state: schema.salesAgents.state, at: c.createdAt, level: c.level })
     .from(c)
     .innerJoin(schema.salesAgents, eq(schema.salesAgents.id, c.agentId))
-    .where(and(countingSale, eq(schema.salesAgents.status, "approved"), eq(schema.salesAgents.showOnLeaderboard, true)))
+    .where(and(countingSale(), eq(schema.salesAgents.status, "approved"), eq(schema.salesAgents.showOnLeaderboard, true)))
     .orderBy(desc(c.createdAt))
     .limit(limit);
   return rows.map((r) => ({ publicName: publicName(r.name), state: r.state, at: r.at, level: r.level }));
@@ -165,7 +164,7 @@ export async function agentDashboard(agent: SalesAgent, now = new Date()): Promi
     agentBalance(agent.id),
     db.select().from(c).where(eq(c.agentId, agent.id)).orderBy(desc(c.createdAt)).limit(25),
     db.select().from(schema.agentPayouts).where(eq(schema.agentPayouts.agentId, agent.id)).orderBy(desc(schema.agentPayouts.paidAt)).limit(12),
-    db.select({ at: c.createdAt, saleCents: c.saleCents }).from(c).where(and(eq(c.agentId, agent.id), countingSale)),
+    db.select({ at: c.createdAt, saleCents: c.saleCents }).from(c).where(and(eq(c.agentId, agent.id), countingSale())),
     db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(schema.agentReferrals).where(eq(schema.agentReferrals.agentId, agent.id)),
     monthsWon(tz, now),
     leaderboard(bounds.thisMonth, bounds.nextMonth),
@@ -174,8 +173,10 @@ export async function agentDashboard(agent: SalesAgent, now = new Date()): Promi
     db
       .select({ n: sql<number>`count(*)`.mapWith(Number) })
       .from(c)
-      .where(and(eq(c.agentId, agent.id), eq(c.kind, "bonus"), ne(c.status, "void"), sql`${c.challengeId} is not null`)),
+      .where(and(eq(c.agentId, agent.id), eq(c.kind, "bonus"), ne(c.status, "void"), sql`${c.challengeId} is not null`, realMoney())),
   ]);
+  // Agents who opted out don't appear to others (ranked without them); you always see yourself.
+  const visibleBoard = board.filter((r) => !r.hidden || r.agentId === agent.id).map((r, i) => ({ ...r, rank: i + 1 }));
   const level = standing(program.levels, thisMonth, lastMonth);
   const fromLastMonth = lastMonth > thisMonth && standing(program.levels, thisMonth).index < level.index;
   const monthSales = sales.filter((s) => s.at >= bounds.thisMonth && s.at < bounds.nextMonth);
@@ -201,8 +202,8 @@ export async function agentDashboard(agent: SalesAgent, now = new Date()): Promi
     ledger,
     payouts,
     badges: computeBadges({ sales, levels: program.levels, challengesWon: challengesWon?.n ?? 0, monthsWon: wins.get(agent.id) ?? 0, now, tz }),
-    board: board.filter((r) => !r.hidden || r.agentId === agent.id).slice(0, 10),
-    myRank: board.find((r) => r.agentId === agent.id) ?? null,
+    board: visibleBoard.slice(0, 10),
+    myRank: visibleBoard.find((r) => r.agentId === agent.id) ?? null,
     feed,
     challenges,
   };
@@ -224,7 +225,7 @@ export async function adminAgentRows(now = new Date()): Promise<AdminAgentRow[]>
         lastMonth: sql<number>`count(*) filter (where ${c.createdAt} < ${bounds.thisMonth.toISOString()}::timestamptz)`.mapWith(Number),
       })
       .from(c)
-      .where(and(countingSale, gte(c.createdAt, bounds.lastMonth), lt(c.createdAt, bounds.nextMonth)))
+      .where(and(countingSale(), gte(c.createdAt, bounds.lastMonth), lt(c.createdAt, bounds.nextMonth)))
       .groupBy(c.agentId),
     db
       .select({ agentId: schema.agentReferrals.agentId, n: sql<number>`count(*)`.mapWith(Number) })

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { activeAdminMember, checkAdminCredentials, createLoginToken, endAdminSession, isAdminRedirect, startAdminSession } from "@/lib/auth";
 import { notifyOwner, sendEmail } from "@/lib/email";
 import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
-import { adminCredentials, isDemoMode } from "@/lib/runtime-mode";
+import { adminCredentials } from "@/lib/runtime-mode";
 import { site } from "@/config/site";
 import { absoluteUrl, isValidEmail, normalizeEmail, safeRedirectPath } from "@/lib/utils";
 
@@ -68,7 +68,9 @@ export async function requestAdminLinkAction(_prev: TeamLinkState, formData: For
     kind: "magic_link",
     markdown: `Click below to sign in to the ${site.name} admin dashboard. This link expires in 30 minutes and can only be used once.\n\n**[Sign in to the dashboard →](${link})**\n\nIf you didn't request this, you can safely ignore this email.`,
   });
-  const showDevLink = !process.env.RESEND_API_KEY && (process.env.NODE_ENV !== "production" || isDemoMode());
+  // Local development only: on any deployed server (a demo included) showing it would let anyone sign in as a team
+  // member. Without email there, the owner creates a link for them in Admin → Admin Team.
+  const showDevLink = !process.env.RESEND_API_KEY && process.env.NODE_ENV !== "production";
   return { sent: true, email, devLink: showDevLink ? link : undefined };
 }
 

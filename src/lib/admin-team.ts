@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import type { AdminMember } from "@/db/schema";
 import { site } from "@/config/site";
 import { notifyOwner, sendEmail } from "@/lib/email";
+import { createLoginToken } from "@/lib/auth";
 import { adminCredentials } from "@/lib/runtime-mode";
 import { absoluteUrl, isValidEmail, normalizeEmail } from "@/lib/utils";
 
@@ -70,6 +71,22 @@ export async function removeAdminMember(id: string): Promise<AdminMember | null>
     .where(and(eq(schema.adminMembers.id, id), isNull(schema.adminMembers.removedAt)))
     .returning();
   return member ?? null;
+}
+
+/**
+ * A one-time sign-in link for a member (30 minutes, single use), for the owner to pass on when email isn't working.
+ * Callers must check the signed-in admin is the owner: anyone holding the link signs in as that member.
+ */
+export async function createTeamSignInLink(memberId: string): Promise<string | null> {
+  const db = await getDb();
+  const [member] = await db
+    .select({ email: schema.adminMembers.email })
+    .from(schema.adminMembers)
+    .where(and(eq(schema.adminMembers.id, memberId), isNull(schema.adminMembers.removedAt)))
+    .limit(1);
+  if (!member) return null;
+  const token = await createLoginToken(member.email, "/admin");
+  return absoluteUrl(`/auth/verify?token=${encodeURIComponent(token)}&for=admin`);
 }
 
 async function sendAdminInvite(member: AdminMember, addedBy: string): Promise<void> {

@@ -8,6 +8,7 @@ import { emailAgent, dashboardLink } from "@/lib/sales/emails";
 import { commissionFor, formatRate, monthBounds, standing } from "@/lib/sales/game";
 import { getSalesProgram } from "@/lib/sales/program";
 import { claimActive } from "@/lib/sales/referrals";
+import { stripeTestMode } from "@/lib/stripe";
 import { escapeMarkdown, formatDate, formatMoney, normalizeEmail, pluralize } from "@/lib/utils";
 
 /**
@@ -20,15 +21,31 @@ import { escapeMarkdown, formatDate, formatMoney, normalizeEmail, pluralize } fr
 const DAY = 86_400_000;
 const c = schema.agentCommissions;
 
+/**
+ * True when the site takes real payments (a live Stripe key). Then commissions from test payments (Stripe test mode,
+ * the built-in test checkout) are never owed or paid and don't count toward levels, challenges or the leaderboard.
+ * Without live payments (local development, a demo) they count like real ones, so the program can be tried out.
+ */
+export function livePayments(): boolean {
+  return Boolean(process.env.STRIPE_SECRET_KEY?.trim()) && !stripeTestMode();
+}
+
+/** Ledger rows that are real money right now (see livePayments). */
+export function realMoney() {
+  return livePayments() ? eq(c.isTest, false) : undefined;
+}
+
 /** Sales that count (for levels, challenges, the leaderboard): commissions on sales, minus refunded ones. */
-const countingSale = and(eq(c.kind, "sale"), ne(c.status, "void"));
+export function countingSale() {
+  return and(eq(c.kind, "sale"), ne(c.status, "void"), realMoney());
+}
 
 async function salesBetween(agentId: string, from: Date, to: Date): Promise<number> {
   const db = await getDb();
   const [row] = await db
     .select({ n: sql<number>`count(*)`.mapWith(Number) })
     .from(c)
-    .where(and(eq(c.agentId, agentId), countingSale, gte(c.createdAt, from), lt(c.createdAt, to)));
+    .where(and(eq(c.agentId, agentId), countingSale(), gte(c.createdAt, from), lt(c.createdAt, to)));
   return row?.n ?? 0;
 }
 
@@ -43,9 +60,12 @@ export async function monthlySales(agentId: string, now = new Date(), tz?: strin
 }
 
 /**
- * Credits a paid course order to the agent who referred its customer (called once the purchase is recorded; safe to
- * call again). No commission when nobody referred the customer, the claim has run out, the agent isn't active, or the
- * agent bought for themself. Returns the new commission, or null.
+ * Credits a paid course order to the agent who referred its customer (called once the purchase is recorded, and by
+ * the daily sweep; safe to call again). The customer must have been the agent's before they paid: a claim made while
+ * the purchase is recorded (the success page sees the buyer's referral cookie, the webhook doesn't) only counts for
+ * later purchases, so the outcome never depends on which of the two ran first. No commission when nobody referred the
+ * customer, a link claim has run out (an admin's assignment doesn't), the agent isn't active, or the agent bought for
+ * themself. Returns the new commission, or null.
  */
 export async function recordAgentSale(order: Order, contactId: string): Promise<AgentCommission | null> {
   if (order.itemType !== "course" || order.status !== "paid" || order.amountCents <= 0) return null;
@@ -56,7 +76,8 @@ export async function recordAgentSale(order: Order, contactId: string): Promise<
   if (!agent || agent.status !== "approved" || normalizeEmail(order.email) === agent.email) return null;
   const program = await getSalesProgram();
   const soldAt = order.paidAt ?? new Date();
-  if (!claimActive(ref.createdAt, program.attributionDays, soldAt.getTime())) return null;
+  if (ref.createdAt.getTime() > soldAt.getTime()) return null;
+  if (ref.source !== "manual" && !claimActive(ref.createdAt, program.attributionDays, soldAt.getTime())) return null;
 
   const tz = await getBusinessTimezone();
   const { thisMonth, lastMonth } = await monthlySales(agent.id, soldAt, tz);
@@ -79,21 +100,31 @@ export async function recordAgentSale(order: Order, contactId: string): Promise<
       status: "held",
       availableAt,
       isTest: order.isTest,
+      // When it sold (the daily sweep may record it later): months, levels and challenges go by this.
+      createdAt: soldAt,
     })
     .onConflictDoNothing({ target: [c.orderId, c.kind] })
     .returning();
   if (!row) return null;
 
-  await db.update(schema.salesAgents).set({ lastSaleAt: new Date() }).where(eq(schema.salesAgents.id, agent.id));
+  await db
+    .update(schema.salesAgents)
+    .set({ lastSaleAt: soldAt })
+    .where(and(eq(schema.salesAgents.id, agent.id), sql`(${schema.salesAgents.lastSaleAt} is null or ${schema.salesAgents.lastSaleAt} < ${soldAt.toISOString()}::timestamptz)`));
   await logActivity(contactId, "note", `Sale credited to sales agent ${agent.name}${agent.code ? ` (${agent.code})` : ""}`, {
     meta: { agentId: agent.id, orderId: order.id, commissionCents: amountCents, rateBps: after.level.rateBps },
   }).catch((err) => console.error("[sales] activity log failed", err));
 
   const levelUp = after.index > before.index;
   const sales = thisMonth + 1;
+  // A test payment on a live site: recorded, but it isn't money and doesn't count (see livePayments).
+  const notCounted = order.isTest && livePayments();
   await emailAgent(agent, `You made a sale! +${formatMoney(amountCents, order.currency)} commission`, [
     `A customer you referred just bought **${escapeMarkdown(order.description)}** for ${formatMoney(order.amountCents, order.currency)}. Your commission: **${formatMoney(amountCents, order.currency)}** (${formatRate(after.level.rateBps)}, ${escapeMarkdown(after.level.name)} level).`,
-    order.isTest && "_This was a test purchase, so no real money changed hands._",
+    order.isTest &&
+      (notCounted
+        ? "_This was a test purchase, so no real money changed hands and it isn't paid out or counted toward your level._"
+        : "_This was a test purchase, so no real money changed hands._"),
     `It becomes payable on **${formatDate(availableAt, {}, tz)}**, once the refund window has passed. Sales this month: **${sales}**.`,
     levelUp
       ? `🚀 **Level up: you're now ${escapeMarkdown(after.level.name)}!** Every sale earns ${formatRate(after.level.rateBps)} for the rest of this month and all of next month.`
@@ -164,6 +195,75 @@ export async function reverseAgentSale(orderId: string, reason: string): Promise
   return outcome;
 }
 
+/** How long a disputed sale's commission waits: Stripe disputes usually take 60–75 days to resolve. */
+const DISPUTE_HOLD_DAYS = 90;
+const DISPUTE_NOTE = "On hold: the payment is disputed";
+
+/** A chargeback was opened: the unpaid commission waits until it's resolved (a lost dispute cancels it, via refundOrder). */
+export async function holdAgentSaleForDispute(orderId: string): Promise<boolean> {
+  const db = await getDb();
+  const until = new Date(Date.now() + DISPUTE_HOLD_DAYS * DAY);
+  const [row] = await db
+    .update(c)
+    .set({ availableAt: sql`greatest(${c.availableAt}, ${until.toISOString()}::timestamptz)`, note: DISPUTE_NOTE })
+    .where(and(eq(c.orderId, orderId), eq(c.kind, "sale"), eq(c.status, "held")))
+    .returning({ id: c.id });
+  return Boolean(row);
+}
+
+/** The dispute was won (or closed without a loss): the commission is payable after its normal hold again. */
+export async function releaseAgentSaleDispute(orderId: string): Promise<boolean> {
+  const db = await getDb();
+  const { holdDays } = await getSalesProgram();
+  const [row] = await db
+    .update(c)
+    .set({ availableAt: sql`${c.createdAt} + make_interval(days => ${holdDays})`, note: null })
+    .where(and(eq(c.orderId, orderId), eq(c.kind, "sale"), eq(c.status, "held"), eq(c.note, DISPUTE_NOTE)))
+    .returning({ id: c.id });
+  return Boolean(row);
+}
+
+/**
+ * Daily safety net: credits paid course orders whose commission wasn't recorded (recordPurchase is best effort and
+ * runs once), and reverses commissions on orders refunded since. Looks back `days` days.
+ */
+export async function reconcileAgentSales(days = 45): Promise<{ credited: number; reversed: number }> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * DAY);
+  const o = schema.orders;
+  const r = schema.agentReferrals;
+  const missing = await db
+    .select({ order: o, contactId: r.contactId })
+    .from(o)
+    .innerJoin(r, eq(r.contactId, o.contactId))
+    .leftJoin(c, and(eq(c.orderId, o.id), eq(c.kind, "sale")))
+    .where(and(eq(o.status, "paid"), eq(o.itemType, "course"), gte(o.paidAt, since), lte(r.createdAt, o.paidAt), isNull(c.id)))
+    .limit(200);
+  let credited = 0;
+  for (const { order, contactId } of missing) {
+    try {
+      if (await recordAgentSale(order, contactId)) credited++;
+    } catch (err) {
+      console.error("[sales] commission backfill failed", order.id, err);
+    }
+  }
+  const refunded = await db
+    .select({ orderId: o.id })
+    .from(o)
+    .innerJoin(c, and(eq(c.orderId, o.id), eq(c.kind, "sale"), ne(c.status, "void")))
+    .where(and(eq(o.status, "refunded"), gte(o.updatedAt, since)))
+    .limit(200);
+  let reversed = 0;
+  for (const { orderId } of refunded) {
+    try {
+      if (await reverseAgentSale(orderId, "Refunded")) reversed++;
+    } catch (err) {
+      console.error("[sales] commission reversal failed", orderId, err);
+    }
+  }
+  return { credited, reversed };
+}
+
 /* ------------------------------------------------------------------ */
 /* Balances + payouts                                                  */
 /* ------------------------------------------------------------------ */
@@ -197,7 +297,7 @@ export async function agentBalances(agentIds?: string[]): Promise<Map<string, Ag
       next: sql<string | null>`min(${c.availableAt}) filter (where ${c.status} = 'held' and ${c.availableAt} > ${now})`,
     })
     .from(c)
-    .where(agentIds ? inArray(c.agentId, agentIds) : undefined)
+    .where(and(agentIds ? inArray(c.agentId, agentIds) : undefined, realMoney()))
     .groupBy(c.agentId);
   return new Map(
     rows.map((r) => [
@@ -228,7 +328,7 @@ export async function recordPayout(input: {
     const rows = await tx
       .select({ id: c.id, amountCents: c.amountCents, currency: c.currency })
       .from(c)
-      .where(and(eq(c.agentId, input.agentId), eq(c.status, "held"), lte(c.availableAt, now)))
+      .where(and(eq(c.agentId, input.agentId), eq(c.status, "held"), lte(c.availableAt, now), realMoney()))
       .for("update");
     const total = rows.reduce((sum, r) => sum + r.amountCents, 0);
     if (!rows.length || total <= 0) return null;
@@ -266,6 +366,7 @@ export async function recordPayout(input: {
 /** A manual bonus (positive) or correction (negative), payable straight away. */
 export async function addAgentAdjustment(input: { agentId: string; amountCents: number; note: string; by: string }): Promise<AgentCommission> {
   const db = await getDb();
+  console.log(`[sales] ${input.by} added a ${input.amountCents > 0 ? "bonus" : "correction"} of ${input.amountCents} cents for agent ${input.agentId}`);
   const [row] = await db
     .insert(c)
     .values({
@@ -274,7 +375,8 @@ export async function addAgentAdjustment(input: { agentId: string; amountCents: 
       amountCents: Math.round(input.amountCents),
       status: "held",
       availableAt: new Date(),
-      note: `${input.note.trim().slice(0, 300)} (by ${input.by})`,
+      // Agents see this note: who added it is in the server log, not here.
+      note: input.note.trim().slice(0, 300),
     })
     .returning();
   if (input.amountCents > 0) {
@@ -317,7 +419,7 @@ export async function challengeScores(challenge: Pick<AgentChallenge, "metric" |
       volume: sql<number>`coalesce(sum(${c.saleCents}), 0)`.mapWith(Number),
     })
     .from(c)
-    .where(and(countingSale, gte(c.createdAt, challenge.startsAt), lt(c.createdAt, challenge.endsAt), agentIds ? inArray(c.agentId, agentIds) : undefined))
+    .where(and(countingSale(), gte(c.createdAt, challenge.startsAt), lt(c.createdAt, challenge.endsAt), agentIds ? inArray(c.agentId, agentIds) : undefined))
     .groupBy(c.agentId);
   return new Map(rows.map((r) => [r.agentId, challenge.metric === "revenue" ? r.volume : r.sales]));
 }
@@ -364,6 +466,8 @@ export async function awardDueChallenges(now = new Date()): Promise<number> {
           amountCents: challenge.bonusCents,
           status: "held",
           availableAt,
+          // Won with test sales (no live payments): a test bonus, never owed on a live site.
+          isTest: !livePayments(),
           note: `Challenge: ${challenge.title}`.slice(0, 300),
         })
         .onConflictDoNothing({ target: [c.challengeId, c.agentId] })

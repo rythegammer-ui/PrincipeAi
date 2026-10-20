@@ -4,11 +4,14 @@ import { SettingsForm } from "@/components/funnels/settings-form";
 import { SettingsTools } from "@/components/funnels/settings-tools";
 import { PageHeader } from "@/components/ui/misc";
 import { site } from "@/config/site";
+import { getDb } from "@/db";
 import { AI_MODEL } from "@/lib/ai";
 import { requireAdmin } from "@/lib/auth";
 import { integrations } from "@/lib/integrations";
+import { readWebhookSecret } from "@/lib/payment-links";
 import { checkoutMode, livePaymentsBlocked } from "@/lib/payments";
 import { getSettings } from "@/lib/settings";
+import { stripeTestMode } from "@/lib/stripe";
 import { absoluteUrl } from "@/lib/utils";
 import { emailStatus, isLiveDeployment, paymentsStatus } from "./integration-status";
 import { groupTimezones, supportedTimezones } from "./timezones";
@@ -17,12 +20,13 @@ export const metadata: Metadata = { title: "Settings" };
 
 const VERCEL_ENV = "Vercel → your project → Settings → Environment Variables";
 
-function integrationItems(live: boolean): IntegrationItem[] {
+/** `autoWebhook`: the payment-link sync created the Stripe webhook endpoint itself (no STRIPE_WEBHOOK_SECRET needed). */
+function integrationItems(live: boolean, autoWebhook: boolean): IntegrationItem[] {
   const s = integrations();
   // In production /api/cron refuses every call without CRON_SECRET (see authorizeCron).
   const cronRequired = !s.cron && process.env.NODE_ENV === "production";
   const email = emailStatus({ email: s.email, live });
-  const payments = paymentsStatus({ stripe: s.stripe, stripeWebhook: s.stripeWebhook, mode: checkoutMode(), liveKeyBlocked: livePaymentsBlocked() });
+  const payments = paymentsStatus({ stripe: s.stripe, stripeWebhook: s.stripeWebhook || autoWebhook, mode: checkoutMode(), liveKeyBlocked: livePaymentsBlocked() });
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   const webhookUrl = absoluteUrl("/api/stripe/webhook");
   const redeploy = (
@@ -154,6 +158,10 @@ function integrationItems(live: boolean): IntegrationItem[] {
       steps: [
         <>In the <ExtLink href="https://dashboard.stripe.com/apikeys">Stripe dashboard</ExtLink>, open <strong>Developers → API keys</strong> and copy the <strong>Secret key</strong>. Start with test mode (<Code>sk_test_…</Code>).</>,
         <>Add it in {VERCEL_ENV} as <Code>STRIPE_SECRET_KEY</Code>.</>,
+        <>
+          Redeploy. The site then creates each course&apos;s payment link and its own Stripe webhook (Admin → Courses → <strong>Sync with Stripe</strong> does
+          the same any time). To use a webhook of your own instead, follow the next steps.
+        </>,
         <>Open <strong>Developers → Webhooks → Add endpoint</strong> and use this URL: <Code>{webhookUrl}</Code></>,
         <>
           Select these events: <Code>checkout.session.completed</Code>, <Code>checkout.session.async_payment_succeeded</Code>,{" "}
@@ -200,6 +208,7 @@ function integrationItems(live: boolean): IntegrationItem[] {
 export default async function SettingsPage() {
   await requireAdmin();
   const settings = await getSettings();
+  const autoWebhook = Boolean(await readWebhookSecret(await getDb(), stripeTestMode() ? "test" : "live").catch(() => null));
   const timezones = groupTimezones(supportedTimezones());
   const live = isLiveDeployment(process.env.NODE_ENV, integrations().demoMode);
 
@@ -220,7 +229,7 @@ export default async function SettingsPage() {
           </h2>
           <p className="mt-1 text-sm text-zinc-500">Connect these in Vercel to take the platform live. Each one takes a few minutes.</p>
         </div>
-        <IntegrationsChecklist items={integrationItems(live)} live={live} />
+        <IntegrationsChecklist items={integrationItems(live, autoWebhook)} live={live} />
       </section>
 
       <section aria-labelledby="tools-heading" className="flex flex-col gap-4">

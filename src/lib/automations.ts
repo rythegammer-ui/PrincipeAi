@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, count, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { SequenceTrigger } from "@/db/schema";
-import { defaultTemplateVars, emailBusinessName, escapeMarkdown, fillTemplate, sendEmail, type TemplateVars } from "@/lib/email";
+import { buyLinkPattern, defaultTemplateVars, emailBusinessName, escapeMarkdown, fillTemplate, sendEmail, type TemplateVars } from "@/lib/email";
 import { firstName } from "@/lib/utils";
 
 const HOUR = 3_600_000;
@@ -22,6 +22,8 @@ export function recipientTemplateVars(
     firstName: firstName(person.name, person.email),
     name: fullName,
     email: person.email,
+    // {{buy_link:<course-slug>}}: checkout with the recipient's email already filled in.
+    "buy_link:*": buyLinkPattern(person.email),
   };
   const body: TemplateVars = { ...subject, name: escapeMarkdown(fullName), email: escapeMarkdown(person.email), businessName: escapeMarkdown(businessName) };
   return { subject, body };

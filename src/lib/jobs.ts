@@ -4,7 +4,7 @@ import { and, asc, eq, gt, inArray, like, lt, notLike, or, sql } from "drizzle-o
 import { getDb, schema } from "@/db";
 import { processDueEnrollments } from "@/lib/automations";
 import { releaseExpiredHolds, sendDueBookingReminders } from "@/lib/booking-service";
-import { failPendingOrder, fulfillOrder, UNDELIVERABLE_ALERT_PREFIX, UNDELIVERABLE_ALERT_TTL_MS } from "@/lib/payments";
+import { failPendingOrder, fulfillOrder, recoverPaymentLinkCheckouts, UNDELIVERABLE_ALERT_PREFIX, UNDELIVERABLE_ALERT_TTL_MS } from "@/lib/payments";
 import { getStripe, paymentIntentId, type Stripe } from "@/lib/stripe";
 import type { JobKey } from "@/components/funnels/automation-utils";
 
@@ -75,6 +75,14 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
   const db = await getDb();
   const o = schema.orders;
   const now = Date.now();
+  // Payment-link checkouts have no order until their webhook arrives, so they're found through Stripe instead.
+  let links = { checked: 0, recovered: 0, failed: 0 };
+  try {
+    links = await recoverPaymentLinkCheckouts(stripe, new Date(now - STRIPE_RECONCILE_WINDOW_MS));
+  } catch (err) {
+    links.failed++;
+    console.error("[jobs] payment-link checkout recovery failed", err);
+  }
   // createCheckout stores the session id seconds after creating the order, and this job only looks at orders
   // older than STRIPE_RECONCILE_AFTER_MS, so `updated_at` that close to `created_at` means "never checked".
   const lookPriority = sql`case
@@ -138,11 +146,12 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
   }
   const notes = [
     `${candidates.length} checked`,
+    links.checked ? `${links.checked} payment-link checkout${links.checked === 1 ? "" : "s"} checked` : "",
     closed ? `${closed} closed by Stripe` : "",
     declined ? `${declined} payment${declined === 1 ? "" : "s"} declined` : "",
-    failed ? `${failed} failed` : "",
+    failed + links.failed ? `${failed + links.failed} failed` : "",
   ];
-  return { count: recovered, detail: notes.filter(Boolean).join(", ") };
+  return { count: recovered + links.recovered, detail: notes.filter(Boolean).join(", ") };
 }
 
 const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = {

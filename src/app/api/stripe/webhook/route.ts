@@ -3,8 +3,9 @@ import { getDb, schema } from "@/db";
 import type { Order } from "@/db/schema";
 import { logActivity } from "@/lib/crm";
 import { escapeMarkdown, notifyOwner } from "@/lib/email";
-import { failPendingOrder, fulfillOrder, refundOrder } from "@/lib/payments";
-import { getStripe, paymentIntentId, stripeDashboardUrl, type Stripe } from "@/lib/stripe";
+import { readWebhookSecret } from "@/lib/payment-links";
+import { failPendingOrder, fulfillOrder, orderIdForCheckoutSession, refundOrder } from "@/lib/payments";
+import { getStripe, paymentIntentId, stripeDashboardUrl, stripeTestMode, type Stripe } from "@/lib/stripe";
 import { formatDate, formatMoney } from "@/lib/utils";
 
 /**
@@ -13,15 +14,35 @@ import { formatDate, formatMoney } from "@/lib/utils";
  *   Events: checkout.session.completed, checkout.session.async_payment_succeeded,
  *           checkout.session.async_payment_failed, checkout.session.expired, charge.refunded,
  *           charge.dispute.created, charge.dispute.closed
- * and set STRIPE_WEBHOOK_SECRET to the endpoint's signing secret (whsec_…).
+ * and set STRIPE_WEBHOOK_SECRET to the endpoint's signing secret (whsec_…). Without STRIPE_WEBHOOK_SECRET, the
+ * payment-link sync (src/lib/payment-links.ts) creates the endpoint itself and keeps its secret in the database.
  */
 export const dynamic = "force-dynamic";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Signing secrets to accept: STRIPE_WEBHOOK_SECRET, and the endpoint the payment-link sync created. */
+async function webhookSecrets(): Promise<string[]> {
+  const secrets: string[] = [];
+  const env = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  if (env) secrets.push(env);
+  try {
+    const stored = await readWebhookSecret(await getDb(), stripeTestMode() ? "test" : "live");
+    if (stored && stored !== env) secrets.push(stored);
+  } catch (err) {
+    // No database: only the env secret can be checked.
+    console.error("[stripe] could not read the stored webhook secret", err);
+  }
+  return secrets;
+}
 
-function orderIdFrom(session: Stripe.Checkout.Session): string | null {
-  const id = session.metadata?.orderId ?? session.client_reference_id;
-  return id && UUID.test(id) ? id : null;
+function verifiedEvent(stripe: Stripe, body: string, signature: string, secrets: string[]): Stripe.Event | null {
+  for (const secret of secrets) {
+    try {
+      return stripe.webhooks.constructEvent(body, signature, secret);
+    } catch {
+      // Not signed with this secret: try the next one.
+    }
+  }
+  return null;
 }
 
 /** Moves a still-pending order to `status`; returns the order when it changed (null for duplicates/late events). */
@@ -98,8 +119,8 @@ async function handleDispute(dispute: Stripe.Dispute, closed: boolean) {
 
 export async function POST(request: Request) {
   const stripe = getStripe();
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!stripe || !secret) {
+  const secrets = stripe ? await webhookSecrets() : [];
+  if (!stripe || secrets.length === 0) {
     return Response.json({ error: "Stripe webhooks are not configured" }, { status: 400 });
   }
 
@@ -107,11 +128,9 @@ export async function POST(request: Request) {
   if (!signature) return Response.json({ error: "Missing Stripe-Signature header" }, { status: 400 });
 
   const body = await request.text();
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(body, signature, secret);
-  } catch (err) {
-    console.warn("[stripe] webhook signature verification failed", err instanceof Error ? err.message : err);
+  const event = verifiedEvent(stripe, body, signature, secrets);
+  if (!event) {
+    console.warn("[stripe] webhook signature verification failed");
     return Response.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -120,7 +139,8 @@ export async function POST(request: Request) {
       case "checkout.session.completed":
       case "checkout.session.async_payment_succeeded": {
         const session = event.data.object;
-        const orderId = orderIdFrom(session);
+        // A payment-link checkout gets its order here (pending until paid, so a delayed payment's outcome finds it).
+        const orderId = await orderIdForCheckoutSession(session, { create: true });
         // Delayed payment methods complete the session as "unpaid" first; fulfil on async_payment_succeeded.
         if (orderId && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
           await fulfillOrder(orderId, {
@@ -134,13 +154,14 @@ export async function POST(request: Request) {
         break;
       }
       case "checkout.session.async_payment_failed": {
-        const orderId = orderIdFrom(event.data.object);
+        const orderId = await orderIdForCheckoutSession(event.data.object, { create: true });
         // Marks the order failed and emails the buyer (best effort: don't make Stripe retry over an email).
         if (orderId) await failPendingOrder(orderId);
         break;
       }
       case "checkout.session.expired": {
-        const orderId = orderIdFrom(event.data.object);
+        // An abandoned payment-link checkout has no order, so nothing is created for it.
+        const orderId = await orderIdForCheckoutSession(event.data.object, { create: false });
         if (orderId) await setPendingOrderStatus(orderId, "expired");
         break;
       }

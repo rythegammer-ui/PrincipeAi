@@ -2,6 +2,7 @@ import { and, asc, count, countDistinct, eq, gte, sql } from "drizzle-orm";
 import { CheckCircle2, DollarSign, Eye, GraduationCap, Pencil, Plus, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PaymentLinksPanel, type PaymentLinkRow } from "@/components/courses/admin/payment-links-panel";
 import { CourseCover } from "@/components/courses/course-cover";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -10,9 +11,13 @@ import { Card } from "@/components/ui/card";
 import { EmptyState, PageHeader, StatCard } from "@/components/ui/misc";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { site } from "@/config/site";
 import { getDb, schema } from "@/db";
 import { requireAdmin } from "@/lib/auth";
-import { formatMoney } from "@/lib/utils";
+import { linkMatchesCourse, readPaymentLinks, readWebhookSecret } from "@/lib/payment-links";
+import { livePaymentsBlocked } from "@/lib/payments";
+import { getStripe, stripeTestMode } from "@/lib/stripe";
+import { absoluteUrl, formatMoney } from "@/lib/utils";
 import { toggleCoursePublishedAction } from "./actions";
 
 export const metadata: Metadata = { title: "Courses" };
@@ -57,10 +62,35 @@ async function loadCourses() {
   };
 }
 
+/** Each course's Stripe payment link (src/lib/payment-links.ts) and whether it sells at the current price. */
+async function loadPaymentLinks(courses: (typeof schema.courses.$inferSelect)[]) {
+  const db = await getDb();
+  const mode = stripeTestMode() ? "test" : "live";
+  const stripe = livePaymentsBlocked() ? "blocked" : getStripe() ? "connected" : "missing";
+  const [links, storedWebhook] = await Promise.all([readPaymentLinks(db, mode), readWebhookSecret(db, mode)]);
+  const rows: PaymentLinkRow[] = courses.map((course) => {
+    const link = links.get(course.id);
+    const forSale = course.published && course.priceCents > 0;
+    const status: PaymentLinkRow["status"] = !forSale ? "off" : linkMatchesCourse(link, course, site.currency) ? "ready" : link ? "stale" : "missing";
+    return {
+      courseId: course.id,
+      title: course.title,
+      slug: course.slug,
+      price: course.priceCents > 0 ? formatMoney(course.priceCents) : "Free",
+      status,
+      stripeUrl: link?.url ?? null,
+      buyUrl: absoluteUrl(`/buy/${course.slug}`),
+    };
+  });
+  const webhook = process.env.STRIPE_WEBHOOK_SECRET?.trim() ? "env" : storedWebhook ? "auto" : "missing";
+  return { rows, stripe, mode, webhook } as const;
+}
+
 export default async function AdminCoursesPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   await requireAdmin();
   const { deleted } = await searchParams;
   const { rows, totals } = await loadCourses();
+  const paymentLinks = await loadPaymentLinks(rows.map((r) => r.course));
   const published = rows.filter((r) => r.course.published).length;
 
   return (
@@ -169,6 +199,8 @@ export default async function AdminCoursesPage({ searchParams }: { searchParams:
           </Table>
         </Card>
       )}
+
+      {rows.length > 0 && <PaymentLinksPanel {...paymentLinks} />}
     </>
   );
 }

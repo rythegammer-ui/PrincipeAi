@@ -47,6 +47,8 @@ export const PLACEHOLDERS = [
   { key: "loginUrl", description: "Student login" },
   { key: "businessName", description: "Your business name (Settings → Business)" },
 ] as const;
+// Plus {{buy_link:<course-slug>}}: a checkout link for that course (see fillTemplate and /buy/[slug]); the step
+// editor offers one per paid course.
 
 /** Sample person used for previews and test sends. */
 export const SAMPLE_PERSON = { firstName: "Alex", name: "Alex Rivera", email: "alex@example.com" } as const;

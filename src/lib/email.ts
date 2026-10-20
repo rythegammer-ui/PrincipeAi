@@ -31,13 +31,28 @@ export { escapeMarkdown } from "@/lib/utils";
 
 export type TemplateVars = Record<string, string | number | null | undefined>;
 
-/** Replaces {{placeholders}}. Unknown placeholders are removed. Values are HTML-escaped when `escape` is true. */
+/**
+ * Replaces {{placeholders}}. Unknown placeholders are removed. Values are HTML-escaped when `escape` is true.
+ * A placeholder can take a slug argument, `{{buy_link:ai-essentials}}`: it uses `vars["buy_link:ai-essentials"]`,
+ * else `vars["buy_link:*"]` with `{arg}` replaced by the slug.
+ */
 export function fillTemplate(template: string, vars: TemplateVars, escape = false): string {
-  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) => {
-    const v = vars[key];
+  return template.replace(/\{\{\s*(\w+)(?::([a-z0-9]+(?:-[a-z0-9]+)*))?\s*\}\}/g, (_, key: string, arg: string | undefined) => {
+    let v = arg ? vars[`${key}:${arg}`] : vars[key];
+    if (arg && (v === undefined || v === null)) {
+      const pattern = vars[`${key}:*`];
+      v = pattern === undefined || pattern === null ? pattern : String(pattern).replaceAll("{arg}", arg);
+    }
     if (v === undefined || v === null) return "";
     return escape ? escapeHtml(String(v)) : String(v);
   });
+}
+
+/** `/buy/<course-slug>` link for {{buy_link:<course-slug>}}: the course's checkout, with `email` filled in when given. */
+export function buyLinkPattern(email?: string | null): string {
+  // encodeURIComponent leaves ( and ) alone, which would end a Markdown link early.
+  const query = email ? `?email=${encodeURIComponent(email).replace(/\(/g, "%28").replace(/\)/g, "%29")}` : "";
+  return `${absoluteUrl("/buy/")}{arg}${query}`;
 }
 
 /** Standard links available to every template, plus {{businessName}} (pass `emailBusinessName()`). */
@@ -49,6 +64,7 @@ export function defaultTemplateVars(businessName: string = site.name): TemplateV
     assessmentUrl: absoluteUrl("/assessment"),
     guideUrl: absoluteUrl("/guide?src=email"),
     loginUrl: absoluteUrl("/login"),
+    "buy_link:*": buyLinkPattern(),
     businessName,
   };
 }

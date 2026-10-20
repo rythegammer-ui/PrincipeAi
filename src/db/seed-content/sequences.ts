@@ -3,7 +3,8 @@ import type { SequenceTrigger } from "../schema";
 /**
  * Default email automations, editable at /admin/sequences. Bodies are Markdown and support
  * placeholders: {{firstName}}, {{name}}, {{siteUrl}}, {{bookUrl}}, {{coursesUrl}},
- * {{assessmentUrl}}, {{guideUrl}}, {{loginUrl}}, {{businessName}}.
+ * {{assessmentUrl}}, {{guideUrl}}, {{loginUrl}}, {{businessName}}, and {{buy_link:<course-slug>}}
+ * (straight to checkout for that course, with the reader's email filled in).
  *
  * `delayHours` is the wait after the previous email (or after enrollment for the first one).
  * Every example below is clearly hypothetical — never present invented clients or results.
@@ -16,6 +17,19 @@ export type SeedSequence = {
 };
 
 const SIGN_OFF = "Talk soon,\nThe {{businessName}} team";
+
+/* Course pitches with direct buy links. `sequenceCopyUpgrades` (applied by scripts/migrate.ts) adds the links to
+ * databases seeded before they existed, wherever the owner hasn't rewritten that paragraph. */
+const GUIDE_SELF_PACED_V1 = `**If you'd like to learn at your own pace**, our [courses]({{coursesUrl}}) take you from the basics to building real workflows, with an AI tutor inside every lesson to answer your questions as you go.`;
+const GUIDE_SELF_PACED = `${GUIDE_SELF_PACED_V1} Most people start with **[AI Essentials]({{buy_link:ai-essentials}})**; if you run a business, go straight to **[AI for Business Owners]({{buy_link:ai-for-business}})**.`;
+const ASSESSMENT_SELF_PACED_V1 = `Prefer to learn on your own? Our [courses]({{coursesUrl}}) follow the same step-by-step path, with an AI tutor in every lesson.`;
+const ASSESSMENT_SELF_PACED = `${ASSESSMENT_SELF_PACED_V1} You can [start AI Essentials today]({{buy_link:ai-essentials}}), or [AI for Business Owners]({{buy_link:ai-for-business}}) if you're bringing AI into a company.`;
+
+/** Paragraph rewrites for existing databases: `from` is replaced by `to` in that sequence step, once per `id`. */
+export const sequenceCopyUpgrades: { id: string; sequence: string; subject: string; from: string; to: string }[] = [
+  { id: "buy-links-guide", sequence: "Free Guide Nurture", subject: "Your next step with AI", from: GUIDE_SELF_PACED_V1, to: GUIDE_SELF_PACED },
+  { id: "buy-links-assessment", sequence: "Assessment Follow-up", subject: "Let's turn your AI plan into results", from: ASSESSMENT_SELF_PACED_V1, to: ASSESSMENT_SELF_PACED },
+];
 
 export const seedSequences: SeedSequence[] = [
   /* ---------------------------------------------------------------- */
@@ -135,7 +149,7 @@ ${SIGN_OFF}`,
 
 This is the last email in this series, so let me be direct about how we can help, if and when you want it.
 
-**If you'd like to learn at your own pace**, our [courses]({{coursesUrl}}) take you from the basics to building real workflows, with an AI tutor inside every lesson to answer your questions as you go.
+${GUIDE_SELF_PACED}
 
 **If you'd rather talk it through**, book a [free 30-minute strategy call]({{bookUrl}}). We'll look at where your time goes, pick the two or three places AI will help most, and map out how to get there. No pressure and no hard sell.
 
@@ -238,7 +252,7 @@ On the call we'll:
 - pick the two or three changes that will save you the most time
 - map out exactly how to make them, with or without us
 
-Prefer to learn on your own? Our [courses]({{coursesUrl}}) follow the same step-by-step path, with an AI tutor in every lesson.
+${ASSESSMENT_SELF_PACED}
 
 ${SIGN_OFF}`,
       },

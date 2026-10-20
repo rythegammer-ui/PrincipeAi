@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { AlertTriangle, ArrowRight, CalendarCheck, CalendarX, CheckCircle2, Clock, Mail, PartyPopper } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -5,7 +6,9 @@ import { z } from "zod";
 import { ButtonLink } from "@/components/ui/button";
 import { getStudent } from "@/lib/auth";
 import { PAID_UNAVAILABLE_REASON } from "@/lib/booking-service";
-import { fulfillOrder, getOrderDetails, isDuplicatePurchase, isStripeSessionId, withinClaimWindow, type OrderDetails } from "@/lib/payments";
+import { getDb, schema } from "@/db";
+import { fulfillOrder, getOrderDetails, isDuplicatePurchase, isStripeSessionId, orderIdForCheckoutSession, withinClaimWindow, type OrderDetails } from "@/lib/payments";
+import { rateLimitByIp } from "@/lib/rate-limit";
 import { getStripe, paymentIntentId } from "@/lib/stripe";
 import { formatDateTime } from "@/lib/utils";
 import { AccessLinkForm } from "../checkout-forms";
@@ -16,13 +19,36 @@ export const metadata: Metadata = { title: "Thank you", robots: { index: false, 
 type Search = { order?: string; session_id?: string };
 
 /**
+ * A Stripe Payment Link sends buyers back with only `session_id` (no order id): finds the order for that session,
+ * creating it from Stripe's copy of the session when the webhook hasn't arrived yet. The session id can't be guessed;
+ * lookups that have to ask Stripe are rate limited all the same.
+ */
+async function orderIdForSession(sessionId: string): Promise<string | null> {
+  const db = await getDb();
+  const [order] = await db.select({ id: schema.orders.id }).from(schema.orders).where(eq(schema.orders.stripeSessionId, sessionId)).limit(1);
+  if (order) return order.id;
+  const stripe = getStripe();
+  if (!stripe || !(await rateLimitByIp("checkout-session-lookup", 20, 600)).ok) return null;
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    return session.payment_link ? await orderIdForCheckoutSession(session, { create: true }) : null;
+  } catch (err) {
+    console.error("[checkout] could not look up Stripe session", err);
+    return null;
+  }
+}
+
+/**
  * Stripe redirects here after payment. When the session id matches the order we trust the URL as
  * proof of purchase: we confirm payment with Stripe (fulfilling now if the webhook hasn't arrived yet,
  * e.g. in local dev) and show the order. It is NOT proof of identity — the buyer typed the email at
  * checkout — so course access always goes through the magic link emailed to that address.
  */
 async function resolve(search: Search): Promise<{ details: OrderDetails | null; proof: boolean; processing: boolean }> {
-  const orderId = search.order;
+  let orderId = search.order;
+  if (!orderId && search.session_id && isStripeSessionId(search.session_id) && search.session_id.length <= 200) {
+    orderId = (await orderIdForSession(search.session_id)) ?? undefined;
+  }
   if (!orderId || !z.uuid().safeParse(orderId).success) return { details: null, proof: false, processing: false };
   let details = await getOrderDetails(orderId);
   if (!details) return { details: null, proof: false, processing: false };
@@ -36,7 +62,8 @@ async function resolve(search: Search): Promise<{ details: OrderDetails | null; 
     if (stripe) {
       try {
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        const sameOrder = (session.metadata?.orderId ?? session.client_reference_id) === details.order.id;
+        // Our own checkouts carry the order id; a payment-link checkout's order was made for this session.
+        const sameOrder = session.payment_link ? session.id === details.order.stripeSessionId : (session.metadata?.orderId ?? session.client_reference_id) === details.order.id;
         if (sameOrder && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
           await fulfillOrder(details.order.id, {
             stripePaymentIntentId: paymentIntentId(session.payment_intent),

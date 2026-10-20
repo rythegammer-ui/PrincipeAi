@@ -8,6 +8,9 @@ import { getDb, schema } from "@/db";
 import { assertAdmin } from "@/lib/auth";
 import { enrollInCourse } from "@/lib/courses";
 import { PENDING_ORDER_TTL_MS } from "@/lib/jobs";
+import { describeSync } from "@/lib/payment-links";
+import { syncCoursePaymentLinks, syncCoursePaymentLinksLater } from "@/lib/payments";
+import { rateLimit } from "@/lib/rate-limit";
 import { parseVideoUrl } from "@/lib/video";
 import { slugify } from "@/lib/utils";
 
@@ -220,6 +223,8 @@ export async function updateCourseAction(_prev: FormState, formData: FormData): 
     .where(eq(schema.courses.id, d.id));
   if (before.slug !== d.slug) revalidatePath(`/courses/${before.slug}`);
   await revalidateCourse(d.id);
+  // Price, title or status may have changed: the Stripe payment link follows.
+  syncCoursePaymentLinksLater();
   return { ok: true, message: "Course saved." };
 }
 
@@ -229,6 +234,7 @@ export async function toggleCoursePublishedAction(formData: FormData): Promise<v
   const db = await getDb();
   await db.update(schema.courses).set({ published: sql`not ${schema.courses.published}` }).where(eq(schema.courses.id, id));
   await revalidateCourse(id);
+  syncCoursePaymentLinksLater();
 }
 
 export async function deleteCourseAction(formData: FormData): Promise<void> {
@@ -254,9 +260,32 @@ export async function deleteCourseAction(formData: FormData): Promise<void> {
     );
   if (open > 0) redirect(`/admin/courses/${id}?error=open-checkouts`);
   await db.delete(schema.courses).where(eq(schema.courses.id, id));
+  // Its Stripe payment link stops selling.
+  syncCoursePaymentLinksLater();
   revalidatePath("/admin/courses");
   revalidatePath("/courses");
   redirect("/admin/courses?deleted=1");
+}
+
+export type PaymentLinkSyncState = { ok: true; message: string; details: string[] } | { ok: false; error: string; details?: string[] };
+
+/** Admin → Courses → "Sync with Stripe": creates or updates every paid course's Stripe payment link now. */
+export async function syncPaymentLinksAction(): Promise<PaymentLinkSyncState> {
+  const session = await assertAdmin();
+  const limit = await rateLimit(`admin-payment-links:${session.email}`, 10, 600);
+  if (!limit.ok) return { ok: false, error: "That's a lot of syncs in a few minutes. Please wait a little and try again." };
+  try {
+    const result = await syncCoursePaymentLinks();
+    if (!result) return { ok: false, error: "Stripe isn't connected. Add STRIPE_SECRET_KEY in your Vercel environment variables, then redeploy." };
+    revalidatePath("/admin/courses");
+    const details = describeSync(result);
+    if (result.errors.length) return { ok: false, error: `Synced with ${result.errors.length} problem${result.errors.length === 1 ? "" : "s"}.`, details };
+    const live = result.courses.filter((c) => c.url).length;
+    return { ok: true, message: `Payment links are up to date for ${live} course${live === 1 ? "" : "s"}.`, details };
+  } catch (err) {
+    console.error("[courses] payment-link sync failed", err);
+    return { ok: false, error: `Stripe sync failed: ${err instanceof Error ? err.message : "unknown error"}` };
+  }
 }
 
 /* ------------------------------------------------------------------ */

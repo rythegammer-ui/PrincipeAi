@@ -308,7 +308,7 @@ Rules:
 - One clear call to action per email, written as a Markdown link using a placeholder URL.
 - Never invent client stories, testimonials, statistics, results, credentials or guarantees. If an example helps, make it clearly hypothetical ("imagine…", "for example…").
 - Markdown only: paragraphs, **bold**, lists, links and > quotes. No HTML, no images, no headings larger than ###.
-- Only these placeholders, written exactly like this: {{firstName}} {{name}} {{siteUrl}} {{bookUrl}} {{coursesUrl}} {{assessmentUrl}} {{guideUrl}} {{loginUrl}} {{businessName}}. Never invent other placeholders or real URLs.
+- Only these placeholders, written exactly like this: {{firstName}} {{name}} {{siteUrl}} {{bookUrl}} {{coursesUrl}} {{assessmentUrl}} {{guideUrl}} {{loginUrl}} {{businessName}}, plus {{buy_link:<course-slug>}} (straight to checkout for one course) using only the buy-link placeholders listed with the courses. Never invent other placeholders or real URLs.
 - Start with "Hi {{firstName}}," and sign off with "Talk soon," then "The {{businessName}} team" on its own line.
 - 90 to 220 words. Subject line under 70 characters, specific and curiosity-driven, no clickbait, no emoji.
 
@@ -337,7 +337,7 @@ export async function draftStepAction(input: { sequenceId: string; index: number
   const [settings, courses, meetingTypes] = await Promise.all([
     getSettings(),
     db
-      .select({ title: schema.courses.title, subtitle: schema.courses.subtitle })
+      .select({ title: schema.courses.title, subtitle: schema.courses.subtitle, slug: schema.courses.slug, priceCents: schema.courses.priceCents })
       .from(schema.courses)
       .where(eq(schema.courses.published, true))
       .orderBy(asc(schema.courses.sortOrder)),
@@ -354,7 +354,9 @@ export async function draftStepAction(input: { sequenceId: string; index: number
   const trigger = TRIGGER_META[seq.trigger];
   const user = [
     `Business: ${settings.businessName}. ${site.description}`,
-    courses.length ? `Courses: ${courses.map((c) => `${c.title} (${c.subtitle})`).join("; ")}` : "",
+    courses.length
+      ? `Courses: ${courses.map((c) => `${c.title} (${c.subtitle})${c.priceCents > 0 ? `, buy link {{buy_link:${c.slug}}}` : ""}`).join("; ")}`
+      : "",
     meetingTypes.length ? `Calls people can book: ${meetingTypes.map((m) => `${m.name}, ${m.durationMin} min, ${m.priceCents ? "paid" : "free"}`).join("; ")}` : "",
     "",
     `Automation: "${seq.name}"${seq.description ? ` (${seq.description})` : ""}`,

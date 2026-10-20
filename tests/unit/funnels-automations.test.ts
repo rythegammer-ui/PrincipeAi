@@ -14,11 +14,13 @@ import {
   triggerLabel,
 } from "@/components/funnels/automation-utils";
 import { getDb, schema } from "@/db";
-import { seedSequences } from "@/db/seed-content/sequences";
+import { seedCourses } from "@/db/seed-content/courses";
+import { sequenceCopyUpgrades, seedSequences } from "@/db/seed-content/sequences";
 import { authorizeCron, runScheduledJobs } from "@/lib/jobs";
 
-const KNOWN = new Set<string>(PLACEHOLDERS.map((p) => p.key));
-const placeholdersIn = (text: string) => [...text.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]);
+// {{buy_link:<slug>}} is known for every paid seed course.
+const KNOWN = new Set<string>([...PLACEHOLDERS.map((p) => p.key), ...seedCourses.filter((c) => c.priceCents > 0).map((c) => `buy_link:${c.slug}`)]);
+const placeholdersIn = (text: string) => [...text.matchAll(/\{\{\s*(\w+(?::[a-z0-9-]+)?)\s*\}\}/g)].map((m) => m[1]);
 
 describe("default sequences", () => {
   const byTrigger = Object.fromEntries(seedSequences.map((s) => [s.trigger, s]));
@@ -47,12 +49,24 @@ describe("default sequences", () => {
         for (const key of [...placeholdersIn(step.subject), ...placeholdersIn(step.body)]) expect(KNOWN, `${seq.name}: ${key}`).toContain(key);
         expect(step.subject.length).toBeLessThanOrEqual(200);
         // One clear call to action: a placeholder link, or an invitation to reply.
-        expect(step.body).toMatch(/\]\(\{\{\w+\}\}|just reply to this email/i);
+        expect(step.body).toMatch(/\]\(\{\{\w+(:[a-z0-9-]+)?\}\}|just reply to this email/i);
       }
     }
     expect(byTrigger.lead_magnet.steps[0].body).toContain("{{guideUrl}}");
     expect(byTrigger.lead_magnet.steps[4].body).toContain("{{assessmentUrl}}");
     expect(byTrigger.purchase.steps[0].body).toContain("{{loginUrl}}");
+  });
+
+  it("pitches courses with direct buy links, and can upgrade copy seeded before they existed", () => {
+    expect(byTrigger.lead_magnet.steps.at(-1)?.body).toContain("{{buy_link:ai-essentials}}");
+    expect(byTrigger.quiz_completed.steps.at(-1)?.body).toContain("{{buy_link:ai-for-business}}");
+    for (const u of sequenceCopyUpgrades) {
+      const step = seedSequences.find((q) => q.name === u.sequence)?.steps.find((st) => st.subject === u.subject);
+      expect(step?.body, u.id).toContain(u.to);
+      // Rewriting the old paragraph gives today's seed copy.
+      expect(step!.body.replace(u.to, u.from).replace(u.from, u.to)).toBe(step!.body);
+      expect(u.to.startsWith(u.from)).toBe(true);
+    }
   });
 });
 

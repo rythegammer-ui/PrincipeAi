@@ -76,6 +76,9 @@ Reset the local database with `npm run db:reset-local`.
    secret into `STRIPE_WEBHOOK_SECRET`.
 5. **Redeploy**, then sign in at `/admin` and visit **Settings**: it shows which integrations are connected and walks
    you through anything missing.
+6. **Speed Insights** (optional): in the Vercel project, open **Speed Insights** and enable it. The site already includes
+   the `<SpeedInsights />` component, so real-visitor performance data starts appearing after the next deployment.
+   Private links and query strings are removed from page URLs before they're sent.
 
 ### Upgrading an existing deployment
 

@@ -9,7 +9,7 @@ import { absoluteUrl } from "@/lib/utils";
  * advice. Have it reviewed by a qualified professional for your jurisdiction (e.g. GDPR, CCPA/CPRA)
  * before relying on it, and update LAST_UPDATED whenever you change it.
  */
-const LAST_UPDATED = "October 18, 2026";
+const LAST_UPDATED = "October 20, 2026";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -37,6 +37,7 @@ If you have any questions, contact us at [${site.contactEmail}](mailto:${site.co
 
 - **Usage and analytics data** — pages you visit, buttons you click and the steps you take through our funnels (for example, starting the assessment or booking a call), along with the referring website and any campaign (UTM) tags in the link you followed.
 - **Device and technical data** — such as your IP address and browser information, used for security, rate limiting and preventing abuse.
+- **Performance data** — anonymous page-speed measurements (Core Web Vitals) collected through Vercel Speed Insights, along with the page address, browser, device type, operating system, connection speed and country. It isn't tied to you or your IP address, and we remove private links and query strings from page addresses before they're sent.
 - **Cookies** — see the Cookies section below.
 
 ## How we use your information
@@ -65,7 +66,7 @@ We **do not sell** your personal information. We share it only with service prov
 - **Anthropic** — AI features described above.
 - **Stripe** — payment processing.
 - **Resend** — sending email.
-- **Vercel** — website hosting and infrastructure, together with our database hosting provider.
+- **Vercel** — website hosting and infrastructure (including the anonymous performance measurement above), together with our database hosting provider.
 - **Video-conferencing providers** (such as Zoom or Google Meet) — if you book a call with us.
 
 We may also disclose information if required by law, to protect our rights or the safety of others, or as part of a business transfer such as a merger or acquisition.

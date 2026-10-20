@@ -24,6 +24,7 @@ funnel analytics, email automations and Claude-powered AI throughout.
 | Email | Resend REST API, every email logged to `email_log` (simulated when no key) | `src/lib/email.ts` |
 | Scheduling | Built-in availability + slots (Luxon), ICS invites | `src/lib/scheduling.ts` |
 | Cron | Vercel Cron → `/api/cron` (daily on Hobby) | `vercel.json` |
+| Performance monitoring | Vercel Speed Insights (real-user Core Web Vitals; private links and query strings stripped from URLs) | `src/components/analytics/speed-insights.tsx` |
 
 ## Directory map (who owns what)
 

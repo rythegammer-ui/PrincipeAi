@@ -6,7 +6,7 @@ import { Logo } from "@/components/ui/misc";
 import { getAdminSession } from "@/lib/auth";
 import { adminCredentials, isDemoMode, MIN_ADMIN_PASSWORD_LENGTH, MIN_AUTH_SECRET_LENGTH } from "@/lib/runtime-mode";
 import { safeRedirectPath } from "@/lib/utils";
-import { AdminLoginForm } from "./login-form";
+import { AdminLoginForm, TeamLinkForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Admin sign in", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -41,6 +41,15 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
                 </Alert>
               )}
               <AdminLoginForm next={target} defaultEmail={creds.isDefault ? creds.email : undefined} />
+              <details className="group mt-6 border-t border-zinc-100 pt-5">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg text-sm font-medium text-zinc-700 hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500">
+                  Team member? Sign in with an email link
+                  <span aria-hidden className="text-zinc-400 transition-transform group-open:rotate-45">+</span>
+                </summary>
+                <div className="mt-3">
+                  <TeamLinkForm next={target} />
+                </div>
+              </details>
             </>
           )}
         </div>

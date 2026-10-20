@@ -18,7 +18,7 @@ funnel analytics, email automations and Claude-powered AI throughout.
 | Styling | Tailwind CSS v4 (tokens in `src/app/globals.css`) + `@tailwindcss/typography` | |
 | UI kit | In-house components (no shadcn/radix) | `src/components/ui/*` |
 | Database | Postgres via Drizzle. **Local dev/demo uses embedded PGlite automatically** (no setup) | `src/db` |
-| Auth | Admin: env credentials + signed JWT cookie. Students: passwordless magic link | `src/lib/auth.ts`, `src/proxy.ts` |
+| Auth | Admin: owner from env credentials + signed JWT cookie; admin team members (`admin_members`) by magic link. Students and sales agents: passwordless magic link | `src/lib/auth.ts`, `src/lib/admin-team.ts`, `src/proxy.ts` |
 | AI | Anthropic Claude via `@anthropic-ai/sdk` (default model `claude-opus-5-5`) | `src/lib/ai.ts` |
 | Payments | Stripe Checkout (inline `price_data`), test checkout fallback; Stripe Payment Links per course for emails | `src/lib/payments.ts`, `src/lib/payment-links.ts` |
 | Email | Resend REST API, every email logged to `email_log` (simulated when no key) | `src/lib/email.ts` |
@@ -42,7 +42,10 @@ src/
     (marketing)/courses/**     catalog + sales pages              [courses]
     (marketing)/checkout/**    checkout success/test/cancel       [courses]
     (marketing)/unsubscribe/** one-click unsubscribe              [automations]
+    (marketing)/sales-team/**  sales-team landing, application, agent terms [sales]
     learn/**                   student portal                     [courses]
+    agent/**                   sales agent portal (+ /agent/login) [sales]
+    r/[code]                   agent short link → referral cookie [sales]
     buy/[slug]                 email buy link → Stripe Payment Link [courses]
     login, auth/verify         magic-link login                   [foundation]
     admin/login                admin login                        [foundation]
@@ -53,6 +56,8 @@ src/
     admin/(panel)/courses|orders/**                               [courses]
     admin/(panel)/funnels|sequences|emails|settings/**            [automations]
     admin/(panel)/conversations/**                                [ai]
+    admin/(panel)/sales/**     sales team, payouts, program, challenges [sales]
+    admin/(panel)/team/**      admin team members                  [foundation]
     api/track                  analytics beacon                   [foundation]
     api/chat, api/tutor        AI assistant + course tutor        [ai]
     api/assessment/**          AI plan streaming                  [assessment]
@@ -120,6 +125,8 @@ tests/e2e/*.spec.ts            playwright (helpers.ts, env.ts, mock-anthropic.ts
 | `payments.ts` | `createCheckout(input)`, `fulfillOrder(orderId, payment)`, `refundOrder`, `failPendingOrder(orderId)`, `checkoutMode()` | owned by **courses**. A demo deployment (in-memory database) refuses a live Stripe key (`checkoutMode()` → `"disabled"`) |
 | `payment-links.ts` | `syncPaymentLinks({db, stripe, mode, siteUrl, currency, webhook})`, `readPaymentLinks(db, mode)`, `linkMatchesCourse`, `readWebhookSecret(db, mode)` | owned by **courses**. One Stripe Product + Price + Payment Link per paid, published course, stored in `settings` (`stripePaymentLink:<mode>:<courseId>`). Synced on every production build (`scripts/migrate.ts`), from Admin → Courses, and after a course changes (`syncCoursePaymentLinksLater()` in payments.ts). Creates the Stripe webhook endpoint too when `STRIPE_WEBHOOK_SECRET` is unset. Payment-link checkouts get their order from `orderIdForCheckoutSession` (webhook, success page, reconcile job); `/buy/<slug>` redirects to the current link, and `{{buy_link:<slug>}}` in any template resolves to it. No `server-only`: the build script imports it |
 | `courses.ts` | `enrollInCourse({email,name,courseId,source,orderId})` | owned by **courses** |
+| `admin-team.ts` | `listAdminMembers()`, `addAdminMember(…)`, `removeAdminMember(id)`, `ownerEmail()`, `notifyAdminTeam(subject, markdown)` | Admins besides the owner. They sign in with an emailed link to `/admin` (`consumeLoginToken` turns a token for an `/admin…` path into a team session, only for a current member). Their cookie carries the owner's credential version (`cv`, so changing `ADMIN_PASSWORD`/`ADMIN_SESSION_VERSION` signs them out too) and their session version (`tm`), which `getAdminSession()` checks against the database: removing a member ends their sessions at once. The proxy can't read the database, so pages and actions must keep calling `requireAdmin()`/`assertAdmin()` |
+| `sales/*.ts` | `game.ts` (pure: levels, `standing`, badges, streaks, codes), `program.ts` (`getSalesProgram`/`saveSalesProgram`, settings key `salesProgram`), `referrals.ts` (`pa_agent` cookie, `claimContactForAgent`, `assignContactToAgent`), `commissions.ts` (`recordAgentSale`, `reverseAgentSale`, `agentBalances`, `recordPayout`, `addAgentAdjustment`, `voidCommission`, `awardDueChallenges`), `agents.ts` (`submitAgentApplication`, `approveAgent`, `rejectAgent`, `setAgentStatus`, `currentAgent`), `stats.ts` (dashboard, leaderboard, feed) | owned by **sales**. `?ref=CODE` (proxy) or `/r/CODE` sets `pa_agent`; `captureLead` and payment-link orders (`client_reference_id=agent_CODE`, set by `/buy`) claim the contact; `recordPurchase` calls `recordAgentSale`, `refundOrder` calls `reverseAgentSale`. Ledger rows are `held` until `available_at` (refund hold), then owed; payouts move owed rows to `paid`. Course orders only; test orders are recorded with `is_test` |
 | `booking-service.ts` | `confirmPaidBooking(bookingId)`, `sendDueBookingReminders()`, `releaseExpiredHolds()`, `paidOrderForBooking(bookingId)`, `refreshPrepTasks(meetingTypeId)`, `prepTaskDescription(details, tz)`, `ownerGoogleCalendarUrl(details)` | owned by **scheduling**; cron calls `sendDueBookingReminders` and `releaseExpiredHolds`. `paidOrderForBooking` = the paid order of a booking (refund checks) |
 
 ### Pipeline stages

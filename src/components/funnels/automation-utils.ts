@@ -297,6 +297,7 @@ export const JOB_LABELS = {
   expiredOrders: "Abandoned checkouts expired",
   rateLimits: "Old rate-limit records cleared",
   loginTokens: "Expired login links cleared",
+  salesChallenges: "Sales challenge bonuses awarded",
   paymentLinks: "Stripe payment links updated",
 } as const;
 export type JobKey = keyof typeof JOB_LABELS;

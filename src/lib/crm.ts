@@ -6,6 +6,7 @@ import { STAGES } from "@/db/schema";
 import { SCORE_RULES } from "@/components/admin/crm-utils";
 import { stopAutomations, triggerAutomations } from "@/lib/automations";
 import { notifyOwner } from "@/lib/email";
+import { claimContactFromCookie } from "@/lib/sales/referrals";
 import { getSettings } from "@/lib/settings";
 import { getVisitorContext, linkVisitorToContact, trackEvent, type FunnelEventName, type VisitorContext } from "@/lib/tracking";
 import { absoluteUrl, normalizeEmail } from "@/lib/utils";
@@ -202,6 +203,8 @@ export type CaptureLeadInput = Omit<UpsertContactInput, "visitor"> & {
 export async function captureLead(input: CaptureLeadInput): Promise<{ contact: Contact; created: boolean }> {
   const visitor = await getVisitorContext().catch(() => null);
   const { contact, created } = await upsertContact({ ...input, visitor });
+  // Came through a sales agent's link: they become that agent's customer (lib/sales/referrals.ts).
+  await claimContactFromCookie(contact.id);
   await logActivity(contact.id, input.activity.type, input.activity.title, { body: input.activity.body, meta: input.activity.meta });
   if (input.event) {
     await trackEvent({ name: input.event.name, path: input.event.path, props: input.event.props, contactId: contact.id, visitorId: visitor?.visitorId });

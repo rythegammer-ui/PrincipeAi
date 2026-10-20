@@ -14,6 +14,8 @@ import { emailBusinessName, escapeMarkdown, notifyOwner, sendEmail } from "@/lib
 import { testCheckoutAllowed } from "@/lib/integrations";
 import { PaymentLinkSyncBusyError, stripeInstallId, syncPaymentLinks, type PaymentLinkSyncResult } from "@/lib/payment-links";
 import { rateLimit } from "@/lib/rate-limit";
+import { recordAgentSale, reverseAgentSale } from "@/lib/sales/commissions";
+import { claimContactForAgent, CLIENT_REFERENCE_PREFIX } from "@/lib/sales/referrals";
 import { formatMeetingTime, getBusinessTimezone } from "@/lib/scheduling";
 import { getStripe, paymentIntentId, stripeDashboardUrl, stripeTestMode, type Stripe } from "@/lib/stripe";
 import { absoluteUrl, firstName, formatDate, formatDateTime, formatMoney, isValidEmail, normalizeEmail } from "@/lib/utils";
@@ -559,6 +561,8 @@ async function recordPurchase(order: Order): Promise<void> {
   if (order.contactId !== contact.id) {
     await db.update(schema.orders).set({ contactId: contact.id }).where(eq(schema.orders.id, order.id));
   }
+  // A customer a sales agent referred: their commission (and a "you made a sale" email). Never blocks the receipt.
+  await recordAgentSale(order, contact.id).catch((err) => console.error("[payments] agent commission failed", order.id, err));
   // They bought — stop the top-of-funnel nurture sequences.
   await stopAutomations(contact.id, "lead_magnet");
   await stopAutomations(contact.id, "quiz_completed");
@@ -843,6 +847,10 @@ async function createPaymentLinkOrder(session: Stripe.Checkout.Session): Promise
   const name = session.customer_details?.name?.trim() || null;
   const amountCents = session.amount_total ?? course?.priceCents ?? 0;
   const { contact } = await upsertContact({ email, name, source: "checkout" });
+  // Started from a sales agent's link (/buy/<course>?ref=CODE, or with their cookie): the buyer is their customer.
+  // Anyone can add a client_reference_id to a payment link, but that's no more than visiting the agent's link.
+  const ref = session.client_reference_id;
+  if (ref?.startsWith(CLIENT_REFERENCE_PREFIX)) await claimContactForAgent(contact.id, ref.slice(CLIENT_REFERENCE_PREFIX.length));
   const [row] = await db
     .insert(schema.orders)
     .values({
@@ -1000,6 +1008,8 @@ export async function refundOrder(
     const removed = await db.delete(schema.enrollments).where(eq(schema.enrollments.orderId, order.id)).returning();
     revoked = removed.length > 0;
   }
+  // The sales agent's commission on it is cancelled (or clawed back from their next payout if already paid).
+  await reverseAgentSale(order.id, opts.reason ?? "Refunded").catch((err) => console.error("[payments] agent commission reversal failed", order.id, err));
   if (order.contactId) {
     // Test payments never added to lifetime value (see recordPurchase).
     if (!order.isTest) await addLifetimeValue(order.contactId, -order.amountCents);

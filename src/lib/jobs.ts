@@ -16,6 +16,7 @@ import {
   UNDELIVERABLE_ALERT_PREFIX,
   UNDELIVERABLE_ALERT_TTL_MS,
 } from "@/lib/payments";
+import { awardDueChallenges } from "@/lib/sales/commissions";
 import { getStripe, paymentIntentId, type Stripe } from "@/lib/stripe";
 import type { JobKey } from "@/components/funnels/automation-utils";
 
@@ -226,6 +227,10 @@ const JOBS: Record<JobKey, (ctx: JobContext) => Promise<{ count: number; detail?
       .where(lt(schema.loginTokens.expiresAt, new Date(Date.now() - LOGIN_TOKEN_RETENTION_MS)))
       .returning({ hash: schema.loginTokens.tokenHash });
     return { count: rows.length };
+  },
+  // Bonuses for sales-team challenges that have ended.
+  async salesChallenges() {
+    return { count: await awardDueChallenges() };
   },
   // Last, so the clean-up jobs above always run within the cron's time limit. Catches up when a sync after a course
   // change failed (or a link was changed in the Stripe dashboard).

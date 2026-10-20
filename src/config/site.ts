@@ -15,12 +15,17 @@ export const site = {
   /** Owner's timezone — availability rules for scheduling are interpreted in this zone. */
   timezone: process.env.BUSINESS_TIMEZONE ?? "America/New_York",
   currency: "usd",
+  /** Full profile URLs (https://…). Filled ones are linked in the footer and in search-engine structured data. */
   social: {
     youtube: "",
     instagram: "",
     linkedin: "",
     x: "",
     tiktok: "",
+    threads: "",
+    facebook: "",
+    pinterest: "",
+    bluesky: "",
   },
   /** Add real client testimonials here. Sections that use them are hidden while this is empty. */
   testimonials: [] as { quote: string; name: string; role: string }[],

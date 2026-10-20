@@ -31,8 +31,10 @@ export const agentApplicationSchema = z.object({
 export type AgentApplication = z.infer<typeof agentApplicationSchema>;
 
 /**
- * Records an application (or updates a pending or rejected one) and alerts the admin team. An address that's already
- * on the team is left as it is. Callers report success either way, so the form never reveals who is an agent.
+ * Records an application and alerts the admin team. Someone declined or removed earlier can apply again (back in the
+ * queue). A pending application or an agent on the team is left exactly as it is: anyone can type any address into
+ * the form, so it never changes someone else's details. Callers report success either way, so the form never reveals
+ * who has applied or is an agent.
  */
 export async function submitAgentApplication(input: AgentApplication): Promise<"created" | "updated" | "unchanged"> {
   const db = await getDb();
@@ -56,7 +58,7 @@ export async function submitAgentApplication(input: AgentApplication): Promise<"
     const [updated] = await db
       .update(schema.salesAgents)
       .set({ ...values, status: "applied" })
-      .where(and(eq(schema.salesAgents.email, email), inArray(schema.salesAgents.status, ["applied", "rejected"])))
+      .where(and(eq(schema.salesAgents.email, email), inArray(schema.salesAgents.status, ["rejected", "removed"])))
       .returning();
     if (!updated) return "unchanged";
     agent = updated;
@@ -101,7 +103,7 @@ async function uniqueCode(agent: Pick<SalesAgent, "id" | "name">, wanted?: strin
     const code = suggestAgentCode(agent.name);
     if (!(await taken(code))) return code;
   }
-  return `AGENT${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  return `AGENT${String(Date.now()).slice(-6)}`;
 }
 
 export type AgentLinks = { home: string; short: string; courses: string };
@@ -195,7 +197,7 @@ export async function setAgentStatus(id: string, status: Extract<AgentStatus, "p
 /** Changes an agent's referral code. Old links stop working, so only do it for a good reason. */
 export async function setAgentCode(id: string, raw: string): Promise<{ ok: true; code: string } | { ok: false; error: string }> {
   const code = normalizeAgentCode(raw);
-  if (!code || !AGENT_CODE_RE.test(code)) return { ok: false, error: "Use 4–16 letters and digits." };
+  if (!code || !AGENT_CODE_RE.test(code)) return { ok: false, error: "Use 4–16 letters and digits, including at least one digit." };
   const db = await getDb();
   const [clash] = await db
     .select({ id: schema.salesAgents.id })

@@ -26,8 +26,10 @@ import {
   addAgentAdjustment,
   agentBalance,
   awardDueChallenges,
+  adjustAgentSaleForPartialRefund,
   holdAgentSaleForDispute,
   monthlySales,
+  PayoutChangedError,
   reconcileAgentSales,
   recordPayout,
   releaseAgentSaleDispute,
@@ -40,6 +42,7 @@ import {
   normalizeAgentCode,
   normalizeLevels,
   publicName,
+  sameMailbox,
   standing,
   suggestAgentCode,
   weeklyStreak,
@@ -84,6 +87,10 @@ describe("program rules (pure)", () => {
     expect(publicName("Prince")).toBe("Prince");
     expect(normalizeAgentCode(" jane27 ")).toBe("JANE27");
     expect(normalizeAgentCode("ja")).toBeNull();
+    // Other sites' ?ref= values (no digit) are never taken for a code.
+    expect(normalizeAgentCode("producthunt")).toBeNull();
+    expect(sameMailbox("Jane+promo@Gmail.com", "jane@gmail.com")).toBe(true);
+    expect(sameMailbox("jane@gmail.com", "jane@example.com")).toBe(false);
     expect(normalizeAgentCode("jane-27")).toBeNull();
     expect(suggestAgentCode("Émile Zola", () => 0.5)).toBe("MILE55");
     expect(suggestAgentCode("A", () => 0)).toBe("AGENT10");
@@ -172,9 +179,10 @@ describe("sales team", () => {
   it("takes applications quietly, and approval gives a unique referral code", async () => {
     const email = unique("apply");
     expect(await submitAgentApplication(application(email))).toBe("created");
-    expect(await submitAgentApplication(application(email))).toBe("updated");
+    // Anyone can type any address: a pending application is never changed by the form.
+    expect(await submitAgentApplication({ ...application(email, "Someone Else"), city: "Elsewhere" })).toBe("unchanged");
     const [row] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.email, email));
-    expect(row).toMatchObject({ status: "applied", code: null, state: "TX" });
+    expect(row).toMatchObject({ status: "applied", code: null, state: "TX", name: "Jane Tester", city: "Austin" });
     expect(await rejectAgent(row.id, "owner@example.com", { notify: true })).toMatchObject({ status: "rejected" });
     // Re-applying after a decline puts them back in the queue.
     expect(await submitAgentApplication(application(email))).toBe("updated");
@@ -252,7 +260,8 @@ describe("sales team", () => {
     // Refund while held: cancelled, and the sale stops counting.
     await refundOrder(first.order.id, { source: "manual", reason: "Changed their mind" });
     const [voided] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.id, first.commission.id));
-    expect(voided).toMatchObject({ status: "void", voidReason: "Changed their mind" });
+    // The agent sees a plain label, never the admin's note.
+    expect(voided).toMatchObject({ status: "void", voidReason: "Refunded" });
     expect((await monthlySales(jane.id)).thisMonth).toBe(2);
 
     // The hold passes: both are owed; a payout takes them.
@@ -302,8 +311,12 @@ describe("sales team", () => {
     expect(after.status).toBe("void");
   });
 
-  it("credits payment-link checkouts started from an agent's /buy link", async () => {
+  it("credits payment-link checkouts by their own code, whether the webhook or the success page records them", async () => {
     const jane = await newAgent();
+    const sam = await newAgent("Sam Cookie");
+    // The success page sees the buyer's cookie for another agent: the checkout's own code still decides.
+    mocks.jar.set(AGENT_COOKIE, sam.code!);
+    onTestFinished(() => mocks.jar.clear());
     const email = unique("link-buyer");
     const session = {
       id: `cs_test_${randomUUID().replace(/-/g, "")}`,
@@ -374,13 +387,16 @@ describe("sales team", () => {
   it("holds a disputed sale's commission until the dispute is resolved", async () => {
     const jane = await newAgent();
     const { order, commission } = await sale(jane);
+    // Past its hold: owed, until a chargeback is opened.
+    await db.update(schema.agentCommissions).set({ availableAt: new Date(Date.now() - DAY) }).where(eq(schema.agentCommissions.id, commission.id));
+    expect((await agentBalance(jane.id)).owedCents).toBe(commission.amountCents);
     expect(await holdAgentSaleForDispute(order.id)).toBe(true);
-    const [held] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.id, commission.id));
-    expect(held.availableAt.getTime()).toBeGreaterThan(Date.now() + 80 * DAY);
+    expect(await agentBalance(jane.id)).toMatchObject({ owedCents: 0, pendingCents: commission.amountCents });
+    expect(await recordPayout({ agentId: jane.id, by: "owner@example.com" })).toBeNull();
     expect(await releaseAgentSaleDispute(order.id)).toBe(true);
     const [released] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.id, commission.id));
-    expect(released.availableAt.getTime()).toBe(commission.availableAt.getTime());
     expect(released.note).toBeNull();
+    expect((await agentBalance(jane.id)).owedCents).toBe(commission.amountCents);
   });
 
   it("never owes or counts test payments once the site takes live payments", async () => {
@@ -395,6 +411,110 @@ describe("sales team", () => {
     expect((await agentBalance(jane.id)).owedCents).toBe(0);
     expect(await recordPayout({ agentId: jane.id, by: "owner@example.com" })).toBeNull();
     expect((await monthlySales(jane.id)).thisMonth).toBe(0);
+  });
+
+  it("never lets a form move an existing contact; a checkout through the agent's link credits an existing customer", async () => {
+    const jane = await newAgent();
+    // Someone already in the CRM (organic lead). An agent types their address into a form with her cookie: nothing.
+    const email = unique("organic");
+    const { contact } = await captureLead({ email, source: "lead_magnet", activity: { type: "optin", title: "Opt-in" } });
+    mocks.jar.set(AGENT_COOKIE, jane.code!);
+    await captureLead({ email, source: "contact_form", activity: { type: "form", title: "Form" } });
+    mocks.jar.clear();
+    expect(await db.select().from(schema.agentReferrals).where(eq(schema.agentReferrals.contactId, contact.id))).toHaveLength(0);
+
+    // The same person later buys through her link (the checkout carries her code): credited, and now her customer.
+    const [order] = await db
+      .insert(schema.orders)
+      .values({ contactId: contact.id, email, itemType: "course", courseId: course.id, description: course.title, amountCents: course.priceCents, agentCode: jane.code })
+      .returning();
+    await fulfillOrder(order.id, { isTest: true });
+    const [commission] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, order.id));
+    expect(commission.agentId).toBe(jane.id);
+    const [ref] = await db.select().from(schema.agentReferrals).where(eq(schema.agentReferrals.contactId, contact.id));
+    expect(ref.agentId).toBe(jane.id);
+
+    // A plus-address of the agent's own is still her.
+    const [own] = await db
+      .insert(schema.orders)
+      .values({ email: jane.email.replace("@", "+x@"), itemType: "course", courseId: course.id, description: course.title, amountCents: course.priceCents, agentCode: jane.code })
+      .returning();
+    await fulfillOrder(own.id, { isTest: true });
+    expect(await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, own.id))).toHaveLength(0);
+  });
+
+  it("pays nothing for sales made while an agent was paused, even after they're resumed", async () => {
+    const jane = await newAgent();
+    await setAgentStatus(jane.id, "paused", "owner@example.com");
+    const paused = await sale(jane);
+    expect(paused.commission).toBeUndefined();
+    await approveAgent(jane.id, "owner@example.com");
+    expect((await reconcileAgentSales()).credited).toBe(0);
+    expect(await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, paused.order.id))).toHaveLength(0);
+    // Sales after the resume count again.
+    expect((await sale(jane)).commission).toBeDefined();
+  });
+
+  it("stops counting a paid sale that's refunded, and handles partial refunds", async () => {
+    const jane = await newAgent();
+    const a = await sale(jane);
+    const b = await sale(jane);
+    await db.update(schema.agentCommissions).set({ availableAt: new Date(Date.now() - DAY) }).where(eq(schema.agentCommissions.agentId, jane.id));
+    await recordPayout({ agentId: jane.id, by: "owner@example.com" });
+    expect((await monthlySales(jane.id)).thisMonth).toBe(2);
+    await refundOrder(a.order.id, { source: "manual" });
+    expect((await monthlySales(jane.id)).thisMonth).toBe(1);
+
+    // Partial refund of a paid sale: the difference comes back; then the rest of it is refunded.
+    const half = Math.floor(course.priceCents / 2);
+    expect(await adjustAgentSaleForPartialRefund(b.order.id, half)).toBe(true);
+    expect(await adjustAgentSaleForPartialRefund(b.order.id, half)).toBe(false);
+    const owedBack = b.commission.amountCents - commissionFor(course.priceCents - half, b.commission.rateBps);
+    expect((await agentBalance(jane.id)).owedCents).toBe(-a.commission.amountCents - owedBack);
+    await refundOrder(b.order.id, { source: "stripe", reason: "Refunded in Stripe" });
+    expect((await agentBalance(jane.id)).owedCents).toBe(-a.commission.amountCents - b.commission.amountCents);
+
+    // Partial refund while unpaid: the commission itself shrinks.
+    const c3 = await sale(jane);
+    expect(await adjustAgentSaleForPartialRefund(c3.order.id, 1000)).toBe(true);
+    const [shrunk] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.id, c3.commission.id));
+    expect(shrunk).toMatchObject({ saleCents: course.priceCents - 1000, amountCents: commissionFor(course.priceCents - 1000, c3.commission.rateBps) });
+  });
+
+  it("records a payout only for the amount the admin saw", async () => {
+    const jane = await newAgent();
+    const { commission } = await sale(jane);
+    await db.update(schema.agentCommissions).set({ availableAt: new Date(Date.now() - DAY) }).where(eq(schema.agentCommissions.id, commission.id));
+    await expect(recordPayout({ agentId: jane.id, by: "owner@example.com", expectedCents: commission.amountCents - 1 })).rejects.toBeInstanceOf(PayoutChangedError);
+    expect((await agentBalance(jane.id)).owedCents).toBe(commission.amountCents);
+    expect((await recordPayout({ agentId: jane.id, by: "owner@example.com", expectedCents: commission.amountCents }))?.amountCents).toBe(commission.amountCents);
+  });
+
+  it("keeps an assignment to a paused agent, and lets an agent's own link renew a lapsed claim", async () => {
+    const jane = await newAgent();
+    const sam = await newAgent("Sam Fourth");
+    const { contact } = await captureLead({ email: unique("kept"), source: "manual", activity: { type: "note", title: "Added" } });
+    await assignContactToAgent(contact.id, jane.id);
+    await setAgentStatus(jane.id, "paused", "owner@example.com");
+    expect(await claimContactForAgent(contact.id, sam.code)).toBe(false);
+
+    const program = await getSalesProgram();
+    mocks.jar.set(AGENT_COOKIE, sam.code!);
+    const { contact: lapsed } = await captureLead({ email: unique("lapsed"), source: "lead_magnet", activity: { type: "optin", title: "Opt-in" } });
+    mocks.jar.clear();
+    const old = new Date(Date.now() - (program.attributionDays + 5) * DAY);
+    await db.update(schema.agentReferrals).set({ createdAt: old }).where(eq(schema.agentReferrals.contactId, lapsed.id));
+    expect(await claimContactForAgent(lapsed.id, sam.code)).toBe(true);
+    const [renewed] = await db.select().from(schema.agentReferrals).where(eq(schema.agentReferrals.contactId, lapsed.id));
+    expect(renewed.createdAt.getTime()).toBeGreaterThan(old.getTime());
+  });
+
+  it("lets a removed agent apply again, back into the queue", async () => {
+    const jane = await newAgent();
+    await setAgentStatus(jane.id, "removed", "owner@example.com");
+    expect(await submitAgentApplication(application(jane.email))).toBe("updated");
+    const [row] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.id, jane.id));
+    expect(row.status).toBe("applied");
   });
 
   it("builds the agent dashboard and leaderboard", async () => {

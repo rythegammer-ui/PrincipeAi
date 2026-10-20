@@ -16,8 +16,8 @@ import { verifySessionToken, type SessionRole } from "@/lib/session-token";
 
 const YEAR = 60 * 60 * 24 * 365;
 const ATTRIBUTION_TTL = 60 * 60 * 24 * 90;
-/** Same format as lib/sales/game.ts normalizeAgentCode (no imports there that the proxy can't use, but keep it tiny). */
-const AGENT_CODE = /^[A-Za-z0-9]{4,16}$/;
+/** Same format as lib/sales/game.ts AGENT_CODE_RE (at least one digit, so other sites' ?ref=newsletter values are ignored). */
+const AGENT_CODE = /^(?=.*\d)[A-Za-z0-9]{4,16}$/;
 
 async function hasValidSession(token: string | undefined, role: SessionRole): Promise<boolean> {
   return (await verifySessionToken(token, role)) !== null;

@@ -2,7 +2,7 @@
 
 import type { LeadFormState } from "@/components/marketing/lead-options";
 import { fieldErrorsOf, isSpam } from "@/lib/leads";
-import { rateLimitByIp } from "@/lib/rate-limit";
+import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
 import { agentApplicationSchema, submitAgentApplication } from "@/lib/sales/agents";
 import { getSalesProgram } from "@/lib/sales/program";
 import { firstName } from "@/lib/utils";
@@ -35,7 +35,9 @@ export async function applyToSalesTeamAction(_prev: SalesApplyState, formData: F
   if (!program.applicationsOpen) return { error: "Applications are closed for now. Please check back soon.", values };
 
   const limit = await rateLimitByIp("sales-apply", 5, 60 * 60);
-  if (!limit.ok) return { error: "Too many applications from your connection. Please wait a little while and try again.", values };
+  // Per address too, so nobody can keep re-sending applications (and the emails they trigger) for someone else's email.
+  const emailLimit = await rateLimit(`sales-apply:${parsed.data.email}`, 3, 24 * 60 * 60);
+  if (!limit.ok || !emailLimit.ok) return { error: "Too many applications from your connection. Please wait a little while and try again.", values };
 
   try {
     await submitAgentApplication(parsed.data);

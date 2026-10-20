@@ -5,7 +5,7 @@ import { logActivity } from "@/lib/crm";
 import { escapeMarkdown, notifyOwner } from "@/lib/email";
 import { markEnvWebhookVerified, readWebhookSecret } from "@/lib/payment-links";
 import { failPendingOrder, fulfillOrder, orderIdForCheckoutSession, refundOrder, refundUndeliveredOrder } from "@/lib/payments";
-import { holdAgentSaleForDispute, releaseAgentSaleDispute } from "@/lib/sales/commissions";
+import { adjustAgentSaleForPartialRefund, holdAgentSaleForDispute, releaseAgentSaleDispute } from "@/lib/sales/commissions";
 import { getStripe, paymentIntentId, stripeDashboardUrl, stripeTestMode, type Stripe } from "@/lib/stripe";
 import { formatDate, formatMoney } from "@/lib/utils";
 
@@ -129,10 +129,16 @@ async function handleRefund(stripe: Stripe, charge: Stripe.Charge) {
   if (charge.refunded) {
     // Full refund: mark refunded and remove the course access bought with this order.
     await refundOrder(order.id, { revokeAccess: true, source: "stripe", reason: "Refunded in Stripe" });
-  } else if (charge.amount_refunded > 0 && order.contactId) {
-    await logActivity(order.contactId, "note", `Partial refund issued for ${order.description}`, {
-      meta: { orderId: order.id, amountRefundedCents: charge.amount_refunded, refund: true, source: "stripe" },
-    });
+  } else if (charge.amount_refunded > 0) {
+    // The sales agent's commission is recalculated on what the customer kept (amount_refunded is the running total).
+    await adjustAgentSaleForPartialRefund(order.id, charge.amount_refunded).catch((err) =>
+      console.error("[stripe] agent commission adjustment failed", order.id, err),
+    );
+    if (order.contactId) {
+      await logActivity(order.contactId, "note", `Partial refund issued for ${order.description}`, {
+        meta: { orderId: order.id, amountRefundedCents: charge.amount_refunded, refund: true, source: "stripe" },
+      });
+    }
   }
 }
 

@@ -58,24 +58,27 @@ export async function leaderboard(from: Date, to: Date, opts: { forAdmin?: boole
   }));
 }
 
-/** How many past months each agent finished #1 (this month doesn't count until it's over). */
+/**
+ * How many past months each agent finished with the most sales on the team (this month doesn't count until it's
+ * over). Ties: more sales volume, then whoever got there first, as on the leaderboard.
+ */
 export async function monthsWon(tz: string, now = new Date()): Promise<Map<string, number>> {
   const db = await getDb();
   const rows = await db
     .select({ agentId: c.agentId, at: c.createdAt, sale: c.saleCents })
     .from(c)
     .where(and(countingSale(), lt(c.createdAt, monthBounds(now, tz).thisMonth)));
-  const byMonth = new Map<string, Map<string, { n: number; v: number }>>();
+  const byMonth = new Map<string, Map<string, { n: number; v: number; last: number }>>();
   for (const r of rows) {
     const key = monthKey(r.at, tz);
     const month = byMonth.get(key) ?? new Map();
-    const t = month.get(r.agentId) ?? { n: 0, v: 0 };
-    month.set(r.agentId, { n: t.n + 1, v: t.v + r.sale });
+    const t = month.get(r.agentId) ?? { n: 0, v: 0, last: 0 };
+    month.set(r.agentId, { n: t.n + 1, v: t.v + r.sale, last: Math.max(t.last, r.at.getTime()) });
     byMonth.set(key, month);
   }
   const wins = new Map<string, number>();
   for (const month of byMonth.values()) {
-    const [winner] = [...month].sort((a, b) => b[1].n - a[1].n || b[1].v - a[1].v);
+    const [winner] = [...month].sort((a, b) => b[1].n - a[1].n || b[1].v - a[1].v || a[1].last - b[1].last);
     if (winner) wins.set(winner[0], (wins.get(winner[0]) ?? 0) + 1);
   }
   return wins;

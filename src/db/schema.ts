@@ -498,6 +498,11 @@ export const orders = pgTable(
     stripePaymentIntentId: text("stripe_payment_intent_id"),
     /** true when completed through the built-in test checkout (no Stripe keys configured). */
     isTest: boolean("is_test").notNull().default(false),
+    /**
+     * Referral code of the sales agent whose link this checkout came through (the buyer's pa_agent cookie, or a payment
+     * link's client_reference_id), checked against the agents when the sale is credited. See lib/sales/commissions.ts.
+     */
+    agentCode: text("agent_code"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     ...timestamps,
   },

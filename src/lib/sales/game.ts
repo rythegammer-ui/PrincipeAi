@@ -111,7 +111,11 @@ export function publicName(name: string): string {
 /* Referral codes                                                      */
 /* ------------------------------------------------------------------ */
 
-export const AGENT_CODE_RE = /^[A-Z0-9]{4,16}$/;
+/**
+ * 4–16 letters and digits, with at least one digit (generated codes end in two), so everyday `?ref=` values other
+ * sites add to links (ref=producthunt, ref=newsletter) are never taken for an agent's code and never replace one.
+ */
+export const AGENT_CODE_RE = /^(?=.*\d)[A-Z0-9]{4,16}$/;
 
 /** A referral code from a link or form (case-insensitive), or null when it can't be one. */
 export function normalizeAgentCode(raw: string | null | undefined): string | null {
@@ -124,6 +128,18 @@ export function suggestAgentCode(name: string, random: () => number = Math.rando
   const letters = (name.trim().split(/\s+/)[0] ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 8);
   const base = letters.length >= 2 ? letters : "AGENT";
   return `${base}${String(Math.floor(random() * 90) + 10)}`;
+}
+
+/**
+ * True when two addresses reach the same inbox, ignoring case and a "+tag" (jane+x@gmail.com is jane@gmail.com):
+ * an agent's own purchase never earns them commission.
+ */
+export function sameMailbox(a: string, b: string): boolean {
+  const canon = (email: string) => {
+    const [local = "", domain = ""] = email.trim().toLowerCase().split("@");
+    return `${local.split("+")[0]}@${domain}`;
+  };
+  return canon(a) === canon(b);
 }
 
 /* ------------------------------------------------------------------ */
@@ -234,7 +250,7 @@ export function computeBadges(input: BadgeInput): Badge[] {
     { key: "club-10k", name: "$10K Club", description: "Sell $10,000 in total.", icon: "star", ...cash(volume, 1_000_000) },
     { key: "half-century", name: "Half Century", description: "Make 50 sales in total.", icon: "target", ...count(total, 50) },
     { key: "challenger", name: "Challenge Winner", description: "Hit the target in a sales challenge.", icon: "trophy", ...count(input.challengesWon, 1) },
-    { key: "champion", name: "Monthly Champion", description: "Finish a month #1 on the leaderboard.", icon: "crown", ...count(input.monthsWon, 1) },
+    { key: "champion", name: "Monthly Champion", description: "Finish a month with the most sales on the team.", icon: "crown", ...count(input.monthsWon, 1) },
   );
   return badges;
 }

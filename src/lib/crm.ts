@@ -6,7 +6,7 @@ import { STAGES } from "@/db/schema";
 import { SCORE_RULES } from "@/components/admin/crm-utils";
 import { stopAutomations, triggerAutomations } from "@/lib/automations";
 import { notifyOwner } from "@/lib/email";
-import { claimContactFromCookie } from "@/lib/sales/referrals";
+import { claimNewContactFromCookie } from "@/lib/sales/referrals";
 import { getSettings } from "@/lib/settings";
 import { getVisitorContext, linkVisitorToContact, trackEvent, type FunnelEventName, type VisitorContext } from "@/lib/tracking";
 import { absoluteUrl, normalizeEmail } from "@/lib/utils";
@@ -183,6 +183,8 @@ export async function upsertContact(input: UpsertContactInput): Promise<{ contac
 }
 
 export type CaptureLeadInput = Omit<UpsertContactInput, "visitor"> & {
+  /** False when the visitor's referral cookie must not claim a new contact (payment-link orders carry their own code). */
+  claimReferral?: boolean;
   /** Timeline entry describing what the lead just did. */
   activity: { type: ActivityType; title: string; body?: string | null; meta?: Record<string, unknown> };
   /** Funnel event to record (e.g. "optin"). */
@@ -203,8 +205,8 @@ export type CaptureLeadInput = Omit<UpsertContactInput, "visitor"> & {
 export async function captureLead(input: CaptureLeadInput): Promise<{ contact: Contact; created: boolean }> {
   const visitor = await getVisitorContext().catch(() => null);
   const { contact, created } = await upsertContact({ ...input, visitor });
-  // Came through a sales agent's link: they become that agent's customer (lib/sales/referrals.ts).
-  await claimContactFromCookie(contact.id);
+  // A new contact who came through a sales agent's link becomes that agent's customer (lib/sales/referrals.ts).
+  if (created && input.claimReferral !== false) await claimNewContactFromCookie(contact.id);
   await logActivity(contact.id, input.activity.type, input.activity.title, { body: input.activity.body, meta: input.activity.meta });
   if (input.event) {
     await trackEvent({ name: input.event.name, path: input.event.path, props: input.event.props, contactId: contact.id, visitorId: visitor?.visitorId });

@@ -10,6 +10,7 @@ import {
   fulfillOrder,
   paymentLinkSyncBlocked,
   recoverPaymentLinkCheckouts,
+  refundUndeliveredOrder,
   sessionFullyRefunded,
   syncCoursePaymentLinks,
   UNDELIVERABLE_ALERT_PREFIX,
@@ -85,14 +86,6 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
   const db = await getDb();
   const o = schema.orders;
   const now = Date.now();
-  // Payment-link checkouts have no order until their webhook arrives, so they're found through Stripe instead.
-  let links = { checked: 0, recovered: 0, failed: 0 };
-  try {
-    links = await recoverPaymentLinkCheckouts(stripe, new Date(now - STRIPE_RECONCILE_WINDOW_MS));
-  } catch (err) {
-    links.failed++;
-    console.error("[jobs] payment-link checkout recovery failed", err);
-  }
   // createCheckout stores the session id seconds after creating the order, and this job only looks at orders
   // older than STRIPE_RECONCILE_AFTER_MS, so `updated_at` that close to `created_at` means "never checked".
   const lookPriority = sql`case
@@ -121,8 +114,10 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
     let closedByStripe = false;
     try {
       const session = await stripe.checkout.sessions.retrieve(order.sessionId, { expand: ["payment_intent", "payment_intent.latest_charge"] });
-      // A payment refunded in full before anything was delivered has nothing left to deliver.
-      if ((session.payment_status === "paid" || session.payment_status === "no_payment_required") && !sessionFullyRefunded(session)) {
+      // A payment refunded in full before anything was delivered: nothing to deliver, now or later.
+      if (sessionFullyRefunded(session)) {
+        if (await refundUndeliveredOrder(order.id)) continue;
+      } else if (session.payment_status === "paid" || session.payment_status === "no_payment_required") {
         await fulfillOrder(order.id, {
           stripePaymentIntentId: paymentIntentId(session.payment_intent),
           isTest: session.livemode === false,
@@ -155,6 +150,14 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
       console.error("[jobs] Stripe reconcile could not update order", order.id, err);
     }
   }
+  // Then payment-link checkouts, which have no order until their webhook arrives, so they're found through Stripe.
+  let links = { checked: 0, recovered: 0, failed: 0 };
+  try {
+    links = await recoverPaymentLinkCheckouts(stripe, new Date(now - STRIPE_RECONCILE_WINDOW_MS));
+  } catch (err) {
+    links.failed++;
+    console.error("[jobs] payment-link checkout recovery failed", err);
+  }
   const notes = [
     `${candidates.length} checked`,
     links.checked ? `${links.checked} payment-link checkout${links.checked === 1 ? "" : "s"} checked` : "",
@@ -165,7 +168,13 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
   return { count: recovered + links.recovered, detail: notes.filter(Boolean).join(", ") };
 }
 
-const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = {
+/** When this run of the jobs started (the cron route has 60 seconds for all of them). */
+type JobContext = { startedAt: number };
+
+/** Time the jobs may use in total: the cron's maxDuration (60s) less a margin to answer. */
+const JOBS_BUDGET_MS = 50_000;
+
+const JOBS: Record<JobKey, (ctx: JobContext) => Promise<{ count: number; detail?: string }>> = {
   async automations() {
     // Default emails written before a feature existed get their update before anything is sent (once).
     let upgraded = 0;
@@ -220,12 +229,14 @@ const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = 
   },
   // Last, so the clean-up jobs above always run within the cron's time limit. Catches up when a sync after a course
   // change failed (or a link was changed in the Stripe dashboard).
-  async paymentLinks() {
+  async paymentLinks({ startedAt }) {
     const blocked = paymentLinkSyncBlocked();
     if (blocked) return { count: 0, detail: blocked };
+    const left = startedAt + JOBS_BUDGET_MS - Date.now();
+    if (left < 15_000) return { count: 0, detail: "skipped: not enough time left in this run" };
     let result;
     try {
-      result = await syncCoursePaymentLinks({ lockWaitMs: 5_000, signal: AbortSignal.timeout(30_000) });
+      result = await syncCoursePaymentLinks({ lockWaitMs: 5_000, signal: AbortSignal.timeout(left - 5_000) });
     } catch (err) {
       if (err instanceof PaymentLinkSyncBusyError) return { count: 0, detail: "another sync was running" };
       throw err;
@@ -244,7 +255,7 @@ export async function runScheduledJobs(): Promise<JobsSummary> {
   for (const key of Object.keys(JOBS) as JobKey[]) {
     const t0 = Date.now();
     try {
-      const r = await JOBS[key]();
+      const r = await JOBS[key]({ startedAt: started });
       jobs[key] = { ok: true, count: r.count, ...(r.detail ? { detail: r.detail } : {}), ms: Date.now() - t0 };
     } catch (err) {
       console.error(`[jobs] ${key} failed`, err);

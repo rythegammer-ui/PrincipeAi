@@ -7,6 +7,7 @@ import { recipientTemplateVars } from "@/lib/automations";
 import { emailHasCourse, getCourseWithCurriculum } from "@/lib/courses";
 import { defaultTemplateVars, fillTemplate } from "@/lib/email";
 import { paymentLinkKey, PAYMENT_LINK_SOURCE, stripeInstallId, type StoredPaymentLink } from "@/lib/payment-links";
+import { getStripe } from "@/lib/stripe";
 
 const SECRET = "whsec_test_payment_link_secret";
 const STORED_SECRET = "whsec_test_stored_by_the_sync";
@@ -189,12 +190,77 @@ describe("Stripe payment-link checkouts", () => {
     expect(await emailHasCourse(email, course.id)).toBe(false);
   });
 
+  it("never delivers a checkout refunded before its order was claimed or even created", async () => {
+    const stripe = getStripe()!;
+    // A payment-link sale whose checkout event failed before the order existed; then a full refund arrives.
+    const email = `refunded-first-${randomUUID().slice(0, 8)}@example.com`;
+    const session = linkSession(email);
+    const list = vi.spyOn(stripe.checkout.sessions, "list").mockResolvedValue({ data: [session] } as never);
+    try {
+      const refund = { id: "ch_first", object: "charge", payment_intent: session.payment_intent, refunded: true, amount_refunded: course.priceCents };
+      expect((await POST(signedRequest({ type: "charge.refunded", data: { object: refund } }))).status).toBe(200);
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ payment_intent: session.payment_intent }));
+      expect((await ordersFor(session.id))[0]).toMatchObject({ status: "refunded", courseId: course.id });
+      // Stripe's retry of the checkout event: nothing is delivered.
+      expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: session } }))).status).toBe(200);
+      expect((await ordersFor(session.id))[0].status).toBe("refunded");
+      expect(await emailHasCourse(email, course.id)).toBe(false);
+
+      // The site's own checkout: its order has no PaymentIntent until it's first claimed.
+      const db = await getDb();
+      const ownSessionId = newSessionId();
+      const [own] = await db
+        .insert(schema.orders)
+        .values({ email: `own-${randomUUID().slice(0, 8)}@example.com`, itemType: "course", courseId: course.id, description: course.title, amountCents: course.priceCents, stripeSessionId: ownSessionId })
+        .returning();
+      const ownSession = { ...linkSession(own.email), id: ownSessionId, payment_link: null, metadata: { orderId: own.id }, client_reference_id: own.id };
+      list.mockResolvedValue({ data: [ownSession] } as never);
+      const ownRefund = { id: "ch_own", object: "charge", payment_intent: ownSession.payment_intent, refunded: true, amount_refunded: course.priceCents };
+      expect((await POST(signedRequest({ type: "charge.refunded", data: { object: ownRefund } }))).status).toBe(200);
+      expect((await db.select().from(schema.orders).where(eq(schema.orders.id, own.id)))[0].status).toBe("refunded");
+      expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: ownSession } }))).status).toBe(200);
+      expect((await db.select().from(schema.orders).where(eq(schema.orders.id, own.id)))[0].status).toBe("refunded");
+    } finally {
+      list.mockRestore();
+    }
+  });
+
+  it("hands over from the site's own webhook endpoint to the owner's once that one delivers", async () => {
+    const db = await getDb();
+    const OLD = "whsec_test_site_made_endpoint";
+    await db
+      .insert(schema.settings)
+      .values({ key: "stripeWebhook:test", value: { v: 1, endpointId: "we_site", url: "https://principe.example/api/stripe/webhook", secret: OLD, createdAt: new Date().toISOString() } })
+      .onConflictDoUpdate({ target: schema.settings.key, set: { value: { v: 1, endpointId: "we_site", url: "https://principe.example/api/stripe/webhook", secret: OLD, createdAt: new Date().toISOString() } } });
+    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:envVerified:live"));
+    // Until STRIPE_WEBHOOK_SECRET's endpoint has delivered an event, the site's endpoint is still handled.
+    const before = linkSession(`handover-1-${randomUUID().slice(0, 8)}@example.com`);
+    expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: before } }, OLD))).status).toBe(200);
+    expect((await ordersFor(before.id))[0].status).toBe("paid");
+    // The owner's endpoint delivers (signed with STRIPE_WEBHOOK_SECRET)...
+    const viaOwner = linkSession(`handover-2-${randomUUID().slice(0, 8)}@example.com`);
+    expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: viaOwner } }))).status).toBe(200);
+    // ...so the site endpoint's copy of an event is acknowledged without being handled a second time.
+    const copy = linkSession(`handover-3-${randomUUID().slice(0, 8)}@example.com`);
+    const res = await POST(signedRequest({ type: "checkout.session.completed", data: { object: copy } }, OLD));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ignored: "replaced endpoint" });
+    expect(await ordersFor(copy.id)).toHaveLength(0);
+    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:test"));
+    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:envVerified:live"));
+  });
+
   it("accepts events signed with the secret of the endpoint the sync created", async () => {
     const db = await getDb();
     await db
       .insert(schema.settings)
       .values({ key: "stripeWebhook:test", value: { v: 1, endpointId: "we_auto", url: "https://principe.example/api/stripe/webhook", secret: STORED_SECRET, createdAt: new Date().toISOString() } })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: schema.settings.key,
+        set: { value: { v: 1, endpointId: "we_auto", url: "https://principe.example/api/stripe/webhook", secret: STORED_SECRET, createdAt: new Date().toISOString() } },
+      });
+    // STRIPE_WEBHOOK_SECRET's endpoint hasn't delivered anything yet, so the site's endpoint is still handled.
+    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:envVerified:live"));
     const session = linkSession(`stored-${randomUUID().slice(0, 8)}@example.com`);
     // Both the env secret and the stored one are accepted; anything else isn't.
     expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: session } }, STORED_SECRET))).status).toBe(200);

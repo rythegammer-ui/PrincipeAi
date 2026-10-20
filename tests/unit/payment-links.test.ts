@@ -8,6 +8,7 @@ import {
   paymentLinkKey,
   PAYMENT_LINK_SOURCE,
   productIdFor,
+  markEnvWebhookVerified,
   readLastSync,
   readPaymentLinks,
   readWebhookSecret,
@@ -279,7 +280,12 @@ describe("Stripe payment-link sync", () => {
     expect((await sync({ webhook: { ...OWNER_SECRET, removeReplaced: false } })).webhook?.status).toBe("env");
     expect(fake.endpoints.has(ours.id as string)).toBe(true);
     expect(await readWebhookSecret(db, "test")).toBe(ourSecret);
-    // On the live site: the site's own endpoint goes, so events aren't handled twice.
+    // On the live site, but STRIPE_WEBHOOK_SECRET's endpoint hasn't delivered anything yet (it may be wrong, or in
+    // the other mode): the site keeps its own endpoint rather than be left with none.
+    expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("env");
+    expect(fake.endpoints.has(ours.id as string)).toBe(true);
+    // Once it has, the site's own endpoint goes, so events aren't handled twice.
+    await markEnvWebhookVerified(db, "test", OWNER_SECRET.envSecret);
     expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("env");
     expect(fake.endpoints.has(ours.id as string)).toBe(false);
     expect(await readWebhookSecret(db, "test")).toBeNull();
@@ -310,6 +316,17 @@ describe("Stripe payment-link sync", () => {
     expect((await readPaymentLinks(db, "test")).get(course.id)?.paymentLinkId).toBe(link.paymentLinkId);
     // Restamped with the new install id.
     expect(fake.links.get(link.paymentLinkId)?.metadata.install).toBe(newInstall);
+
+    // A copy of this database (same course ids) returning buyers somewhere else, e.g. a local one: not ours.
+    const copy = await fake.stripe.paymentLinks.create({
+      line_items: [{ price: link.priceId, quantity: 1 }],
+      metadata: { source: PAYMENT_LINK_SOURCE, install: "a-local-copy", courseId: course.id, courseSlug: course.slug, priceId: link.priceId },
+      after_completion: { type: "redirect", redirect: { url: "http://localhost:3000/checkout/success?session_id={CHECKOUT_SESSION_ID}" } },
+    });
+    const again = await sync();
+    expect(again.retired).toBe(0);
+    expect(fake.links.get(copy.id)?.active).toBe(true);
+    expect(fake.links.get(copy.id)?.metadata.install).toBe("a-local-copy");
   });
 
   it("never runs two syncs at once, even when one outlives its lease", async () => {

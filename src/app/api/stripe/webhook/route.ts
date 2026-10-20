@@ -1,10 +1,17 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Order } from "@/db/schema";
 import { logActivity } from "@/lib/crm";
 import { escapeMarkdown, notifyOwner } from "@/lib/email";
-import { readWebhookSecret } from "@/lib/payment-links";
-import { failPendingOrder, fulfillOrder, orderIdForCheckoutSession, refundOrder } from "@/lib/payments";
+import { envWebhookVerified, markEnvWebhookVerified, readWebhookSecret, type StripeMode } from "@/lib/payment-links";
+import {
+  failPendingOrder,
+  fulfillOrder,
+  orderIdForCheckoutSession,
+  refundOrder,
+  refundUndeliveredOrder,
+  syncCoursePaymentLinksLater,
+} from "@/lib/payments";
 import { getStripe, paymentIntentId, stripeDashboardUrl, stripeTestMode, type Stripe } from "@/lib/stripe";
 import { formatDate, formatMoney } from "@/lib/utils";
 
@@ -20,29 +27,42 @@ import { formatDate, formatMoney } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 /** Signing secrets to accept: STRIPE_WEBHOOK_SECRET, and the endpoint the payment-link sync created. */
-async function webhookSecrets(): Promise<string[]> {
-  const secrets: string[] = [];
-  const env = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  if (env) secrets.push(env);
+async function webhookSecrets(): Promise<{ env: string | null; stored: string | null }> {
+  const env = process.env.STRIPE_WEBHOOK_SECRET?.trim() || null;
+  let stored: string | null = null;
   try {
-    const stored = await readWebhookSecret(await getDb(), stripeTestMode() ? "test" : "live");
-    if (stored && stored !== env) secrets.push(stored);
+    stored = await readWebhookSecret(await getDb(), stripeTestMode() ? "test" : "live");
   } catch (err) {
     // No database: only the env secret can be checked.
     console.error("[stripe] could not read the stored webhook secret", err);
   }
-  return secrets;
+  return { env, stored: stored && stored !== env ? stored : null };
 }
 
-function verifiedEvent(stripe: Stripe, body: string, signature: string, secrets: string[]): Stripe.Event | null {
+function verifiedEvent(stripe: Stripe, body: string, signature: string, secrets: (string | null)[]): { event: Stripe.Event; secret: string } | null {
   for (const secret of secrets) {
+    if (!secret) continue;
     try {
-      return stripe.webhooks.constructEvent(body, signature, secret);
+      return { event: stripe.webhooks.constructEvent(body, signature, secret), secret };
     } catch {
       // Not signed with this secret: try the next one.
     }
   }
   return null;
+}
+
+/**
+ * A charge refunded in full whose order wasn't found by its PaymentIntent: the order hasn't been claimed yet (the
+ * site's own checkout stores the PaymentIntent on its first claim) or, for a payment link, doesn't exist yet. Finds
+ * it through the Checkout Session and marks it refunded, so a later retry of the checkout event can't deliver it.
+ */
+async function stopRefundedCheckout(stripe: Stripe, charge: Stripe.Charge) {
+  const pi = paymentIntentId(charge.payment_intent);
+  if (!pi) return;
+  const [session] = (await stripe.checkout.sessions.list({ payment_intent: pi, limit: 1 })).data;
+  if (!session || session.status !== "complete") return;
+  const orderId = await orderIdForCheckoutSession(session, { create: true });
+  if (orderId) await refundUndeliveredOrder(orderId);
 }
 
 /** Moves a still-pending order to `status`; returns the order when it changed (null for duplicates/late events). */
@@ -65,25 +85,15 @@ async function orderForPayment(value: string | Stripe.PaymentIntent | null): Pro
   return order ?? null;
 }
 
-async function handleRefund(charge: Stripe.Charge) {
+async function handleRefund(stripe: Stripe, charge: Stripe.Charge) {
   const order = await orderForPayment(charge.payment_intent);
-  if (!order) return;
-  if (charge.refunded && (order.status === "pending" || order.status === "expired")) {
-    // Refunded before it was delivered (e.g. the checkout event failed and Stripe hadn't retried yet): nothing to
-    // take back, but a later retry of the checkout event, or the success page, must not deliver it now.
-    const db = await getDb();
-    const [stopped] = await db
-      .update(schema.orders)
-      .set({ status: "refunded" })
-      .where(and(eq(schema.orders.id, order.id), inArray(schema.orders.status, ["pending", "expired"])))
-      .returning({ id: schema.orders.id });
-    if (stopped && order.contactId) {
-      await logActivity(order.contactId, "note", `Refunded ${order.description} before it was delivered`, {
-        meta: { orderId: order.id, amountCents: order.amountCents, refund: true, source: "stripe", accessRevoked: false },
-      });
-    }
-    if (stopped) return;
+  if (!order) {
+    if (charge.refunded) await stopRefundedCheckout(stripe, charge);
+    return;
   }
+  // Refunded before it was delivered (e.g. the checkout event failed and Stripe hadn't retried yet): nothing to take
+  // back, but a later retry of the checkout event, or the success page, must not deliver it now.
+  if (charge.refunded && (order.status === "pending" || order.status === "expired") && (await refundUndeliveredOrder(order.id))) return;
   if (charge.refunded) {
     // Full refund: mark refunded and remove the course access bought with this order.
     await refundOrder(order.id, { revokeAccess: true, source: "stripe", reason: "Refunded in Stripe" });
@@ -135,8 +145,8 @@ async function handleDispute(dispute: Stripe.Dispute, closed: boolean) {
 
 export async function POST(request: Request) {
   const stripe = getStripe();
-  const secrets = stripe ? await webhookSecrets() : [];
-  if (!stripe || secrets.length === 0) {
+  const secrets = stripe ? await webhookSecrets() : { env: null, stored: null };
+  if (!stripe || (!secrets.env && !secrets.stored)) {
     return Response.json({ error: "Stripe webhooks are not configured" }, { status: 400 });
   }
 
@@ -144,10 +154,21 @@ export async function POST(request: Request) {
   if (!signature) return Response.json({ error: "Missing Stripe-Signature header" }, { status: 400 });
 
   const body = await request.text();
-  const event = verifiedEvent(stripe, body, signature, secrets);
-  if (!event) {
+  const verified = verifiedEvent(stripe, body, signature, [secrets.env, secrets.stored]);
+  if (!verified) {
     console.warn("[stripe] webhook signature verification failed");
     return Response.json({ error: "Invalid signature" }, { status: 400 });
+  }
+  const { event } = verified;
+  const eventMode: StripeMode = event.livemode ? "live" : "test";
+  if (secrets.env && verified.secret === secrets.env) {
+    // STRIPE_WEBHOOK_SECRET's endpoint works: from now on it replaces the endpoint the site made (if any).
+    await markEnvWebhookVerified(await getDb(), eventMode, secrets.env).catch((err) => console.error("[stripe] could not record the webhook check", err));
+  } else if (secrets.env && (await envWebhookVerified(await getDb(), eventMode, secrets.env).catch(() => false))) {
+    // The site's old endpoint, replaced by STRIPE_WEBHOOK_SECRET's: Stripe sends that one the same event, so this copy
+    // is acknowledged without handling it twice, and the old endpoint is removed.
+    syncCoursePaymentLinksLater();
+    return Response.json({ received: true, ignored: "replaced endpoint" });
   }
 
   try {
@@ -182,7 +203,7 @@ export async function POST(request: Request) {
         break;
       }
       case "charge.refunded":
-        await handleRefund(event.data.object);
+        await handleRefund(stripe, event.data.object);
         break;
       case "charge.dispute.created":
         await handleDispute(event.data.object, false);

@@ -7,7 +7,17 @@ import { ButtonLink } from "@/components/ui/button";
 import { getStudent } from "@/lib/auth";
 import { PAID_UNAVAILABLE_REASON } from "@/lib/booking-service";
 import { getDb, schema } from "@/db";
-import { fulfillOrder, getOrderDetails, isDuplicatePurchase, isStripeSessionId, orderIdForCheckoutSession, withinClaimWindow, type OrderDetails } from "@/lib/payments";
+import {
+  fulfillOrder,
+  getOrderDetails,
+  isDuplicatePurchase,
+  isStripeSessionId,
+  orderIdForCheckoutSession,
+  refundUndeliveredOrder,
+  sessionFullyRefunded,
+  withinClaimWindow,
+  type OrderDetails,
+} from "@/lib/payments";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { getStripe, paymentIntentId } from "@/lib/stripe";
 import { formatDateTime } from "@/lib/utils";
@@ -62,10 +72,14 @@ async function resolve(search: Search): Promise<{ details: OrderDetails | null; 
     const stripe = getStripe();
     if (stripe) {
       try {
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent", "payment_intent.latest_charge"] });
         // Our own checkouts carry the order id; a payment-link checkout's order was made for this session.
         const sameOrder = session.payment_link ? session.id === details.order.stripeSessionId : (session.metadata?.orderId ?? session.client_reference_id) === details.order.id;
-        if (sameOrder && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
+        if (sameOrder && sessionFullyRefunded(session)) {
+          // Refunded in Stripe before it was delivered (the refund webhook may not have arrived yet).
+          await refundUndeliveredOrder(details.order.id);
+          details = (await getOrderDetails(details.order.id)) ?? details;
+        } else if (sameOrder && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
           await fulfillOrder(details.order.id, {
             stripePaymentIntentId: paymentIntentId(session.payment_intent),
             isTest: session.livemode === false,

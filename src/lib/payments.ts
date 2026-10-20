@@ -769,7 +769,7 @@ export async function syncCoursePaymentLinks(opts: { lockWaitMs?: number; signal
 /** Runs syncCoursePaymentLinks after the response (call it after a course's price, status or details change). */
 export function syncCoursePaymentLinksLater(): void {
   if (paymentLinkSyncBlocked()) return;
-  after(async () => {
+  const run = async () => {
     try {
       const result = await syncCoursePaymentLinks({ lockWaitMs: 15_000 });
       if (result?.errors.length) console.error("[payments] payment-link sync problems", result.errors);
@@ -778,7 +778,13 @@ export function syncCoursePaymentLinksLater(): void {
       if (err instanceof PaymentLinkSyncBusyError) console.info("[payments]", err.message);
       else console.error("[payments] payment-link sync failed", err);
     }
-  });
+  };
+  try {
+    after(run);
+  } catch {
+    // Outside a request (a script or a test): just start it.
+    void run();
+  }
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -876,6 +882,27 @@ async function createPaymentLinkOrder(session: Stripe.Checkout.Session): Promise
   return row.id;
 }
 
+/**
+ * Marks an order that was never delivered (pending or expired) refunded, because its payment was refunded in full in
+ * Stripe first: a retried checkout event, the success page or the reconcile job then can't deliver it. Returns
+ * whether it changed.
+ */
+export async function refundUndeliveredOrder(orderId: string): Promise<boolean> {
+  const db = await getDb();
+  const [order] = await db
+    .update(schema.orders)
+    .set({ status: "refunded" })
+    .where(and(eq(schema.orders.id, orderId), inArray(schema.orders.status, ["pending", "expired"])))
+    .returning();
+  if (!order) return false;
+  if (order.contactId) {
+    await logActivity(order.contactId, "note", `Refunded ${order.description} before it was delivered`, {
+      meta: { orderId: order.id, amountCents: order.amountCents, refund: true, source: "stripe", accessRevoked: false },
+    });
+  }
+  return true;
+}
+
 /** True when a session's payment was refunded in full (needs `payment_intent.latest_charge` expanded to tell). */
 export function sessionFullyRefunded(session: Stripe.Checkout.Session): boolean {
   const pi = session.payment_intent;
@@ -891,7 +918,7 @@ export function sessionFullyRefunded(session: Stripe.Checkout.Session): boolean 
 export async function recoverPaymentLinkCheckouts(stripe: Stripe, since: Date): Promise<{ checked: number; recovered: number; failed: number }> {
   const sessions = await stripe.checkout.sessions
     .list({ status: "complete", created: { gte: Math.floor(since.getTime() / 1000) }, limit: 100, expand: ["data.payment_intent.latest_charge"] })
-    .autoPagingToArray({ limit: 1000 });
+    .autoPagingToArray({ limit: 300 });
   const db = await getDb();
   let checked = 0;
   let recovered = 0;
@@ -906,8 +933,11 @@ export async function recoverPaymentLinkCheckouts(stripe: Stripe, since: Date): 
         .where(eq(schema.orders.stripeSessionId, session.id))
         .limit(1);
       if (existing && existing.status !== "pending" && existing.status !== "expired") continue;
-      // Refunded before the webhook (or this job) caught up: there's nothing to deliver.
-      if (sessionFullyRefunded(session)) continue;
+      // Refunded before the webhook (or this job) caught up: there's nothing to deliver, and nothing may deliver it later.
+      if (sessionFullyRefunded(session)) {
+        if (existing) await refundUndeliveredOrder(existing.id);
+        continue;
+      }
       const orderId = existing?.id ?? (await orderIdForCheckoutSession(session, { create: true }));
       if (orderId && (session.payment_status === "paid" || session.payment_status === "no_payment_required")) {
         await fulfillOrder(orderId, {

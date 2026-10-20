@@ -71,6 +71,7 @@ export function PaymentLinksPanel({
             disabled={pending}
             onClick={() =>
               start(async () => {
+                setResult(null);
                 try {
                   setResult(await syncPaymentLinksAction());
                 } catch {
@@ -84,9 +85,9 @@ export function PaymentLinksPanel({
         )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {/* Announces the wait; the result Alert below announces itself. */}
+        {/* The one announcer for screen readers (the result Alert below is silent), so every sync is read out once. */}
         <p role="status" aria-live="polite" className="sr-only">
-          {pending ? "Syncing with Stripe…" : ""}
+          {pending ? "Syncing with Stripe…" : result ? (result.ok ? result.message : result.error) : ""}
         </p>
         {stripe === "missing" && (
           <Alert tone="info">Connect Stripe (Settings → Integrations) to create payment links. Until then, the buy links below open each course&apos;s sales page.</Alert>
@@ -109,7 +110,7 @@ export function PaymentLinksPanel({
           </Alert>
         )}
         {result && (
-          <Alert tone={result.ok ? "success" : "error"} title={result.ok ? result.message : result.error}>
+          <Alert tone={result.ok ? "success" : "error"} title={result.ok ? result.message : result.error} role="none">
             {result.details && result.details.length > 0 && (
               <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs break-all">
                 {result.details.map((line, i) => (

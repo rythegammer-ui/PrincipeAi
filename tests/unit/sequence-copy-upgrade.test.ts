@@ -74,15 +74,25 @@ describe("default email copy upgrades", () => {
     expect((await db.select().from(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY)))).toHaveLength(0);
     await db.update(schema.courses).set({ published: true }).where(eq(schema.courses.slug, "ai-for-business"));
 
-    // The owner saved the guide email (any edit), and added a line to the assessment paragraph.
-    await ownerSaves(db, guideStep.id, oldGuide);
+    // The owner edited the guide email elsewhere, and added a line to the assessment paragraph.
+    await ownerSaves(db, guideStep.id, `${oldGuide}\n\nP.S. Reply any time.`);
     await setBody(db, assessmentStep.id, oldAssessment.replace(assessment.from, `${assessment.from} Use code SAVE10.`));
     expect(await upgradeSequenceCopy()).toBe(0);
-    expect((await stepFor(db, guide.sequence, guide.subject)).body).toBe(oldGuide);
+    expect((await stepFor(db, guide.sequence, guide.subject)).body).toBe(`${oldGuide}\n\nP.S. Reply any time.`);
     expect((await stepFor(db, assessment.sequence, assessment.subject)).body).toContain("Use code SAVE10.");
     expect((await stepFor(db, assessment.sequence, assessment.subject)).body).not.toContain(assessment.to);
     const done = await db.select().from(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY));
     expect(done[0].value).toEqual(sequenceCopyUpgrades.map((u) => u.id));
+  });
+
+  it("still upgrades an email whose only change was a reordering of the sequence", async () => {
+    await db.delete(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY));
+    const guideStep = await stepFor(db, guide.sequence, guide.subject);
+    const seededGuide = seedSequences.find((q) => q.name === guide.sequence)!.steps.find((st) => st.subject === guide.subject)!.body;
+    // Exactly as the older version seeded it, but its updated_at moved (another email was moved or deleted).
+    await ownerSaves(db, guideStep.id, seededGuide.replace(guide.to, guide.from));
+    expect(await upgradeSequenceCopy()).toBeGreaterThanOrEqual(1);
+    expect((await stepFor(db, guide.sequence, guide.subject)).body).toBe(seededGuide);
   });
 
   it("only records the upgrades for a database seeded with the new copy", async () => {

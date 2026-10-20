@@ -19,7 +19,7 @@
  * No "server-only": the build script imports this. Callers pass the database and the Stripe client.
  * OWNER: courses & payments.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, like, lt, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import Stripe from "stripe";
@@ -143,6 +143,25 @@ async function readWebhook(db: DB, mode: StripeMode): Promise<StoredWebhook | nu
 /** Signing secret of the webhook endpoint the sync created for `mode`, if any. */
 export async function readWebhookSecret(db: DB, mode: StripeMode): Promise<string | null> {
   return (await readWebhook(db, mode))?.secret ?? null;
+}
+
+/* Proof that STRIPE_WEBHOOK_SECRET's endpoint works: the webhook route records (a fingerprint of) the secret once an
+ * event of that mode verifies with it. Until then the site keeps its own endpoint, so a wrong or wrong-mode secret
+ * never leaves the site without webhooks; after that the route ignores the old endpoint's copies of each event. */
+const ENV_VERIFIED_PREFIX = "stripeWebhook:envVerified:";
+
+function secretFingerprint(secret: string): string {
+  return createHash("sha256").update(secret).digest("hex").slice(0, 24);
+}
+
+export async function envWebhookVerified(db: DB, mode: StripeMode, secret: string): Promise<boolean> {
+  const [row] = await db.select({ value: schema.settings.value }).from(schema.settings).where(eq(schema.settings.key, `${ENV_VERIFIED_PREFIX}${mode}`)).limit(1);
+  return (row?.value as { fingerprint?: unknown } | undefined)?.fingerprint === secretFingerprint(secret);
+}
+
+export async function markEnvWebhookVerified(db: DB, mode: StripeMode, secret: string): Promise<void> {
+  if (await envWebhookVerified(db, mode, secret)) return;
+  await upsertSetting(db, `${ENV_VERIFIED_PREFIX}${mode}`, { fingerprint: secretFingerprint(secret), at: new Date().toISOString() });
 }
 
 type LinkCourse = { published: boolean; priceCents: number };
@@ -405,7 +424,11 @@ async function runSync(input: SyncInput, token: string): Promise<PaymentLinkSync
   const linksByCourse = new Map<string, Stripe.PaymentLink[]>();
   for (const link of all) {
     const meta = link.metadata;
-    if (meta?.source !== PAYMENT_LINK_SOURCE || !meta.courseId || (meta.install !== install && !courseIds.has(meta.courseId))) continue;
+    if (meta?.source !== PAYMENT_LINK_SOURCE || !meta.courseId) continue;
+    // Another install's link counts as ours only for one of our courses that returns buyers to this same site (a
+    // restored database), not to a copy's (e.g. a local one at http://localhost).
+    const sameSite = link.after_completion?.type === "redirect" && link.after_completion.redirect?.url === redirectUrl;
+    if (meta.install !== install && !(courseIds.has(meta.courseId) && sameSite)) continue;
     const list = linksByCourse.get(link.metadata.courseId) ?? [];
     list.push(link);
     linksByCourse.set(link.metadata.courseId, list);
@@ -554,6 +577,9 @@ async function ensureWebhookEndpoint(
     // No endpoint of ours, or the owner put our own endpoint's secret in STRIPE_WEBHOOK_SECRET: nothing to remove.
     if (!stored || stored.secret === options.envSecret) return { status: "env" };
     if (!options.removeReplaced) return { status: "env", detail: "The site's own endpoint is removed by the next sync on the live site" };
+    if (!(await envWebhookVerified(db, mode, options.envSecret))) {
+      return { status: "env", detail: "The site's own endpoint is kept until STRIPE_WEBHOOK_SECRET's endpoint delivers its first event" };
+    }
     try {
       await stripe.webhookEndpoints.del(stored.endpointId);
     } catch (err) {

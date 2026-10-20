@@ -194,6 +194,14 @@ describe("Stripe checkout reconcile job", () => {
     const orders = await db.select().from(schema.orders).where(eq(schema.orders.email, email));
     expect(orders).toHaveLength(1);
     expect(orders[0]).toMatchObject({ status: "paid", stripeSessionId: sessionId, courseId, isTest: true, amountCents: priceCents });
+    // A site checkout paid, then refunded in full before the webhook (or this job) delivered it: marked refunded.
+    const early = await checkout(2 * HOUR, 2_000, {
+      status: "complete",
+      payment_status: "paid",
+      payment_intent: { id: `pi_${randomUUID().slice(0, 12)}`, object: "payment_intent", status: "succeeded", latest_charge: { id: "ch_x", object: "charge", refunded: true } } as never,
+    });
+    await runScheduledJobs();
+    expect((await reload([early])).get(early.id)?.status).toBe("refunded");
     for (const other of [ownCheckout, foreignLink, refunded]) {
       expect(await db.select().from(schema.orders).where(eq(schema.orders.stripeSessionId, other.id))).toHaveLength(0);
     }

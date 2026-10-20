@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, count, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { SequenceTrigger } from "@/db/schema";
-import { sequenceCopyUpgrades } from "@/db/seed-content/sequences";
+import { seedSequences, sequenceCopyUpgrades } from "@/db/seed-content/sequences";
 import { buyLinkPattern, defaultTemplateVars, emailBusinessName, escapeMarkdown, fillTemplate, sendEmail, type TemplateVars } from "@/lib/email";
 import { firstName } from "@/lib/utils";
 
@@ -60,8 +60,10 @@ export async function upgradeSequenceCopy(): Promise<number> {
       .from(schema.sequenceSteps)
       .innerJoin(schema.emailSequences, eq(schema.emailSequences.id, schema.sequenceSteps.sequenceId))
       .where(and(eq(schema.emailSequences.name, u.sequence), eq(schema.sequenceSteps.subject, u.subject)));
+    // The step exactly as the version before this upgrade seeded it (reordering emails bumps updated_at without an edit).
+    const seeded = seedSequences.find((q) => q.name === u.sequence)?.steps.find((st) => st.subject === u.subject)?.body.replace(u.to, u.from);
     for (const step of steps) {
-      const untouched = step.updatedAt.getTime() - step.createdAt.getTime() < 1000;
+      const untouched = step.updatedAt.getTime() - step.createdAt.getTime() < 1000 || step.body === seeded;
       const at = step.body.indexOf(u.from);
       const wholeParagraph = at >= 0 && (at === 0 || step.body[at - 1] === "\n") && /^(\n|$)/.test(step.body.slice(at + u.from.length));
       if (!untouched || !wholeParagraph || step.body.includes(u.to)) continue;

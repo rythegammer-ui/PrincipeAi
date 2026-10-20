@@ -8,7 +8,7 @@
  *   npx tsx scripts/course-kit/build.ts                               all courses
  *   npx tsx scripts/course-kit/build.ts --course ai-essentials        one course
  *   npx tsx scripts/course-kit/build.ts --licensee "Jane Doe"         personalised copy → deliverables/dist/licensed/
- *   npx tsx scripts/course-kit/build.ts --site-url https://principe.ai
+ *   npx tsx scripts/course-kit/build.ts --site-url https://example.com   links to another domain
  *
  * Needs Chromium for Playwright (PLAYWRIGHT_CHROMIUM_EXECUTABLE to use a specific one) and, for page numbers on the
  * contents pages, `pdftotext` (poppler-utils).
@@ -22,8 +22,8 @@ import { buildCourseBook, buildScriptsBook } from "./book";
 import { allSeedCourses, DELIVERABLES, loadCourse, loadVideoLinks, loadVideoScripts, type KitCourse } from "./content";
 import { writeZip } from "./zip";
 
-/** The live site until a custom domain is connected; override with --site-url or NEXT_PUBLIC_SITE_URL. */
-const DEFAULT_SITE_URL = "https://principeai.vercel.app";
+/** The live site; override with --site-url or NEXT_PUBLIC_SITE_URL. */
+const DEFAULT_SITE_URL = "https://principeai.com";
 
 function args() {
   const out: { course?: string; licensee?: string; siteUrl?: string } = {};

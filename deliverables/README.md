@@ -68,14 +68,13 @@ Rebuild after changing lessons, quizzes, scripts, video links or the site addres
 npm install
 npx tsx scripts/course-kit/build.ts                          # all three courses
 npx tsx scripts/course-kit/build.ts --course ai-for-business  # just one
-npx tsx scripts/course-kit/build.ts --site-url https://principe.ai   # once you have a custom domain
+npx tsx scripts/course-kit/build.ts --site-url https://example.com  # if the site moves to another domain
 ```
 
 The build needs Playwright's Chromium (`npx playwright install chromium`, or set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a
 Chrome/Chromium binary) and, for page numbers on the contents pages, `pdftotext` from poppler (`brew install poppler` or
 `apt install poppler-utils`). Without `pdftotext` the books still build, just without page numbers in the contents. Links
-in the app and books point to `https://principeai.vercel.app` until you pass `--site-url` (or set
-`NEXT_PUBLIC_SITE_URL`).
+in the app and books point to `https://principeai.com` unless you pass `--site-url` (or set `NEXT_PUBLIC_SITE_URL`).
 
 **Where the content comes from:** lessons are read from the course files in `src/db/seed-content/`, the same text the
 website was seeded with. If you edit a lesson in **Admin → Courses** on the live site, make the same edit in the seed

@@ -11,6 +11,7 @@ import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
 import { requireAdmin } from "@/lib/auth";
+import { emailMailingAddress } from "@/lib/email";
 import { integrations } from "@/lib/integrations";
 
 export const metadata: Metadata = { title: "Email Automations" };
@@ -42,7 +43,7 @@ const fmt = (v: number) => v.toLocaleString("en-US");
 export default async function SequencesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireAdmin();
   const sp = await searchParams;
-  const [rows, status] = await Promise.all([listSequences(), Promise.resolve(integrations())]);
+  const [rows, status, mailingAddress] = await Promise.all([listSequences(), Promise.resolve(integrations()), emailMailingAddress()]);
   const totals = rows.reduce((t, r) => ({ inProgress: t.inProgress + r.inProgress, sent: t.sent + r.sent }), { inProgress: 0, sent: 0 });
 
   return (
@@ -64,6 +65,14 @@ export default async function SequencesPage({ searchParams }: { searchParams: Pr
       {sp.deleted === "1" && (
         <Alert tone="success" className="mb-4">
           Automation deleted.
+        </Alert>
+      )}
+      {!mailingAddress && (
+        <Alert tone="warning" className="mb-4" title="Add your mailing address">
+          US law (the CAN-SPAM Act) requires your postal address in every marketing email. Your automation emails don&apos;t include one until you add it.{" "}
+          <Link href="/admin/settings#s-mailingAddress" className="font-medium underline">
+            Add it in Settings
+          </Link>
         </Alert>
       )}
       {!status.email && (

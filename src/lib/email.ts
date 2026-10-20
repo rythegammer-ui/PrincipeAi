@@ -5,7 +5,7 @@ import type { EmailStatus } from "@/db/schema";
 import { site } from "@/config/site";
 import { absoluteUrl } from "@/lib/utils";
 
-/** Kinds that are marketing (respect unsubscribe + include unsubscribe link). */
+/** Kinds that are marketing (respect unsubscribe + include the unsubscribe link and the business's postal address). */
 const MARKETING_KINDS = new Set(["sequence", "broadcast", "nurture"]);
 
 const escapeHtml = (s: string) =>
@@ -67,9 +67,37 @@ export async function emailBusinessName(): Promise<string> {
   }
 }
 
-/** Wraps body HTML in the branded email layout. */
-export function emailLayout(bodyHtml: string, opts: { preheader?: string; unsubscribeUrl?: string } = {}): string {
+/**
+ * The postal address marketing emails carry in their footer (Admin → Settings → Mailing address), required by the
+ * US CAN-SPAM Act. "" when it isn't set or can't be read.
+ */
+export async function emailMailingAddress(): Promise<string> {
+  try {
+    const { getSettings } = await import("@/lib/settings");
+    return (await getSettings()).mailingAddress.trim();
+  } catch (err) {
+    console.error("[email] couldn't read the mailing address", err);
+    return "";
+  }
+}
+
+/** Escaped address lines joined with <br> (blank lines dropped). */
+function mailingAddressHtml(address: string): string {
+  return address
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map(escapeHtml)
+    .join("<br>");
+}
+
+/**
+ * Wraps body HTML in the branded email layout. Pass `mailingAddress` and `unsubscribeUrl` for marketing emails: the
+ * footer then shows the postal address above the unsubscribe link.
+ */
+export function emailLayout(bodyHtml: string, opts: { preheader?: string; unsubscribeUrl?: string; mailingAddress?: string } = {}): string {
   const year = new Date().getFullYear();
+  const address = opts.mailingAddress ? mailingAddressHtml(opts.mailingAddress) : "";
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(site.name)}</title></head>
 <body style="margin:0;padding:0;background:#f4f4f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2330;">
@@ -85,7 +113,7 @@ ${bodyHtml}
 </td></tr>
 <tr><td style="padding:20px 32px;border-top:1px solid #eeeef3;font-size:12px;line-height:1.6;color:#8a8fa3;">
 © ${year} ${escapeHtml(site.company)} · <a href="${absoluteUrl("/")}" style="color:#8a8fa3;">${escapeHtml(site.name)}</a>
-${opts.unsubscribeUrl ? `<br><a href="${opts.unsubscribeUrl}" style="color:#8a8fa3;">Unsubscribe</a> from these emails.` : ""}
+${address ? `<br>${address}\n` : ""}${opts.unsubscribeUrl ? `<br><a href="${opts.unsubscribeUrl}" style="color:#8a8fa3;">Unsubscribe</a> from these emails.` : ""}
 </td></tr>
 </table>
 </td></tr></table>
@@ -138,8 +166,10 @@ export async function sendEmail(input: SendEmailInput): Promise<{ status: EmailS
   // Footer link → confirmation page. Header → RFC 8058 one-click endpoint (Gmail/Yahoo "Unsubscribe" button).
   const unsubscribeUrl = token ? absoluteUrl(`/unsubscribe/${token}`) : undefined;
   const oneClickUrl = token ? absoluteUrl(`/api/unsubscribe/${token}`) : undefined;
+  // Marketing emails keep sending without an address (the owner is warned in Admin → Settings until it is set).
+  const mailingAddress = isMarketing ? await emailMailingAddress() : undefined;
   const inner = input.markdown !== undefined ? markdownToEmailHtml(input.markdown) : (input.html ?? "");
-  const html = emailLayout(inner, { preheader: input.preheader, unsubscribeUrl });
+  const html = emailLayout(inner, { preheader: input.preheader, unsubscribeUrl, mailingAddress });
 
   let status: EmailStatus = "simulated";
   let providerId: string | undefined;

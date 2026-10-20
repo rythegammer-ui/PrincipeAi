@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Order } from "@/db/schema";
 import { logActivity } from "@/lib/crm";
@@ -46,18 +46,32 @@ function verifiedEvent(stripe: Stripe, body: string, signature: string, secrets:
 }
 
 /* Each Stripe event is handled once: it reaches every endpoint (the site's own and STRIPE_WEBHOOK_SECRET's while both
- * exist), and Stripe may deliver one twice. The marker lives in rate_limits, kept two days (jobs.ts rateLimits), and
- * is dropped if handling fails so Stripe's retry runs it. */
+ * exist), and Stripe may deliver one twice. A marker row in rate_limits (kept two days, jobs.ts rateLimits) is `count`
+ * 0 while the event is being handled and 1 once it was. It's dropped if handling fails so Stripe's retry runs it, and
+ * one left "in progress" by a function that died part-way is taken over after EVENT_LEASE_MS. */
 const EVENT_KEY = "stripe-event:";
+const EVENT_LEASE_MS = 5 * 60_000;
 
-async function claimEvent(eventId: string): Promise<boolean> {
+async function claimEvent(eventId: string): Promise<"new" | "done" | "busy"> {
   const db = await getDb();
-  const rows = await db
-    .insert(schema.rateLimits)
-    .values({ key: `${EVENT_KEY}${eventId}`, count: 1, windowStart: new Date() })
-    .onConflictDoNothing()
-    .returning({ key: schema.rateLimits.key });
-  return rows.length > 0;
+  const key = `${EVENT_KEY}${eventId}`;
+  const rl = schema.rateLimits;
+  const [inserted] = await db.insert(rl).values({ key, count: 0, windowStart: new Date() }).onConflictDoNothing().returning({ key: rl.key });
+  if (inserted) return "new";
+  const [takenOver] = await db
+    .update(rl)
+    .set({ windowStart: new Date() })
+    .where(and(eq(rl.key, key), eq(rl.count, 0), lt(rl.windowStart, new Date(Date.now() - EVENT_LEASE_MS))))
+    .returning({ key: rl.key });
+  if (takenOver) return "new";
+  const [row] = await db.select({ count: rl.count }).from(rl).where(eq(rl.key, key)).limit(1);
+  // Gone meanwhile (its handler failed and released it): Stripe's retry will run it.
+  return row?.count === 1 ? "done" : "busy";
+}
+
+async function finishEvent(eventId: string): Promise<void> {
+  const db = await getDb();
+  await db.update(schema.rateLimits).set({ count: 1 }).where(eq(schema.rateLimits.key, `${EVENT_KEY}${eventId}`));
 }
 
 async function releaseEvent(eventId: string): Promise<void> {
@@ -184,7 +198,10 @@ export async function POST(request: Request) {
     );
   }
   try {
-    if (!(await claimEvent(event.id))) return Response.json({ received: true, duplicate: true });
+    const claim = await claimEvent(event.id);
+    if (claim === "done") return Response.json({ received: true, duplicate: true });
+    // Another delivery of it is being handled right now: Stripe retries this one later (and then sees it done).
+    if (claim === "busy") return Response.json({ error: "Event is being handled" }, { status: 409 });
   } catch (err) {
     console.error(`[stripe] could not record ${event.id}`, err);
     return Response.json({ error: "Webhook handler failed" }, { status: 500 });
@@ -241,5 +258,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 
+  await finishEvent(event.id).catch((err) => console.error("[stripe] could not mark event handled", event.id, err));
   return Response.json({ received: true });
 }

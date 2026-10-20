@@ -247,6 +247,23 @@ describe("Stripe payment-link checkouts", () => {
     await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:test"));
   });
 
+  it("takes over an event whose handler died part-way, but not one still being handled", async () => {
+    const db = await getDb();
+    const email = `stuck-${randomUUID().slice(0, 8)}@example.com`;
+    const session = linkSession(email);
+    const eventId = `evt_${randomUUID()}`;
+    const payload = JSON.stringify({ id: eventId, object: "event", api_version: null, created: Math.floor(Date.now() / 1000), livemode: true, type: "checkout.session.completed", data: { object: session } });
+    // Another delivery is being handled right now: Stripe is asked to retry this one later.
+    await db.insert(schema.rateLimits).values({ key: `stripe-event:${eventId}`, count: 0, windowStart: new Date() });
+    expect((await POST(signedPayload(payload, SECRET))).status).toBe(409);
+    // That handler died (e.g. a timeout) without finishing: after the lease, the retry handles the event.
+    await db.update(schema.rateLimits).set({ windowStart: new Date(Date.now() - 10 * 60_000) }).where(eq(schema.rateLimits.key, `stripe-event:${eventId}`));
+    expect((await POST(signedPayload(payload, SECRET))).status).toBe(200);
+    expect((await ordersFor(session.id))[0].status).toBe("paid");
+    // Handled: later copies are acknowledged as duplicates.
+    expect(await (await POST(signedPayload(payload, SECRET))).json()).toMatchObject({ duplicate: true });
+  });
+
   it("lets Stripe's retry of a failed event run it again", async () => {
     const email = `retry-${randomUUID().slice(0, 8)}@example.com`;
     // Paid for a course that no longer exists: handling fails (500) each time, so it isn't marked handled.

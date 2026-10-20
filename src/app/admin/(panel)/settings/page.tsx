@@ -208,7 +208,9 @@ function integrationItems(live: boolean, autoWebhook: boolean): IntegrationItem[
 export default async function SettingsPage() {
   await requireAdmin();
   const settings = await getSettings();
-  const autoWebhook = Boolean(await readWebhookSecret(await getDb(), stripeTestMode() ? "test" : "live").catch(() => null));
+  const autoWebhook = await getDb()
+    .then((db) => readWebhookSecret(db, stripeTestMode() ? "test" : "live"))
+    .then(Boolean, () => false);
   const timezones = groupTimezones(supportedTimezones());
   const live = isLiveDeployment(process.env.NODE_ENV, integrations().demoMode);
 

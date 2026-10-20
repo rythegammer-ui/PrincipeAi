@@ -240,16 +240,15 @@ describe("Stripe payment-link sync", () => {
 
   it("creates its own webhook endpoint once, and stays out of the way of one set up by hand", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
+    const url = `${SITE}/api/stripe/webhook`;
     // Local addresses can't receive webhooks.
     expect((await sync({ siteUrl: "http://localhost:3000", webhook: NO_ENV_SECRET })).webhook?.status).toBe("skipped");
-    // STRIPE_WEBHOOK_SECRET already set: nothing to do.
-    expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("env");
     expect(fake.created.endpoints).toBe(0);
 
     const first = await sync({ webhook: NO_ENV_SECRET });
     expect(first.webhook?.status).toBe("created");
     const [endpoint] = [...fake.endpoints.values()];
-    expect(endpoint).toMatchObject({ url: `${SITE}/api/stripe/webhook`, enabled_events: STRIPE_WEBHOOK_EVENTS });
+    expect(endpoint).toMatchObject({ url, enabled_events: STRIPE_WEBHOOK_EVENTS });
     expect(await readWebhookSecret(db, "test")).toBe(`whsec_${endpoint.id as string}_secret`);
     expect(await readWebhookSecret(db, "live")).toBeNull();
 
@@ -260,35 +259,44 @@ describe("Stripe payment-link sync", () => {
     expect(fake.endpoints.get(endpoint.id as string)?.enabled_events).toEqual(STRIPE_WEBHOOK_EVENTS);
     expect(fake.created.endpoints).toBe(1);
 
-    // A different site address with an endpoint the owner made by hand: left alone, and the owner is told why.
+    // A different site address with an endpoint the owner made by hand: left alone, and reported with what to do.
     fake.endpoints.set("we_manual", { id: "we_manual", url: "https://other.example/api/stripe/webhook", status: "enabled", metadata: {}, enabled_events: ["*"] });
     await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:test"));
     const manual = await sync({ siteUrl: "https://other.example", webhook: NO_ENV_SECRET });
     expect(manual.webhook?.status).toBe("unmanaged");
-    // Webhooks can't be verified until the owner acts, so it's reported as a problem.
     expect(manual.errors.join(" ")).toMatch(/STRIPE_WEBHOOK_SECRET/);
     expect(fake.endpoints.has("we_manual")).toBe(true);
-
-    // Back on our own address, then STRIPE_WEBHOOK_SECRET is added.
+    // Back on our address: our endpoint's secret was lost with the row, so it's replaced by a new one.
     expect((await sync({ webhook: NO_ENV_SECRET })).webhook?.status).toBe("created");
-    const ours = [...fake.endpoints.values()].find((e) => e.url === `${SITE}/api/stripe/webhook`)!;
+    expect(fake.endpoints.has(endpoint.id as string)).toBe(false);
+    const current = [...fake.endpoints.values()].find((e) => e.url === url && (e.metadata as Record<string, string>).source === "principe-webhook")!;
+
+    // STRIPE_WEBHOOK_SECRET is our own endpoint's secret: nothing changes.
     const ourSecret = (await readWebhookSecret(db, "test"))!;
-    // It's our own endpoint's secret: the endpoint stays.
     expect((await sync({ webhook: { envSecret: ourSecret, removeReplaced: true } })).webhook?.status).toBe("env");
-    expect(fake.endpoints.has(ours.id as string)).toBe(true);
-    // Another endpoint's secret, seen by the build step: the endpoint stays until the live site (which has the secret) syncs.
-    expect((await sync({ webhook: { ...OWNER_SECRET, removeReplaced: false } })).webhook?.status).toBe("env");
-    expect(fake.endpoints.has(ours.id as string)).toBe(true);
-    expect(await readWebhookSecret(db, "test")).toBe(ourSecret);
-    // On the live site, but STRIPE_WEBHOOK_SECRET's endpoint hasn't delivered anything yet (it may be wrong, or in
-    // the other mode): the site keeps its own endpoint rather than be left with none.
+    expect(fake.endpoints.has(current.id as string)).toBe(true);
+
+    // Another secret, but nothing else at our address gets the events (a wrong or other-mode secret): ours stays.
     expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("env");
-    expect(fake.endpoints.has(ours.id as string)).toBe(true);
-    // Once it has, the site's own endpoint goes, so events aren't handled twice.
+    expect(fake.endpoints.has(current.id as string)).toBe(true);
+    // The owner's endpoint exists and gets every event, but hasn't delivered one yet: still kept.
+    fake.endpoints.set("we_owner", { id: "we_owner", url, status: "enabled", metadata: {}, enabled_events: ["*"] });
+    expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("env");
+    expect(fake.endpoints.has(current.id as string)).toBe(true);
+    // Once it has, the build step still leaves ours alone (the deployment with the secret isn't live yet)...
     await markEnvWebhookVerified(db, "test", OWNER_SECRET.envSecret);
+    expect((await sync({ webhook: { ...OWNER_SECRET, removeReplaced: false } })).webhook?.status).toBe("env");
+    expect(fake.endpoints.has(current.id as string)).toBe(true);
+    // ...and the live site retires it.
     expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("env");
-    expect(fake.endpoints.has(ours.id as string)).toBe(false);
+    expect(fake.endpoints.has(current.id as string)).toBe(false);
     expect(await readWebhookSecret(db, "test")).toBeNull();
+    expect(fake.endpoints.has("we_owner")).toBe(true);
+
+    // A secret from the other mode with nothing in this one: the site makes its own so payments are still confirmed.
+    fake.endpoints.delete("we_owner");
+    expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("created");
+    expect(await readWebhookSecret(db, "test")).not.toBeNull();
   });
 
   it("refuses to point live links at a local or plain-http address", async () => {

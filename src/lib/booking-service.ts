@@ -184,7 +184,8 @@ async function closeCheckout(order: Pick<Order, "id" | "stripeSessionId">): Prom
     try {
       session = await stripe.checkout.sessions.expire(sessionId);
     } catch {
-      session = await stripe.checkout.sessions.retrieve(sessionId);
+      // Expanded so a payment refunded in full is recognised (see prepareCheckoutRetry).
+      session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent", "payment_intent.latest_charge"] });
     }
     if (session.status === "complete") {
       return session.payment_status === "unpaid" ? { state: "processing" } : { state: "paid", session };
@@ -267,15 +268,22 @@ export async function prepareCheckoutRetry(bookingId: string): Promise<CheckoutR
   }
   if (paid.length) {
     // Imported lazily: payments imports this module.
-    const { fulfillOrder } = await import("@/lib/payments");
+    const { fulfillOrder, refundUndeliveredOrder, sessionFullyRefunded } = await import("@/lib/payments");
+    let delivered = 0;
     for (const { orderId, session } of paid) {
+      // Paid, then refunded in full before it was delivered: close it instead.
+      if (sessionFullyRefunded(session)) {
+        await refundUndeliveredOrder(orderId);
+        continue;
+      }
       await fulfillOrder(orderId, {
         stripePaymentIntentId: paymentIntentId(session.payment_intent),
         isTest: session.livemode === false,
         amountPaidCents: session.amount_total,
       });
+      delivered++;
     }
-    return "paid";
+    if (delivered) return "paid";
   }
   if (failure) throw failure;
   return processing ? "processing" : "ok";

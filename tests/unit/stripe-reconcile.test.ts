@@ -202,9 +202,13 @@ describe("Stripe checkout reconcile job", () => {
     });
     await runScheduledJobs();
     expect((await reload([early])).get(early.id)?.status).toBe("refunded");
-    for (const other of [ownCheckout, foreignLink, refunded]) {
+    for (const other of [ownCheckout, foreignLink]) {
       expect(await db.select().from(schema.orders).where(eq(schema.orders.stripeSessionId, other.id))).toHaveLength(0);
     }
+    // The refunded one is recorded as refunded, so a late checkout event can't deliver it.
+    const refundedOrders = await db.select().from(schema.orders).where(eq(schema.orders.stripeSessionId, refunded.id));
+    expect(refundedOrders).toHaveLength(1);
+    expect(refundedOrders[0].status).toBe("refunded");
     mocks.listed.length = 0;
   });
 });

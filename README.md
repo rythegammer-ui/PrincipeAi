@@ -80,8 +80,9 @@ Reset the local database with `npm run db:reset-local`.
    To use a webhook endpoint of your own instead, add `https://YOUR-DOMAIN/api/stripe/webhook` in the Stripe dashboard
    with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
    `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`, `charge.dispute.created`,
-   `charge.dispute.closed`, and copy its signing secret into `STRIPE_WEBHOOK_SECRET`. Once your endpoint has delivered
-   its first event, the site stops handling its own endpoint's copies and removes it.
+   `charge.dispute.closed`, and copy its signing secret into `STRIPE_WEBHOOK_SECRET`. Once your endpoint receives every
+   one of those events and has delivered one, the site removes its own; until then both deliver and each event is
+   handled once.
    The daily scheduled job re-syncs the links (and retries a sync that failed), and the first run after this feature
    ships adds course buy links to the two default sales emails, unless you've edited them.
    **Rolling back** to a deployment from before payment links: switch the links off in Stripe (Payment links →

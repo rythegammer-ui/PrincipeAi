@@ -15,6 +15,10 @@ const saved = { key: process.env.STRIPE_SECRET_KEY, secret: process.env.STRIPE_W
 
 function signedRequest(event: Record<string, unknown>, secret = SECRET): Request {
   const payload = JSON.stringify({ id: `evt_${randomUUID()}`, object: "event", api_version: null, created: Math.floor(Date.now() / 1000), livemode: true, ...event });
+  return signedPayload(payload, secret);
+}
+
+function signedPayload(payload: string, secret: string): Request {
   const header = Stripe.webhooks.generateTestHeaderString({ payload, secret });
   return new Request("http://localhost/api/stripe/webhook", { method: "POST", body: payload, headers: { "stripe-signature": header } });
 }
@@ -225,29 +229,31 @@ describe("Stripe payment-link checkouts", () => {
     }
   });
 
-  it("hands over from the site's own webhook endpoint to the owner's once that one delivers", async () => {
+  it("handles each event once, even when two endpoints deliver it", async () => {
     const db = await getDb();
     const OLD = "whsec_test_site_made_endpoint";
-    await db
-      .insert(schema.settings)
-      .values({ key: "stripeWebhook:test", value: { v: 1, endpointId: "we_site", url: "https://principe.example/api/stripe/webhook", secret: OLD, createdAt: new Date().toISOString() } })
-      .onConflictDoUpdate({ target: schema.settings.key, set: { value: { v: 1, endpointId: "we_site", url: "https://principe.example/api/stripe/webhook", secret: OLD, createdAt: new Date().toISOString() } } });
-    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:envVerified:live"));
-    // Until STRIPE_WEBHOOK_SECRET's endpoint has delivered an event, the site's endpoint is still handled.
-    const before = linkSession(`handover-1-${randomUUID().slice(0, 8)}@example.com`);
-    expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: before } }, OLD))).status).toBe(200);
-    expect((await ordersFor(before.id))[0].status).toBe("paid");
-    // The owner's endpoint delivers (signed with STRIPE_WEBHOOK_SECRET)...
-    const viaOwner = linkSession(`handover-2-${randomUUID().slice(0, 8)}@example.com`);
-    expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: viaOwner } }))).status).toBe(200);
-    // ...so the site endpoint's copy of an event is acknowledged without being handled a second time.
-    const copy = linkSession(`handover-3-${randomUUID().slice(0, 8)}@example.com`);
-    const res = await POST(signedRequest({ type: "checkout.session.completed", data: { object: copy } }, OLD));
+    const stored = { v: 1, endpointId: "we_site", url: "https://principe.example/api/stripe/webhook", secret: OLD, createdAt: new Date().toISOString() };
+    await db.insert(schema.settings).values({ key: "stripeWebhook:test", value: stored }).onConflictDoUpdate({ target: schema.settings.key, set: { value: stored } });
+    const email = `twice-${randomUUID().slice(0, 8)}@example.com`;
+    const session = linkSession(email);
+    const payload = JSON.stringify({ id: `evt_${randomUUID()}`, object: "event", api_version: null, created: Math.floor(Date.now() / 1000), livemode: true, type: "checkout.session.completed", data: { object: session } });
+    // The site's endpoint and STRIPE_WEBHOOK_SECRET's both deliver the same event.
+    expect((await POST(signedPayload(payload, OLD))).status).toBe(200);
+    const res = await POST(signedPayload(payload, SECRET));
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ignored: "replaced endpoint" });
-    expect(await ordersFor(copy.id)).toHaveLength(0);
+    expect(await res.json()).toMatchObject({ duplicate: true });
+    const receipts = (await db.select().from(schema.emailLog).where(eq(schema.emailLog.to, email))).filter((e) => e.kind === "receipt");
+    expect(receipts).toHaveLength(1);
     await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:test"));
-    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:envVerified:live"));
+  });
+
+  it("lets Stripe's retry of a failed event run it again", async () => {
+    const email = `retry-${randomUUID().slice(0, 8)}@example.com`;
+    // Paid for a course that no longer exists: handling fails (500) each time, so it isn't marked handled.
+    const session = linkSession(email, { metadata: { source: PAYMENT_LINK_SOURCE, courseId: randomUUID(), courseSlug: course.slug } });
+    const payload = JSON.stringify({ id: `evt_${randomUUID()}`, object: "event", api_version: null, created: Math.floor(Date.now() / 1000), livemode: true, type: "checkout.session.completed", data: { object: session } });
+    expect((await POST(signedPayload(payload, SECRET))).status).toBe(500);
+    expect((await POST(signedPayload(payload, SECRET))).status).toBe(500);
   });
 
   it("accepts events signed with the secret of the endpoint the sync created", async () => {

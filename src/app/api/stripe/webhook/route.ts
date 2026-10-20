@@ -3,15 +3,8 @@ import { getDb, schema } from "@/db";
 import type { Order } from "@/db/schema";
 import { logActivity } from "@/lib/crm";
 import { escapeMarkdown, notifyOwner } from "@/lib/email";
-import { envWebhookVerified, markEnvWebhookVerified, readWebhookSecret, type StripeMode } from "@/lib/payment-links";
-import {
-  failPendingOrder,
-  fulfillOrder,
-  orderIdForCheckoutSession,
-  refundOrder,
-  refundUndeliveredOrder,
-  syncCoursePaymentLinksLater,
-} from "@/lib/payments";
+import { markEnvWebhookVerified, readWebhookSecret } from "@/lib/payment-links";
+import { failPendingOrder, fulfillOrder, orderIdForCheckoutSession, refundOrder, refundUndeliveredOrder } from "@/lib/payments";
 import { getStripe, paymentIntentId, stripeDashboardUrl, stripeTestMode, type Stripe } from "@/lib/stripe";
 import { formatDate, formatMoney } from "@/lib/utils";
 
@@ -23,6 +16,7 @@ import { formatDate, formatMoney } from "@/lib/utils";
  *           charge.dispute.created, charge.dispute.closed
  * and set STRIPE_WEBHOOK_SECRET to the endpoint's signing secret (whsec_…). Without STRIPE_WEBHOOK_SECRET, the
  * payment-link sync (src/lib/payment-links.ts) creates the endpoint itself and keeps its secret in the database.
+ * Events signed by either are accepted, and each event is handled once even when both endpoints deliver it.
  */
 export const dynamic = "force-dynamic";
 
@@ -51,6 +45,26 @@ function verifiedEvent(stripe: Stripe, body: string, signature: string, secrets:
   return null;
 }
 
+/* Each Stripe event is handled once: it reaches every endpoint (the site's own and STRIPE_WEBHOOK_SECRET's while both
+ * exist), and Stripe may deliver one twice. The marker lives in rate_limits, kept two days (jobs.ts rateLimits), and
+ * is dropped if handling fails so Stripe's retry runs it. */
+const EVENT_KEY = "stripe-event:";
+
+async function claimEvent(eventId: string): Promise<boolean> {
+  const db = await getDb();
+  const rows = await db
+    .insert(schema.rateLimits)
+    .values({ key: `${EVENT_KEY}${eventId}`, count: 1, windowStart: new Date() })
+    .onConflictDoNothing()
+    .returning({ key: schema.rateLimits.key });
+  return rows.length > 0;
+}
+
+async function releaseEvent(eventId: string): Promise<void> {
+  const db = await getDb();
+  await db.delete(schema.rateLimits).where(eq(schema.rateLimits.key, `${EVENT_KEY}${eventId}`));
+}
+
 /**
  * A charge refunded in full whose order wasn't found by its PaymentIntent: the order hasn't been claimed yet (the
  * site's own checkout stores the PaymentIntent on its first claim) or, for a payment link, doesn't exist yet. Finds
@@ -62,7 +76,10 @@ async function stopRefundedCheckout(stripe: Stripe, charge: Stripe.Charge) {
   const [session] = (await stripe.checkout.sessions.list({ payment_intent: pi, limit: 1 })).data;
   if (!session || session.status !== "complete") return;
   const orderId = await orderIdForCheckoutSession(session, { create: true });
-  if (orderId) await refundUndeliveredOrder(orderId);
+  if (!orderId || (await refundUndeliveredOrder(orderId))) return;
+  // Claimed (and so delivered) while this ran, e.g. by a retried checkout event: refund it like any paid order.
+  const order = await orderForPayment(charge.payment_intent);
+  if (order?.status === "paid") await refundOrder(order.id, { revokeAccess: true, source: "stripe", reason: "Refunded in Stripe" });
 }
 
 /** Moves a still-pending order to `status`; returns the order when it changed (null for duplicates/late events). */
@@ -160,15 +177,17 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid signature" }, { status: 400 });
   }
   const { event } = verified;
-  const eventMode: StripeMode = event.livemode ? "live" : "test";
   if (secrets.env && verified.secret === secrets.env) {
-    // STRIPE_WEBHOOK_SECRET's endpoint works: from now on it replaces the endpoint the site made (if any).
-    await markEnvWebhookVerified(await getDb(), eventMode, secrets.env).catch((err) => console.error("[stripe] could not record the webhook check", err));
-  } else if (secrets.env && (await envWebhookVerified(await getDb(), eventMode, secrets.env).catch(() => false))) {
-    // The site's old endpoint, replaced by STRIPE_WEBHOOK_SECRET's: Stripe sends that one the same event, so this copy
-    // is acknowledged without handling it twice, and the old endpoint is removed.
-    syncCoursePaymentLinksLater();
-    return Response.json({ received: true, ignored: "replaced endpoint" });
+    // Proof that STRIPE_WEBHOOK_SECRET's endpoint works in this mode: the sync may now retire the site's own.
+    await markEnvWebhookVerified(await getDb(), event.livemode ? "live" : "test", secrets.env).catch((err) =>
+      console.error("[stripe] could not record the webhook check", err),
+    );
+  }
+  try {
+    if (!(await claimEvent(event.id))) return Response.json({ received: true, duplicate: true });
+  } catch (err) {
+    console.error(`[stripe] could not record ${event.id}`, err);
+    return Response.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 
   try {
@@ -218,6 +237,7 @@ export async function POST(request: Request) {
   } catch (err) {
     // A 500 makes Stripe retry later; fulfilment is idempotent so retries are safe.
     console.error(`[stripe] failed to handle ${event.type} (${event.id})`, err);
+    await releaseEvent(event.id).catch((e) => console.error("[stripe] could not release event", event.id, e));
     return Response.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 

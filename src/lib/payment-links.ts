@@ -147,7 +147,7 @@ export async function readWebhookSecret(db: DB, mode: StripeMode): Promise<strin
 
 /* Proof that STRIPE_WEBHOOK_SECRET's endpoint works: the webhook route records (a fingerprint of) the secret once an
  * event of that mode verifies with it. Until then the site keeps its own endpoint, so a wrong or wrong-mode secret
- * never leaves the site without webhooks; after that the route ignores the old endpoint's copies of each event. */
+ * never leaves the site without webhooks. */
 const ENV_VERIFIED_PREFIX = "stripeWebhook:envVerified:";
 
 function secretFingerprint(secret: string): string {
@@ -559,9 +559,11 @@ async function runSync(input: SyncInput, token: string): Promise<PaymentLinkSync
 }
 
 /**
- * Makes sure Stripe sends this site's checkout and refund events. Uses STRIPE_WEBHOOK_SECRET's endpoint when that's
- * set (removing the one the site made, if it's a different one, so events aren't handled twice); otherwise creates
- * (or keeps up to date) an endpoint of its own and stores its signing secret.
+ * Makes sure Stripe sends this site's checkout and refund events. Without STRIPE_WEBHOOK_SECRET it creates (or keeps
+ * up to date) an endpoint of its own and stores its signing secret. With it, the site's own endpoint is retired once
+ * STRIPE_WEBHOOK_SECRET's endpoint has proven itself (see below); while both exist each event is handled once (the
+ * webhook route dedupes by event id). If nothing else at this address receives every event in this mode, the site
+ * keeps (or makes) its own, so a wrong or other-mode secret never leaves payments unconfirmed.
  */
 async function ensureWebhookEndpoint(
   db: DB,
@@ -572,31 +574,39 @@ async function ensureWebhookEndpoint(
   install: string,
 ): Promise<NonNullable<PaymentLinkSyncResult["webhook"]>> {
   const key = `${WEBHOOK_PREFIX}${mode}`;
-  if (options.envSecret) {
-    const stored = await readWebhook(db, mode);
-    // No endpoint of ours, or the owner put our own endpoint's secret in STRIPE_WEBHOOK_SECRET: nothing to remove.
-    if (!stored || stored.secret === options.envSecret) return { status: "env" };
-    if (!options.removeReplaced) return { status: "env", detail: "The site's own endpoint is removed by the next sync on the live site" };
-    if (!(await envWebhookVerified(db, mode, options.envSecret))) {
-      return { status: "env", detail: "The site's own endpoint is kept until STRIPE_WEBHOOK_SECRET's endpoint delivers its first event" };
-    }
-    try {
-      await stripe.webhookEndpoints.del(stored.endpointId);
-    } catch (err) {
-      if (!isMissing(err)) throw err;
-    }
-    await db.delete(schema.settings).where(eq(schema.settings.key, key));
-    return { status: "env", detail: "Removed the endpoint the site had created: STRIPE_WEBHOOK_SECRET's endpoint is used instead" };
-  }
   const url = `${siteUrl}/api/stripe/webhook`;
-  if (!isPublicHttps(url)) {
-    return { status: "skipped", detail: "Stripe can only send webhooks to a public https address" };
-  }
   const stored = await readWebhook(db, mode);
+  // The owner put our own endpoint's secret in STRIPE_WEBHOOK_SECRET: it's the same endpoint, nothing to change.
+  if (options.envSecret && stored?.secret === options.envSecret) return { status: "env" };
+  if (!isPublicHttps(url)) {
+    return options.envSecret ? { status: "env" } : { status: "skipped", detail: "Stripe can only send webhooks to a public https address" };
+  }
   const endpoints = await stripe.webhookEndpoints.list({ limit: 100 }).autoPagingToArray({ limit: 1000 });
-
   const mine = stored ? endpoints.find((e) => e.id === stored.endpointId) : undefined;
-  if (stored && mine) {
+  const coversAll = (e: Stripe.WebhookEndpoint) =>
+    e.status === "enabled" && (e.enabled_events.includes("*") || STRIPE_WEBHOOK_EVENTS.every((ev) => e.enabled_events.includes(ev)));
+
+  if (options.envSecret) {
+    // STRIPE_WEBHOOK_SECRET's endpoint, as far as Stripe shows it: one at this address, not made by a site, getting every event.
+    const replacement = endpoints.find((e) => e.url === url && e.metadata?.source !== WEBHOOK_SOURCE && coversAll(e));
+    if (mine) {
+      const proven = Boolean(replacement) && (await envWebhookVerified(db, mode, options.envSecret));
+      if (!proven || !options.removeReplaced) {
+        return {
+          status: "env",
+          detail: "The site's own endpoint stays until STRIPE_WEBHOOK_SECRET's endpoint receives every event and has delivered one; meanwhile each event is handled once",
+        };
+      }
+      await deleteEndpoint(stripe, mine.id);
+      await db.delete(schema.settings).where(eq(schema.settings.key, key));
+      return { status: "env", detail: "Removed the endpoint the site had created: STRIPE_WEBHOOK_SECRET's endpoint is used instead" };
+    }
+    // The site's endpoint was deleted in Stripe: its secret is of no use any more.
+    if (stored) await db.delete(schema.settings).where(eq(schema.settings.key, key));
+    if (replacement) return { status: "env" };
+    // Nothing at this address gets every event in this mode, so STRIPE_WEBHOOK_SECRET can't be enough on its own
+    // (e.g. a test-mode secret with a live key): the site makes its own endpoint, below.
+  } else if (stored && mine) {
     const events = mine.enabled_events;
     const missing = !events.includes("*") && STRIPE_WEBHOOK_EVENTS.some((e) => !events.includes(e));
     if (mine.url !== url || missing || mine.status !== "enabled") {
@@ -608,16 +618,19 @@ async function ensureWebhookEndpoint(
   }
 
   const sameUrl = endpoints.filter((e) => e.url === url);
-  // Made by hand, or by another database on this Stripe account: not ours to replace.
-  const foreign = sameUrl.find((e) => e.metadata?.source !== WEBHOOK_SOURCE || e.metadata.install !== install);
-  if (foreign) {
-    return {
-      status: "unmanaged",
-      detail: `A webhook endpoint for ${url} that the site didn't create already exists in Stripe (${foreign.id}). Copy its signing secret (Stripe → Developers → Webhooks) into STRIPE_WEBHOOK_SECRET in Vercel and redeploy, or delete that endpoint and sync again.`,
-    };
+  const ours = (e: Stripe.WebhookEndpoint) => e.metadata?.source === WEBHOOK_SOURCE && e.metadata.install === install;
+  if (!options.envSecret) {
+    // Made by hand, or by another database on this Stripe account: not ours to replace.
+    const foreign = sameUrl.find((e) => !ours(e));
+    if (foreign) {
+      return {
+        status: "unmanaged",
+        detail: `A webhook endpoint for ${url} that the site didn't create already exists in Stripe (${foreign.id}). Copy its signing secret (Stripe → Developers → Webhooks) into STRIPE_WEBHOOK_SECRET in Vercel and redeploy, or delete that endpoint and sync again.`,
+      };
+    }
   }
   // One of ours whose secret isn't stored any more (e.g. a new database): Stripe won't show the secret again, so replace it.
-  for (const stale of sameUrl) await stripe.webhookEndpoints.del(stale.id);
+  for (const stale of sameUrl.filter(ours)) await deleteEndpoint(stripe, stale.id);
 
   const created = await stripe.webhookEndpoints.create({
     url,
@@ -629,6 +642,14 @@ async function ensureWebhookEndpoint(
   if (!created.secret) throw new Error("Stripe did not return the new webhook endpoint's signing secret");
   await upsertSetting(db, key, { v: 1, endpointId: created.id, url, secret: created.secret, createdAt: new Date().toISOString() });
   return { status: "created" };
+}
+
+async function deleteEndpoint(stripe: Stripe, id: string): Promise<void> {
+  try {
+    await stripe.webhookEndpoints.del(id);
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+  }
 }
 
 /** One line per course for logs: "AI Essentials: created https://buy.stripe.com/…". */

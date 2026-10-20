@@ -935,7 +935,8 @@ export async function recoverPaymentLinkCheckouts(stripe: Stripe, since: Date): 
       if (existing && existing.status !== "pending" && existing.status !== "expired") continue;
       // Refunded before the webhook (or this job) caught up: there's nothing to deliver, and nothing may deliver it later.
       if (sessionFullyRefunded(session)) {
-        if (existing) await refundUndeliveredOrder(existing.id);
+        const orderId = existing?.id ?? (await orderIdForCheckoutSession(session, { create: true }));
+        if (orderId) await refundUndeliveredOrder(orderId);
         continue;
       }
       const orderId = existing?.id ?? (await orderIdForCheckoutSession(session, { create: true }));

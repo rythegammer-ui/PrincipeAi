@@ -1,0 +1,38 @@
+{
+  "lesson": "iterate-and-follow-up",
+  "questions": [
+    {
+      "q": "According to the lesson, how should you treat the first answer an assistant gives you?",
+      "options": [
+        "As the finished product, ready to use as is",
+        "As proof your prompt failed if it isn't perfect",
+        "As a draft you can steer with follow-ups",
+        "As a guess you should always throw away"
+      ],
+      "answer": 2,
+      "explain": "The first answer is a draft. The real value comes from specific follow-ups that build on the conversation instead of starting over."
+    },
+    {
+      "q": "An answer is close, but the ending sounds too salesy. What's the best next step?",
+      "options": [
+        "Reply \"that's not right\" and ask it to try again",
+        "Delete the chat and retype your original prompt",
+        "Open a new chat and ask the same question there",
+        "Say what to keep and that the ending sounds salesy"
+      ],
+      "answer": 3,
+      "explain": "Specific feedback about what to keep and what's wrong beats vague feedback, and following up keeps the context you've already built."
+    },
+    {
+      "q": "Your chat has become long and muddled, but you want to keep working on the same project. What should you do?",
+      "options": [
+        "Ask it to summarize the conversation, then paste that into a new chat",
+        "Keep adding corrections in the same chat until it gets back on track",
+        "Start a new chat with no background and re-explain everything from memory",
+        "Tell the assistant to forget everything and carry on in the same chat"
+      ],
+      "answer": 0,
+      "explain": "A long, muddled conversation is a sign to start a new chat. Asking the old chat to summarize your preferences and decisions first lets you carry the context over."
+    }
+  ]
+}

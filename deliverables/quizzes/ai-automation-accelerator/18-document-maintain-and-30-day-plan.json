@@ -1,0 +1,38 @@
+{
+  "lesson": "document-maintain-and-30-day-plan",
+  "questions": [
+    {
+      "q": "Why does the lesson say the runbook's \"how to pause\" line matters more than it looks?",
+      "options": [
+        "It lets the builder pause the automation without telling the team",
+        "It must be filled in before the monthly golden set rerun can start",
+        "Anyone on the team should be able to stop it safely in under a minute",
+        "It records how long the automation can run before costs pass budget"
+      ],
+      "answer": 2,
+      "explain": "The lesson says anyone on the team should be able to stop an automation safely in under a minute, so the runbook spells out exactly how to pause it."
+    },
+    {
+      "q": "You shipped a new prompt version, and over the next few days the edit rate in your run log climbs. What does the lesson say to do?",
+      "options": [
+        "Investigate the cause fully before changing anything in production",
+        "Keep the new version and add more reviewers to handle the edits",
+        "Lower the golden set thresholds so the new version still passes",
+        "Roll back to the previous version first, then investigate the cause"
+      ],
+      "answer": 3,
+      "explain": "The safe change process keeps the old version and watches the run log after shipping, and if anything looks worse, you roll back first and investigate second."
+    },
+    {
+      "q": "It's week four of your 30-day plan, and your first automation is live in review mode. When should you promote it one autonomy level?",
+      "options": [
+        "Only when the evidence from your reviews and baseline supports it",
+        "As soon as the first weekly review finds no failures at all",
+        "Right away, since review mode was only meant for week three",
+        "Once you've started building your second automation from a blueprint"
+      ],
+      "answer": 0,
+      "explain": "Week four is about measuring: compare the edit rate and time spent with your baseline, and promote the automation one autonomy level only if the evidence supports it."
+    }
+  ]
+}

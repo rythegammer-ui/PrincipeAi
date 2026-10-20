@@ -1,0 +1,38 @@
+{
+  "lesson": "why-ai-makes-things-up",
+  "questions": [
+    {
+      "q": "Why can an AI assistant state something false with complete confidence?",
+      "options": [
+        "It is designed to mislead people who ask tricky questions",
+        "It copies the first web page it finds without checking it",
+        "It predicts the most plausible reply instead of retrieving verified facts",
+        "It only makes mistakes when a conversation is very short"
+      ],
+      "answer": 2,
+      "explain": "AI writes answers by predicting the most plausible next words, so when it lacks a specific fact, plausible-sounding text can still be wrong, and it sounds just as confident."
+    },
+    {
+      "q": "An assistant gives you a list of books with authors and years. What's the smartest step before you buy one?",
+      "options": [
+        "Ask it to rate its confidence in each item, then search the flagged titles",
+        "Trust the list, since a confident tone means the details are accurate",
+        "Ask \"Isn't this a great list?\" so it confirms the details are right",
+        "Keep the same chat open for weeks so it remembers the list for you"
+      ],
+      "answer": 0,
+      "explain": "Titles, authors and years are the kind of specifics where hallucinations cluster. A confidence self-rating surfaces the shakiest items, and a quick search for each settles it."
+    },
+    {
+      "q": "You want honest feedback on a plan you're excited about. Which question is most likely to get it?",
+      "options": [
+        "Isn't this a great plan?",
+        "Why will this plan work so well?",
+        "Don't you agree this plan is ready?",
+        "What are the weaknesses in this plan?"
+      ],
+      "answer": 3,
+      "explain": "Assistants are built to be agreeable, so leading questions invite agreement. Asking directly for weaknesses gets a more honest, useful answer."
+    }
+  ]
+}

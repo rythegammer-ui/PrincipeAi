@@ -1,0 +1,38 @@
+{
+  "lesson": "voice-and-images",
+  "questions": [
+    {
+      "q": "What is the difference between dictation and voice conversation?",
+      "options": [
+        "Dictation reads answers aloud, while voice conversation types them out",
+        "Dictation types your words, while voice conversation is a spoken back-and-forth",
+        "Dictation only works with photos, while voice conversation only works with text",
+        "There's no difference, since they're two names for the same feature"
+      ],
+      "answer": 1,
+      "explain": "Dictation turns your speech into text in the message box, which is great for long, rambling context. Voice conversation is a spoken back-and-forth, a bit like a phone call with your assistant."
+    },
+    {
+      "q": "You receive a confusing letter and want AI to explain it from a photo. What's the best approach?",
+      "options": [
+        "Attach the uncropped photo with no question and let the AI decide",
+        "Attach it and rely on whatever dates and amounts the AI reads back",
+        "Retype the whole letter instead, since AI can never read photos",
+        "Cover personal details, attach it, and ask what it means and what to do"
+      ],
+      "answer": 3,
+      "explain": "A photo plus a clear question gets a useful answer, and covering sensitive details protects your privacy. You should still check important numbers and deadlines against the original."
+    },
+    {
+      "q": "You want AI to create an image for a printed flyer that shows your event's name. What should you do?",
+      "options": [
+        "Ask for the exact wording inside the image and use whatever comes back",
+        "Describe only the subject and let the AI choose everything else",
+        "Describe the subject, style, mood and use, then add the text yourself",
+        "Base it on a photo of a real person so the flyer looks more authentic"
+      ],
+      "answer": 2,
+      "explain": "Describe four things: subject, style, composition and mood, and use. Image generators can still struggle with exact wording, so add any text yourself in a design or document app."
+    }
+  ]
+}

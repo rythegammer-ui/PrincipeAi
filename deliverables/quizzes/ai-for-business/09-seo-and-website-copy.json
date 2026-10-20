@@ -1,0 +1,38 @@
+{
+  "lesson": "seo-and-website-copy",
+  "questions": [
+    {
+      "q": "According to the lesson, what should drive SEO decisions such as which customer questions and topics to target?",
+      "options": [
+        "The search volumes an AI assistant estimates for each phrase",
+        "Real data, like Search Console queries and customers' own words",
+        "Whatever topics businesses in other regions are writing about",
+        "The longest keyword list the AI can generate for each service"
+      ],
+      "answer": 1,
+      "explain": "The lesson says AI can't reliably tell you search volumes or what customers actually type, so real data such as Search Console and the words customers use should drive decisions, with AI used for thinking and writing."
+    },
+    {
+      "q": "An electrician's AI-drafted service page needs a proof section, but he hasn't provided any reviews yet. What does the lesson's service page prompt tell the AI to do?",
+      "options": [
+        "Write placeholders like [INSERT REAL REVIEW] instead of inventing proof",
+        "Write two sample reviews that sound like typical happy customers",
+        "Leave the proof section out of the page structure entirely",
+        "Summarize what customers of electricians usually say online"
+      ],
+      "answer": 0,
+      "explain": "The lesson's prompt asks for placeholders such as [INSERT REAL REVIEW] instead of invented testimonials, numbers or credentials, so the real thing can be inserted before publishing."
+    },
+    {
+      "q": "A cleaning company serves three towns but wants to show up in searches for 12 nearby towns as well. Which approach fits the lesson's advice on location pages?",
+      "options": [
+        "Create 12 matching pages that each swap in a different town name",
+        "Write one page that lists all 15 town names as keywords",
+        "Create pages for all 15 towns, with AI-written local details",
+        "Create pages only for the towns it genuinely serves, each with specifics"
+      ],
+      "answer": 3,
+      "explain": "The lesson says to create location pages only for areas you genuinely serve, with something specific to say about each; pages that just swap the town name are thin content that hurts more than it helps."
+    }
+  ]
+}

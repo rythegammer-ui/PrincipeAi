@@ -1,0 +1,38 @@
+{
+  "lesson": "what-ai-really-is",
+  "questions": [
+    {
+      "q": "Which mental model does the lesson recommend for thinking about an AI assistant?",
+      "options": [
+        "A search engine that looks up verified answers on the web",
+        "A brilliant new assistant on their first day who has never met you",
+        "A thinking mind that already knows your preferences and goals",
+        "A database of checked facts that is almost never wrong"
+      ],
+      "answer": 1,
+      "explain": "The lesson pictures AI as a brilliant, well-read new assistant on their first day: fast and knowledgeable, but it doesn't know you and can be confidently wrong."
+    },
+    {
+      "q": "You typed \"Give me dinner ideas.\" and got a generic list. What would most improve the next answer?",
+      "options": [
+        "Send the exact same request again in a fresh chat",
+        "Cut it down to a few keywords, like a search box",
+        "Accept the list, since the first reply is the finished product",
+        "Add who's eating, your time, your budget and what to avoid"
+      ],
+      "answer": 3,
+      "explain": "The lesson's improved dinner prompt briefs the assistant on who's eating, time, budget and dislikes, because better context in means better answers out."
+    },
+    {
+      "q": "You have a page of messy meeting notes and want them turned into a tidy checklist. Is this a good job for an AI assistant?",
+      "options": [
+        "Yes, organizing words into lists is a language task it does well",
+        "No, it can only give answers stored in a database of facts",
+        "Only if it first searches the web for similar checklists",
+        "No, it works best when you type just a few short keywords"
+      ],
+      "answer": 0,
+      "explain": "Organizing messy notes into lists, plans and checklists is one of the language tasks the lesson says AI is great at."
+    }
+  ]
+}

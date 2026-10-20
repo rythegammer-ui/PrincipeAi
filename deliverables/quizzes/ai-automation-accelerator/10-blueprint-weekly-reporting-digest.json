@@ -1,0 +1,38 @@
+{
+  "lesson": "blueprint-weekly-reporting-digest",
+  "questions": [
+    {
+      "q": "What does the rule \"code counts, AI explains\" mean in the weekly digest blueprint?",
+      "options": [
+        "The AI step pulls the raw figures from each source and calculates the weekly changes itself",
+        "Formulas or a code step calculate every number, and the AI only writes the narrative from that finished table",
+        "A code step writes the digest text, and the AI step double-checks that the arithmetic is correct",
+        "The AI estimates the trends from raw data, and formulas round its figures before the digest is sent"
+      ],
+      "answer": 1,
+      "explain": "Language models describe data well but aren't reliable calculators, so formulas compute every total, change and average, and the AI receives a finished table to explain."
+    },
+    {
+      "q": "Your digest's number check flags a figure in this week's narrative that doesn't appear anywhere in the data table. What should the workflow do?",
+      "options": [
+        "Send the digest to the whole team anyway, since most flags are false alarms",
+        "Ask the AI to recalculate the figure and replace it automatically before sending",
+        "Delete the flagged sentence and deliver the rest of the digest to the team",
+        "Send the digest to its owner for a quick look instead of to the whole team"
+      ],
+      "answer": 3,
+      "explain": "The lesson says that if the check finds numbers that aren't in the table, the digest goes to its owner for a quick look, because a confident, wrong number damages trust fastest."
+    },
+    {
+      "q": "While testing, you remove the \"Calls booked\" row from the data table. What should a well-built digest do?",
+      "options": [
+        "Say that the calls-booked metric is missing rather than inventing a figure",
+        "Estimate calls booked from last week's figure and the four-week average",
+        "Leave the metric out silently so the digest stays under 200 words",
+        "Stop the workflow and resend last week's digest to the team instead"
+      ],
+      "answer": 0,
+      "explain": "The prompt tells the AI to use only the numbers provided and to say so if a metric is missing, and the testing checklist checks that the digest reports it missing instead of inventing it."
+    }
+  ]
+}

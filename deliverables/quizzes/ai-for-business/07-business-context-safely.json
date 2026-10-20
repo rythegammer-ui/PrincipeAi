@@ -1,0 +1,38 @@
+{
+  "lesson": "business-context-safely",
+  "questions": [
+    {
+      "q": "Under the lesson's traffic-light rules, where can Amber (internal) information go?",
+      "options": [
+        "Into any AI tool, as long as people's names are removed first",
+        "Nowhere, unless a written exception has been approved",
+        "Into personal AI accounts that only the owner uses",
+        "Only into approved business-grade tools with training turned off"
+      ],
+      "answer": 3,
+      "explain": "The lesson says Amber information, such as internal processes and unpublished pricing, goes only in business-grade tools the company has approved, with training on its data turned off."
+    },
+    {
+      "q": "The office manager at a cleaning company wants AI's help replying to a customer who was charged twice. What does the lesson recommend?",
+      "options": [
+        "Paste the full email thread and ask the AI to strip out personal details",
+        "Describe the situation without names, contact details or account numbers",
+        "Paste the customer's details, since a reply email is low risk",
+        "Avoid AI entirely, because billing complaints can't be drafted with it"
+      ],
+      "answer": 1,
+      "explain": "The lesson says to anonymize before you paste, rather than pasting raw data and asking AI to clean it up, because by then it has already been shared; a described scenario still gets an excellent reply."
+    },
+    {
+      "q": "A consultancy connects its AI assistant to its inbox so the AI can work with incoming emails. Which safeguard does the lesson recommend?",
+      "options": [
+        "A human approval step before any AI action that sends, deletes, pays or shares",
+        "Letting the AI act freely, but only on emails from known senders",
+        "Removing the business context pack while the inbox is connected",
+        "Telling the AI to ignore any instructions it finds in the emails"
+      ],
+      "answer": 0,
+      "explain": "Outside content can include instructions designed to steer the AI (prompt injection), so the lesson's safeguard is a human approval step before any AI action that sends, deletes, pays for or shares anything."
+    }
+  ]
+}

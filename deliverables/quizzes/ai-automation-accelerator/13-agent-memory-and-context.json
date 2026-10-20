@@ -1,0 +1,38 @@
+{
+  "lesson": "agent-memory-and-context",
+  "questions": [
+    {
+      "q": "Where should an agent's reference knowledge, such as policies, product details and FAQs, usually live?",
+      "options": [
+        "In documents the agent searches when it needs them",
+        "In the brief, so the agent carries every policy on every step",
+        "In the messages of the current run, pasted in by the trigger",
+        "In long-term memory the agent rewrites after each conversation"
+      ],
+      "answer": 0,
+      "explain": "The lesson's five kinds of memory place reference knowledge in documents searched when needed, and it warns that stuffing a policy library into the brief is a common cause of memory bugs."
+    },
+    {
+      "q": "Your support agent gives inconsistent answers about returns, and you find two different return policy documents in its knowledge base. What's the best fix?",
+      "options": [
+        "Switch to a larger model so it can reconcile the two policies itself",
+        "Paste both policies into the brief so the agent always sees them",
+        "Keep one current source of truth and archive the outdated version",
+        "Tell the agent to choose whichever policy seems more generous"
+      ],
+      "answer": 2,
+      "explain": "Retrieval quality depends more on your documents than on the technology, and two conflicting return policies guarantee inconsistent answers, so keep one source of truth and archive old versions."
+    },
+    {
+      "q": "Your agent saves client notes based on incoming emails. What does the lesson recommend to guard against memory poisoning?",
+      "options": [
+        "Let the agent edit any CRM field freely so its notes stay complete",
+        "Limit what untrusted input can write and review memory saved from outside sources",
+        "Save every incoming email in full so no detail is ever lost or changed",
+        "Hide the memory record from people so nobody can tamper with it"
+      ],
+      "answer": 1,
+      "explain": "A malicious email could plant false facts that influence later runs, so the lesson says to limit what untrusted input can write, review memory from external sources and keep memory visible and editable by people."
+    }
+  ]
+}

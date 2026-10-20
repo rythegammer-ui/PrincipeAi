@@ -1,0 +1,38 @@
+{
+  "lesson": "hiring-and-hr",
+  "questions": [
+    {
+      "q": "Which of these does the lesson place on its \"use with great care, or not at all\" list?",
+      "options": [
+        "Drafting a structured interview guide with a clear scoring guide",
+        "Screening, ranking or rejecting job candidates with an AI tool",
+        "Writing a 30-day onboarding plan from your existing SOPs",
+        "Finding clearer, kinder wording for a schedule-change message"
+      ],
+      "answer": 1,
+      "explain": "The lesson warns that AI models can reflect biases in the data they learned from and that some places regulate automated hiring tools, so screening, ranking or rejecting candidates needs great care or shouldn't be done. The other options are safe drafting uses."
+    },
+    {
+      "q": "A veterinary clinic manager has 40 applications for a receptionist role and only a free personal AI account. What does the lesson say she should do?",
+      "options": [
+        "Keep the CVs out of the tool and have people review the applications",
+        "Paste the CVs in and ask the AI to shortlist the strongest five",
+        "Strip the names from the CVs, then let the AI rank the candidates",
+        "Have the AI reject anyone without a degree to shorten the pile"
+      ],
+      "answer": 0,
+      "explain": "CVs are Red data and don't belong in tools that aren't approved for personal data, and the lesson says not to use general AI tools to screen or rank candidates. AI drafts documents; people make decisions about people."
+    },
+    {
+      "q": "A small construction firm used AI to create a structured interview guide for a site coordinator. How should the team use it in interviews?",
+      "options": [
+        "Let each interviewer choose the questions that suit each candidate",
+        "Have the panel agree on one shared score during the interview itself",
+        "Ask the AI to score each candidate's answers from the interview notes",
+        "Ask everyone the same core questions and score independently first"
+      ],
+      "answer": 3,
+      "explain": "The lesson says every candidate gets the same core questions and interviewers score independently before comparing notes. That's fairer to candidates and gives the business better information."
+    }
+  ]
+}

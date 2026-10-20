@@ -1,0 +1,38 @@
+{
+  "lesson": "score-your-opportunities",
+  "questions": [
+    {
+      "q": "In the lesson's formula, Priority = Impact × Ease × (6 − Risk), why is Risk subtracted from 6?",
+      "options": [
+        "To keep every priority score at or below a maximum of 60",
+        "To give risky tasks a bonus, because they usually matter most",
+        "To make Risk count for less than Impact and Ease combined",
+        "To flip the scale, so a safer task gets a higher priority score"
+      ],
+      "answer": 3,
+      "explain": "The lesson explains that subtracting Risk from 6 flips it, so a lower-risk task produces a higher priority score."
+    },
+    {
+      "q": "A bakery owner scores 'Reply to wholesale inquiries' as Impact 4, Ease 4, Risk 3. What is its priority, and where does it land in the lesson's rough guide?",
+      "options": [
+        "48: a strong candidate for the first projects",
+        "48: worth doing later, or after lowering risk or raising ease",
+        "64: a strong candidate for the first projects",
+        "16: low enough that it should be parked for now"
+      ],
+      "answer": 1,
+      "explain": "4 × 4 × (6 − 3) = 48, and the lesson's guide puts 30 to 59 in the 'worth doing later, or after you reduce the risk or raise the ease' band."
+    },
+    {
+      "q": "A car repair shop's task 'Summarize customer complaints' scores in the 30s, mainly because the complaints include customers' names and contact details. What does the lesson suggest?",
+      "options": [
+        "Drop it for good, since anything under 60 is off the table",
+        "Raise its Impact score until the priority clears 60",
+        "Remove the personal data or add a review step, then re-score",
+        "Move it to the top, because complaints affect revenue"
+      ],
+      "answer": 2,
+      "explain": "One of the lesson's reality checks is to reduce risk to raise the score, for example by removing personal data, keeping it internal or adding a review step, then scoring again; many 30s become 60s this way."
+    }
+  ]
+}

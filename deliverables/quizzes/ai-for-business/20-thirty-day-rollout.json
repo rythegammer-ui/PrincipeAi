@@ -1,0 +1,38 @@
+{
+  "lesson": "thirty-day-rollout",
+  "questions": [
+    {
+      "q": "What order does the 30-day rollout plan follow?",
+      "options": [
+        "Foundations, quick win, core workflow and growth bet, then measurement",
+        "Core workflow, quick win, then foundations once early results show up",
+        "All three projects in week one, then foundations and training after",
+        "Growth bet first, then measurement, then the quick win and foundations"
+      ],
+      "answer": 0,
+      "explain": "The lesson says sequence matters: foundations first, then a quick win, then the core workflow and growth bet, then measurement in week four. Each week ends with a milestone so you know whether you're on track."
+    },
+    {
+      "q": "Three weeks into the rollout at a property management firm, the owner keeps hearing, \"Nobody's using it.\" Which fix does the lesson recommend?",
+      "options": [
+        "Add two more AI tools so people can choose the one they like best",
+        "Pause the rollout until a newer and better AI model is released",
+        "Bring in an implementation partner right away to take over the project",
+        "Tie AI to specific workflows, make it the SOP default and use champions"
+      ],
+      "answer": 3,
+      "explain": "The lesson's fix for \"Nobody's using it\" is to tie AI to specific workflows, make it the default in your SOPs and lean on your champions. Adding tools runs against its advice to pick one primary assistant."
+    },
+    {
+      "q": "A 25-person HVAC company has proven its AI quote workflow. It now wants the workflow connected across its website, CRM, inbox, calendar and accounting, but nobody inside has the time. What does the lesson suggest?",
+      "options": [
+        "Keep everything manual, since outside help rarely suits a small firm",
+        "Let each employee connect the systems with whichever tool they prefer",
+        "Consider a partner who starts with your workflows and trains your team",
+        "Choose the partner with the most impressive tool and let them run it"
+      ],
+      "answer": 2,
+      "explain": "The lesson says outside help makes sense when workflows span several systems or you've proven the value but lack time to scale. Its checklist favors a partner who starts with your workflows, not their favorite tool, and trains your team so you're not dependent on them."
+    }
+  ]
+}

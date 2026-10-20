@@ -1,0 +1,38 @@
+{
+  "lesson": "structured-outputs-and-validation",
+  "questions": [
+    {
+      "q": "Your triage schema includes an \"other\" category and a \"needs_human\" flag. What is their main purpose?",
+      "options": [
+        "They make the JSON shorter and cheaper to process",
+        "They give the model an escape hatch so it never has to guess",
+        "They let the model approve sensitive items without review",
+        "They remove the need for a validation step after the AI"
+      ],
+      "answer": 1,
+      "explain": "An \"other\" category or a \"needs_human\" flag is an escape hatch. It lets the model signal that it's unsure instead of being forced to guess."
+    },
+    {
+      "q": "Your AI step returns valid JSON: category is \"billing\", the summary mentions a refund, and needs_human is false. Your rules say refund emails always need a human. What should happen?",
+      "options": [
+        "Proceed, because the JSON parsed and every field is present",
+        "Ask the model to rewrite the summary without the refund",
+        "Keep retrying the request until needs_human comes back true",
+        "The cross-field check fails, so it must not reach an action"
+      ],
+      "answer": 3,
+      "explain": "Valid JSON can still be wrong. A cross-field check, such as a billing email that mentions a refund needing needs_human set to true, stops the item before any action is taken."
+    },
+    {
+      "q": "An AI output fails validation, and the single retry with the error message attached fails too. What should the workflow do next?",
+      "options": [
+        "Send the item to the human review queue with the error attached",
+        "Keep retrying with the error until a valid answer comes back",
+        "Act on the better of the two answers so the run isn't wasted",
+        "Drop the item quietly so it doesn't clog up the review queue"
+      ],
+      "answer": 0,
+      "explain": "Retry once with the error, then give up gracefully by routing the item to human review with the error attached. Never loop forever, and never let an invalid result reach an action."
+    }
+  ]
+}

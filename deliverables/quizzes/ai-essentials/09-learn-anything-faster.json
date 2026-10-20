@@ -1,0 +1,38 @@
+{
+  "lesson": "learn-anything-faster",
+  "questions": [
+    {
+      "q": "What's the difference between shortcut mode and tutor mode?",
+      "options": [
+        "Shortcut mode is slower, but you remember more",
+        "Tutor mode only works for school subjects and exams",
+        "Shortcut mode gets answers; tutor mode builds understanding",
+        "Tutor mode means the AI does all the thinking for you"
+      ],
+      "answer": 2,
+      "explain": "Shortcut mode asks for the answer and little sticks. Tutor mode asks for help understanding and makes you explain, recall and correct mistakes, so you actually learn."
+    },
+    {
+      "q": "You've just read an AI explanation of a new topic and want it to stick. What should you do next?",
+      "options": [
+        "Read the same explanation again a few more times",
+        "Ask for a longer, more detailed explanation",
+        "Copy the explanation into your notes and move on",
+        "Ask the AI to quiz you, one question at a time"
+      ],
+      "answer": 3,
+      "explain": "Testing yourself, which learning researchers call retrieval practice, is one of the most effective ways to remember things, so have the AI quiz you instead of reading passively."
+    },
+    {
+      "q": "You're studying for a certification exam with an AI tutor. How should you handle the key facts it gives you?",
+      "options": [
+        "Confirm them with your textbook or official guidance",
+        "Trust them fully, since AI is reliable on every topic",
+        "Ask the AI to write your practice answers for you",
+        "Skip checking, since the AI sounds confident about them"
+      ],
+      "answer": 0,
+      "explain": "AI is less reliable on niche or high-stakes specifics, so for something like a certification exam the lesson says to confirm key facts with your textbook, official guidance or another trusted source."
+    }
+  ]
+}

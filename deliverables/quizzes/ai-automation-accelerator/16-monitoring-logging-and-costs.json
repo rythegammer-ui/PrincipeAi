@@ -1,0 +1,38 @@
+{
+  "lesson": "monitoring-logging-and-costs",
+  "questions": [
+    {
+      "q": "According to the lesson, which field in your run log is your best quality signal?",
+      "options": [
+        "Tokens used and how long the run took",
+        "The prompt version that handled the run",
+        "The run ID and the time the run started",
+        "Whether a person approved, edited or rejected it"
+      ],
+      "answer": 3,
+      "explain": "The lesson calls the human outcome, approved, edited or rejected, your best quality signal, which is why it belongs in every run's log entry."
+    },
+    {
+      "q": "Your lead-routing automation has logged zero runs since yesterday morning, with no errors recorded. What's the most likely problem the lesson warns about?",
+      "options": [
+        "The prompt cache expired, so new runs are being skipped",
+        "The effort level is set too low for the model to respond",
+        "A broken trigger, the most dangerous silent failure",
+        "The run log is full and has stopped recording new runs"
+      ],
+      "answer": 2,
+      "explain": "A sudden drop in volume to zero usually means a broken trigger, which the lesson calls the most dangerous silent failure, so set an alert for no runs when you'd expect some."
+    },
+    {
+      "q": "You want to cut costs on a high-volume email classification step. Which approach follows the lesson's advice?",
+      "options": [
+        "Raise the effort level so the model gets each category right the first time",
+        "Use low effort or a smaller model, then confirm quality with your golden set",
+        "Send the full customer record so the model needs fewer follow-up calls",
+        "Put the changing email first and the stable instructions last to help caching"
+      ],
+      "answer": 1,
+      "explain": "The lesson recommends low effort for classification and testing a smaller model against your golden set; it also says to trim context and put stable content first for caching."
+    }
+  ]
+}

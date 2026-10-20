@@ -1,0 +1,38 @@
+{
+  "lesson": "writing-and-editing",
+  "questions": [
+    {
+      "q": "What is the difference between using AI as a ghostwriter and using it as an editor?",
+      "options": [
+        "A ghostwriter keeps your voice, while an editor replaces it with its own",
+        "An editor writes the whole piece, while a ghostwriter only fixes spelling",
+        "As an editor, AI polishes your own ideas and draft instead of writing it all",
+        "There's no real difference, as long as you check the final result"
+      ],
+      "answer": 2,
+      "explain": "With the editor approach, you bring the ideas and a rough draft, and AI helps you structure, tighten and polish. It's faster overall and better, because the substance, specifics and voice come from you."
+    },
+    {
+      "q": "You want AI to improve a draft report and also help you become a better writer. Which instruction works best?",
+      "options": [
+        "Edit for clarity and flow, keep my voice, then list the main changes and why",
+        "Improve this so it sounds more professional and impressive to readers",
+        "Rewrite this from scratch in the best possible style you can manage",
+        "Make it better, and add any facts that would make it more convincing"
+      ],
+      "answer": 0,
+      "explain": "Specific instructions get useful edits, while \"improve this\" gets random changes. Asking for the reasons behind each change helps you learn and makes it easy to reject edits you disagree with."
+    },
+    {
+      "q": "AI's edits keep making your writing sound generic and not like you. What should you do?",
+      "options": [
+        "Accept the edits, since the AI's default style reads as more polished",
+        "Ask it to make the whole text more enthusiastic and exciting to read",
+        "Let the AI write the full draft from scratch next time instead",
+        "Share samples of your writing and ban buzzwords like \"delve\""
+      ],
+      "answer": 3,
+      "explain": "AI has a default style, and you override it by showing it yours with writing samples and a style description. Banning giveaway phrases and asking for short, concrete sentences also helps."
+    }
+  ]
+}

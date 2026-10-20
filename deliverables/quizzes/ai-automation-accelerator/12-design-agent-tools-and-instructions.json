@@ -1,0 +1,38 @@
+{
+  "lesson": "design-agent-tools-and-instructions",
+  "questions": [
+    {
+      "q": "According to the lesson, what is usually behind an agent's failures?",
+      "options": [
+        "The model isn't capable enough, so the first fix is a larger model",
+        "The agent has too few tools, so it can't reach the data it needs",
+        "The brief is written too calmly, so the model ignores important rules",
+        "Vague tools, missing instructions or no clear point at which to stop"
+      ],
+      "answer": 3,
+      "explain": "The lesson says the model is rarely the culprit; failures usually come from vague tools, missing instructions or no clear stopping point, which is why it gives templates for all three."
+    },
+    {
+      "q": "Your agent's step log shows it calling the same tool again and again with the same input. What does the lesson point to as the likely cause?",
+      "options": [
+        "The tool's name is too short, so the agent can't tell what it does",
+        "The tool returns unhelpful errors, so the agent doesn't know what to try next",
+        "The tool returns too few fields, so it should send the full raw record instead",
+        "The brief lacks capital-letter warnings, so the agent ignores its step limit"
+      ],
+      "answer": 1,
+      "explain": "When you test, loops where the agent repeats the same call usually signal unhelpful errors; a good error message tells the agent what to try next."
+    },
+    {
+      "q": "You're writing the brief for an order-support agent. Which rule best follows the lesson's advice?",
+      "options": [
+        "NEVER GUESS TRACKING NUMBERS. THIS IS CRITICAL. DO NOT EVER GUESS.",
+        "Handle every customer request yourself and avoid escalating whenever possible.",
+        "Never guess tracking numbers, because customers act on them.",
+        "Use whatever tools seem useful, and decide for yourself when you're done."
+      ],
+      "answer": 2,
+      "explain": "The lesson recommends explaining the why behind important rules and skipping the shouting, because reasons generalize better and capital-letter warnings can make models overly cautious."
+    }
+  ]
+}

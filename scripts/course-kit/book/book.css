@@ -1,0 +1,161 @@
+/* Print styles for the PDF course book and the video-script book (Chromium, US Letter). */
+:root {
+  --brand-50: #f4f3ff; --brand-100: #ebe9fe; --brand-200: #d9d6fe; --brand-300: #bdb4fe; --brand-400: #9b8afb;
+  --brand-500: #7a5af8; --brand-600: #6938ef; --brand-700: #5925dc; --brand-800: #4a1fb8; --brand-950: #27115f;
+  --gold-50: #fffaeb; --gold-200: #fedf89; --gold-300: #fec84b; --gold-500: #f79009; --gold-700: #b54708;
+  --ink: #0c0a1d; --ink-2: #15122b; --text: #1d1b29; --muted: #4f4d5e; --faint: #7a7890; --border: #e4e2ee;
+}
+@page {
+  size: letter;
+  margin: 0.8in 0.85in 0.85in;
+  /* @bottom-left (the running footer text) is added per book by book.ts */
+  @bottom-right { content: counter(page); font: 600 8.5pt "Geist", sans-serif; color: #6938ef; }
+}
+@page cover {
+  margin: 0;
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font-family: "Geist", system-ui, sans-serif; font-size: 10.6pt; line-height: 1.62; color: var(--text); }
+a { color: var(--brand-700); text-decoration: none; }
+.serif { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; }
+.page { break-before: page; }
+.kicker { font-size: 8pt; font-weight: 650; letter-spacing: .14em; text-transform: uppercase; color: var(--brand-700); margin: 0 0 8pt; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+
+/* Cover */
+.cover {
+  page: cover; position: relative; height: 10.98in; overflow: hidden; color: #fff; padding: 0.85in 0.9in;
+  background: radial-gradient(70% 50% at 100% 0%, rgba(254, 200, 75, .22), transparent 60%), radial-gradient(90% 70% at 0% 100%, rgba(122, 90, 248, .55), transparent 65%), var(--ink);
+  display: flex; flex-direction: column;
+}
+.cover::after {
+  content: ""; position: absolute; inset: 0; opacity: .5;
+  background-image: linear-gradient(rgba(255, 255, 255, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .045) 1px, transparent 1px);
+  background-size: 0.42in 0.42in;
+}
+.cover > * { position: relative; z-index: 1; }
+.logo { display: flex; align-items: center; gap: 9pt; font-weight: 600; font-size: 13pt; letter-spacing: -.01em; }
+.logo .mark { width: 26pt; height: 26pt; border-radius: 8pt; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--brand-500), var(--brand-600) 50%, var(--brand-800)); }
+.logo .mark svg { width: 13pt; height: 13pt; fill: #fff; }
+.logo b { color: var(--gold-300); font-weight: 600; }
+.cover-main { margin-top: auto; margin-bottom: auto; }
+.cover .kicker { color: var(--gold-300); font-size: 9pt; }
+.cover-emoji { font-size: 30pt; width: 54pt; height: 54pt; border-radius: 16pt; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); margin-bottom: 20pt; }
+.cover h1 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: 50pt; line-height: 1.02; margin: 0; letter-spacing: -.01em; }
+.cover h1 em { color: var(--brand-300); }
+.cover .sub { font-size: 13.5pt; line-height: 1.5; color: #d4d1e6; margin: 18pt 0 0; max-width: 5.6in; }
+.cover-meta { display: flex; gap: 8pt; flex-wrap: wrap; margin-top: 24pt; }
+.cover-meta span { font-size: 9pt; padding: 4pt 10pt; border-radius: 99pt; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); color: #ece9f8; }
+.cover-foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 20pt; font-size: 9pt; color: #b4b0cc; border-top: 1px solid rgba(255, 255, 255, .14); padding-top: 12pt; }
+.cover-foot b { color: #fff; font-weight: 600; }
+
+/* Front matter */
+h1.title { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: 34pt; line-height: 1.05; margin: 0 0 14pt; letter-spacing: -.01em; color: var(--ink); }
+h1.title em { color: var(--brand-700); }
+h2.h { font-size: 13.5pt; letter-spacing: -.01em; margin: 22pt 0 8pt; color: var(--ink); break-after: avoid; }
+.intro p { margin: 0 0 9pt; }
+.checks { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 7pt 16pt; }
+.checks li { position: relative; padding-left: 20pt; line-height: 1.45; }
+.checks li::before { content: "✓"; position: absolute; left: 0; top: 0; width: 13pt; height: 13pt; border-radius: 50%; background: var(--brand-100); color: var(--brand-700); font-size: 8pt; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.howto { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; margin-top: 4pt; break-inside: avoid; }
+.howto div { border: 1px solid var(--border); border-radius: 10pt; padding: 10pt 12pt; break-inside: avoid; }
+.howto b { display: block; color: var(--ink); margin-bottom: 2pt; }
+.howto span { font-size: 9.5pt; color: var(--muted); line-height: 1.5; display: block; }
+.app-note { margin-top: 16pt; padding: 11pt 14pt; border-radius: 10pt; background: var(--brand-50); border: 1px solid var(--brand-200); font-size: 9.8pt; }
+
+/* Contents */
+.toc { list-style: none; padding: 0; margin: 0; }
+.toc .tm { margin-top: 13pt; font-weight: 650; color: var(--ink); break-after: avoid; }
+.toc .tm:first-child { margin-top: 4pt; }
+.toc a { display: flex; align-items: baseline; gap: 6pt; color: var(--text); padding: 2.2pt 0; }
+.toc .tm a { color: var(--ink); }
+.toc .num { width: 18pt; color: var(--faint); font-variant-numeric: tabular-nums; flex: none; }
+.toc .tm .num { width: auto; color: var(--brand-700); font-size: 8pt; letter-spacing: .1em; text-transform: uppercase; margin-right: 4pt; }
+.toc .dots { flex: 1; border-bottom: 1.2px dotted #c9c6d8; transform: translateY(-3pt); min-width: 20pt; }
+.toc .pg { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 16pt; text-align: right; }
+
+/* Module opener */
+.opener { padding-top: 1.4in; }
+.opener .big { font-family: "Instrument Serif", Georgia, serif; font-size: 120pt; line-height: .8; color: var(--brand-200); margin-bottom: 18pt; }
+.opener h1 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: 40pt; line-height: 1.05; margin: 0 0 10pt; color: var(--ink); }
+.opener ol { list-style: none; padding: 0; margin: 26pt 0 0; border-top: 1px solid var(--border); }
+.opener li { display: flex; gap: 12pt; padding: 9pt 0; border-bottom: 1px solid var(--border); font-size: 11pt; }
+.opener li .n { width: 20pt; color: var(--brand-700); font-weight: 650; }
+.opener li .t { flex: 1; }
+.opener li .d { color: var(--faint); font-size: 9.5pt; }
+
+/* Lesson */
+.l-eyebrow { display: flex; align-items: center; gap: 8pt; font-size: 8.5pt; color: var(--faint); margin-bottom: 12pt; }
+.pill { font-size: 7.6pt; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: #fff; background: var(--brand-600); padding: 3pt 8pt; border-radius: 99pt; }
+h1.l-title { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: 31pt; line-height: 1.06; margin: 0; color: var(--ink); letter-spacing: -.01em; }
+.l-lead { font-size: 12pt; line-height: 1.5; color: var(--muted); margin: 10pt 0 6pt; padding-bottom: 14pt; border-bottom: 1px solid var(--border); }
+.prose h2 { font-size: 13.5pt; letter-spacing: -.01em; line-height: 1.3; margin: 18pt 0 6pt; color: var(--ink); break-after: avoid; }
+.prose h3 { font-size: 11.5pt; margin: 14pt 0 4pt; break-after: avoid; }
+.prose p { margin: 0 0 8pt; orphans: 3; widows: 3; }
+.prose ul, .prose ol { margin: 0 0 9pt; padding-left: 16pt; }
+.prose li { margin: 2.5pt 0; }
+.prose li::marker { color: var(--brand-500); }
+.prose strong { color: var(--ink); font-weight: 650; }
+.prose blockquote { margin: 10pt 0; padding: 2pt 0 2pt 12pt; border-left: 2.5pt solid var(--brand-300); color: var(--muted); }
+.prose :not(pre) > code { font-family: "Geist Mono", monospace; font-size: .86em; background: var(--brand-50); color: var(--brand-800); padding: .5pt 3pt; border-radius: 3pt; }
+.prose pre {
+  margin: 8pt 0 11pt; padding: 9pt 11pt 9pt 13pt; border-radius: 7pt; background: #f7f6ff; border: 1px solid #e3dffd; border-left: 3pt solid var(--brand-500);
+  font-family: "Geist Mono", monospace; font-size: 8.6pt; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: #241a52; break-inside: avoid;
+}
+.prose pre code { font: inherit; background: none; padding: 0; color: inherit; }
+.prose table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt; font-size: 9.3pt; line-height: 1.45; }
+.prose th { text-align: left; background: var(--brand-50); color: var(--ink); font-weight: 650; }
+.prose th, .prose td { border: 1px solid var(--border); padding: 5pt 7pt; vertical-align: top; }
+.prose tr { break-inside: avoid; }
+.sec-exercise, .sec-takeaways, .sec-mistakes { border-radius: 10pt; padding: 1pt 14pt 6pt; margin: 14pt 0; border: 1px solid var(--border); }
+.sec-exercise { background: var(--brand-50); border-color: var(--brand-200); }
+.sec-takeaways { background: #f8f8fb; break-inside: avoid; }
+.sec-mistakes { background: var(--gold-50); border-color: var(--gold-200); }
+.sec-exercise > h2, .sec-takeaways > h2, .sec-mistakes > h2 { margin-top: 11pt; font-size: 12pt; }
+.sec-exercise > h2::before { content: "✎  "; color: var(--brand-600); }
+.sec-takeaways > h2::before { content: "★  "; color: var(--gold-500); }
+.sec-mistakes > h2::before { content: "!  "; color: #e04f16; font-weight: 800; }
+.sec-exercise > ol, .sec-exercise > ul { list-style: none; padding-left: 0; }
+.sec-exercise > ol > li, .sec-exercise > ul > li { position: relative; padding-left: 19pt; }
+.sec-exercise > ol > li::before, .sec-exercise > ul > li::before {
+  content: ""; position: absolute; left: 0; top: 2.5pt; width: 9pt; height: 9pt; border: 1.3pt solid var(--brand-500); border-radius: 2.5pt; background: #fff;
+}
+
+/* Knowledge check */
+.check { margin-top: 18pt; border: 1px solid var(--border); border-radius: 10pt; padding: 4pt 14pt 10pt; break-inside: avoid; }
+.check h2 { font-size: 12pt; margin: 10pt 0 2pt; color: var(--ink); }
+.check > p { margin: 0 0 6pt; font-size: 9pt; color: var(--faint); }
+.check ol { margin: 0; padding-left: 15pt; }
+.check li { margin: 7pt 0 0; font-weight: 600; color: var(--ink); break-inside: avoid; }
+.check ul { list-style: none; padding: 0; margin: 3pt 0 0; font-weight: 400; color: var(--text); }
+.check ul li { margin: 1.5pt 0 0; font-weight: 400; color: var(--text); display: flex; gap: 6pt; }
+.check ul li b { color: var(--brand-700); width: 10pt; flex: none; }
+
+/* Answer key */
+.answers .a-lesson { margin-top: 12pt; break-inside: avoid; }
+.answers .a-lesson h3 { font-size: 10.5pt; margin: 0 0 3pt; color: var(--ink); }
+.answers .a-lesson p { margin: 0 0 3pt; font-size: 9.2pt; line-height: 1.5; }
+.answers .a-lesson p b { color: var(--brand-700); }
+
+/* Closing */
+.closing .steps { display: grid; gap: 9pt; margin-top: 6pt; }
+.closing .steps div { border: 1px solid var(--border); border-radius: 10pt; padding: 10pt 13pt; }
+.closing .steps b { color: var(--ink); }
+.legal { margin-top: 26pt; padding-top: 12pt; border-top: 1px solid var(--border); font-size: 8.4pt; color: var(--faint); line-height: 1.5; }
+
+/* Video scripts */
+.script-head { margin-bottom: 4pt; }
+.scripts .prose table { width: auto; min-width: 60%; font-size: 9pt; }
+.scripts .prose table th:empty, .scripts .prose thead { display: none; }
+.scripts .prose table td { border: 0; border-bottom: 1px solid var(--border); padding: 3pt 12pt 3pt 0; }
+.scripts .prose > h1 { display: none; }
+.scripts .prose h2 { margin-top: 20pt; padding-top: 6pt; border-top: 1px solid var(--border); font-size: 11pt; letter-spacing: .08em; text-transform: uppercase; color: var(--brand-700); }
+.scripts .prose h3 { font-size: 11.5pt; margin-top: 16pt; color: var(--ink); }
+.scripts .spoken p:not(.cue) { font-size: 12pt; line-height: 1.62; }
+.scripts p.cue { margin: 9pt 0 5pt; font-size: 8.3pt; font-weight: 600; letter-spacing: .04em; color: var(--brand-800); }
+.scripts p.cue strong { display: inline-block; background: var(--brand-100); color: var(--brand-800); padding: 1.5pt 6pt; border-radius: 4pt; font-weight: 700; }
+.scripts p.cue.personal strong { background: var(--gold-50); color: var(--gold-700); border: 1px solid var(--gold-200); }

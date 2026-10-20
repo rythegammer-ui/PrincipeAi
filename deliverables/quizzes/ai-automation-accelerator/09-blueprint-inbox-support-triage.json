@@ -1,0 +1,38 @@
+{
+  "lesson": "blueprint-inbox-support-triage",
+  "questions": [
+    {
+      "q": "Why does the triage blueprint use two separate AI steps, one to classify and one to draft replies?",
+      "options": [
+        "Drafting has to run first so it can set the tone for routing",
+        "A workflow can't get JSON and plain text from one AI step",
+        "Classifying is cheap enough for every message; drafting runs only where useful",
+        "The second step double-checks the category chosen by the first"
+      ],
+      "answer": 2,
+      "explain": "Classification is short and cheap, so it runs on everything at low effort. Drafting needs more context and care, so it runs only where a draft is useful."
+    },
+    {
+      "q": "A customer emails to complain about the service they received from your team. What should the triage workflow do with it?",
+      "options": [
+        "Draft an apology with the AI step and save it for review",
+        "Auto-send a grounded apology based on your policies",
+        "Archive it and send your standard acknowledgment",
+        "Route it to the support lead without an AI draft"
+      ],
+      "answer": 3,
+      "explain": "Complaints go to the support lead with no AI draft, because a human writes those replies. The testing checklist confirms a complaint is never drafted, only routed."
+    },
+    {
+      "q": "A how-to question arrives that your policies and help articles don't cover. What should the grounded drafting step produce?",
+      "options": [
+        "A draft saying you're looking into it and will follow up",
+        "A best-guess answer based on the model's general knowledge",
+        "No draft at all, with the email removed from the queue",
+        "A draft promising a fix by a set date to reassure them"
+      ],
+      "answer": 0,
+      "explain": "A grounded reply may only use the policies and help articles you supply. If they don't answer the question, the draft says you're looking into it and will follow up instead of inventing an answer."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "lesson": "ai-usage-policy",
+  "questions": [
+    {
+      "q": "Why does the lesson recommend a short, clear AI policy instead of banning AI?",
+      "options": [
+        "A policy lets the team skip human review on routine customer messages",
+        "A ban removes the need for team training, which slows the rollout down",
+        "A policy lets staff use any free tool, as long as they're being careful",
+        "A ban pushes AI use out of sight; a policy gives permission and firm lines"
+      ],
+      "answer": 3,
+      "explain": "The lesson says banning AI rarely works because it just pushes use out of sight. A short, clear policy gives people permission to use AI well, and firm lines they won't cross."
+    },
+    {
+      "q": "At a bookkeeping practice, a staff member wants to paste a client's bank statement into her personal free AI account to summarize the transactions. What does the policy template say?",
+      "options": [
+        "It's acceptable as long as she deletes the chat once she's finished",
+        "It's Amber data, so a personal account is fine for a quick summary",
+        "It's Red data and needs written approval of a specific tool and process",
+        "It's Green data, because the client already shared it with the practice"
+      ],
+      "answer": 2,
+      "explain": "Financial, account and payment details are Red data in the template, which never go into AI tools unless the owner has approved a specific tool and process in writing. Personal or free accounts are for Green data only."
+    },
+    {
+      "q": "A week after rollout, an employee at a marketing agency realizes she pasted a client's confidential launch plan into an unapproved AI tool. What does the policy template say should happen?",
+      "options": [
+        "She deletes the chat quietly and makes sure it doesn't happen again",
+        "She tells the policy owner the same day, and the focus is on fixing it",
+        "She waits for the next scheduled policy review to raise it with the owner",
+        "She asks the AI tool to forget the information and then simply moves on"
+      ],
+      "answer": 1,
+      "explain": "Section 8 of the template says to tell the owner the same day if information went somewhere it shouldn't, and that the business fixes problems rather than blaming people for reporting them, so small problems don't get hidden."
+    }
+  ]
+}

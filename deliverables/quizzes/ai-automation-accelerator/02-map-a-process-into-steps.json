@@ -1,0 +1,38 @@
+{
+  "lesson": "map-a-process-into-steps",
+  "questions": [
+    {
+      "q": "When you label your step cards by type, which type of step is the best fit for an AI step?",
+      "options": [
+        "Rule steps, such as if/then decisions on plan or country",
+        "Calculate steps, such as totals, dates and percentages",
+        "Read steps, such as extracting details from messy text",
+        "Judge steps, such as approving refunds or setting prices"
+      ],
+      "answer": 2,
+      "explain": "Read steps, like extracting details and classifying, are best handled by an AI step. Rules go to filters or routers, calculations to formulas, and judge steps stay with a human."
+    },
+    {
+      "q": "While mapping an invoice chase, a colleague calls the choice between a friendly and a firm reminder a judgment call. Pressed, they say it depends on days overdue and reminders already sent. What should you do?",
+      "options": [
+        "Write it down as a rule and handle it with a router, not AI",
+        "Keep it as a judge step and have a human choose every time",
+        "Hand the decision to an AI step, since it involves tone",
+        "Drop the choice and send the same reminder to everyone"
+      ],
+      "answer": 0,
+      "explain": "Many judgment steps are really rules nobody has written down. A router on days overdue and reminders sent beats AI on cost, speed and reliability."
+    },
+    {
+      "q": "Your enquiry form sometimes receives submissions in another language, and you aren't sure your automation can handle them yet. Which is an acceptable way to deal with this exception?",
+      "options": [
+        "Leave it off the map, since it doesn't happen very often",
+        "Wait until it breaks in production, then add a rule for it",
+        "Assume the AI step will work it out without instructions",
+        "Decide to route these submissions to a human for now"
+      ],
+      "answer": 3,
+      "explain": "For every exception you decide to handle it, route it to a human, or ignore it deliberately and log it. Routing to a human is a perfectly good answer; pretending the exception doesn't exist is not."
+    }
+  ]
+}

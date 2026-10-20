@@ -1,0 +1,38 @@
+{
+  "lesson": "documents-and-data",
+  "questions": [
+    {
+      "q": "What is the lesson's \"show me where\" rule?",
+      "options": [
+        "Ask the AI to explain its reasoning step by step before it answers",
+        "Ask the AI to mark where in the sheet each new formula should go",
+        "Have it cite the section or quote the words, then check the original",
+        "Ask the AI which website it got the information from before using it"
+      ],
+      "answer": 2,
+      "explain": "For every important claim, the lesson says to ask the AI to cite the section or quote the exact words, then spot-check them against the original. If it can't point to the source, treat the claim as unverified."
+    },
+    {
+      "q": "A catering company owner uploads twelve months of sales data and wants revenue by service per quarter. Following the lesson's analysis prompt, what should happen first?",
+      "options": [
+        "The AI calculates the quarterly totals, and the owner checks them later",
+        "The owner asks the question in three chats and averages the answers",
+        "The AI writes a management summary with three findings and hypotheses",
+        "The AI describes the data back, and the owner confirms before any math"
+      ],
+      "answer": 3,
+      "explain": "Step 1 of the prompt has the AI describe the data back (rows, date range, missing or odd values) and wait for confirmation. The lesson calls it the most important line because it catches a misread column before every answer built on it is wrong."
+    },
+    {
+      "q": "An AI analysis of a property manager's maintenance spreadsheet shows total repair costs far higher than the owner expected. Which response best fits the lesson's verification checklist?",
+      "options": [
+        "Compare the AI's total with the accounting system or a simple SUM",
+        "Accept the total, since an AI tool calculated it from the raw data",
+        "Ask the AI in the same chat whether it's confident in that number",
+        "Delete the surprising rows so the total lines up with expectations"
+      ],
+      "answer": 0,
+      "explain": "The checklist says totals should reconcile with your accounting system or a simple SUM, and a surprising result should be verified twice. Re-running belongs in a fresh conversation, not a request for reassurance in the same chat."
+    }
+  ]
+}

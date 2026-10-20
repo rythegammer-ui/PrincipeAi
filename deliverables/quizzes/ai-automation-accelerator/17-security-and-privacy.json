@@ -1,0 +1,38 @@
+{
+  "lesson": "security-and-privacy",
+  "questions": [
+    {
+      "q": "Why is prompt injection possible in AI automations?",
+      "options": [
+        "Models read instructions and data through the same channel: text",
+        "Attackers can edit a workflow's prompt once they know the platform",
+        "Models only follow instructions that arrive in a structured format",
+        "Automations encrypt prompts, which hides injected text from checks"
+      ],
+      "answer": 0,
+      "explain": "Because instructions and data both arrive as text, text written by someone else, such as an email or web page, can try to act like instructions."
+    },
+    {
+      "q": "An agent reads incoming customer emails, can look up private order history and can send email to any address. What does the lesson recommend?",
+      "options": [
+        "Rely on labeling the emails as untrusted, which removes the risk",
+        "Break the combination, or put a human approval before anything leaves",
+        "Give the agent admin rights so it can verify each sender's identity",
+        "Add a stronger warning to the brief telling it to ignore instructions"
+      ],
+      "answer": 1,
+      "explain": "This is the dangerous combination of private data, untrusted content and the ability to send information out, so the lesson says to remove a capability or require human approval before anything leaves."
+    },
+    {
+      "q": "A teammate wants to paste your AI provider's API key into a shared spreadsheet so everyone can reuse it. What's the safer practice?",
+      "options": [
+        "Share it, but rename the spreadsheet so outsiders can't find it",
+        "Use one key for every automation so there's only one to protect",
+        "Keep keys in a credential store, one per automation, with spending limits",
+        "Paste the key into each prompt instead, where only the AI can see it"
+      ],
+      "answer": 2,
+      "explain": "The lesson says never to put keys in prompts, spreadsheets or documents; store them in a credential store or environment variables, one per automation, with spending limits and rotation."
+    }
+  ]
+}

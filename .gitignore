@@ -47,3 +47,6 @@ next-env.d.ts
 /playwright-report
 /.next-*
 /scripts/.tmp-*
+
+# personalised course kits (contain customer names)
+/deliverables/dist/licensed/

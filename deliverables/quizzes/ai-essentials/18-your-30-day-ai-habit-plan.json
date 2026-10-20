@@ -1,0 +1,38 @@
+{
+  "lesson": "your-30-day-ai-habit-plan",
+  "questions": [
+    {
+      "q": "Which principle does the lesson recommend for making a new AI habit stick?",
+      "options": [
+        "Wait until you find a big, perfect use case before you start",
+        "Spend at least an hour a day so the habit builds faster",
+        "Attach it to a routine you already have, like your morning coffee",
+        "Restart the whole plan from Day 1 whenever you miss a day"
+      ],
+      "answer": 2,
+      "explain": "An existing routine is the best trigger for a new one, as in \"After my morning coffee, I'll use AI for one task.\" Starting small and keeping a simple log also help the habit stick."
+    },
+    {
+      "q": "You're on Day 12 of the plan and a busy week makes you miss three days in a row. What should you do?",
+      "options": [
+        "Start the 30-day plan over from Day 1 so you do it properly",
+        "Make up for the missed days by doing all of them at once",
+        "Stop the plan, since missed days mean the habit has failed",
+        "Pick up where you left off, with a two-minute version if needed"
+      ],
+      "answer": 3,
+      "explain": "Don't restart the plan; pick up where you left off. Missing a day doesn't break a habit, but quitting does, and on a busy day you can do a two-minute version."
+    },
+    {
+      "q": "A new AI feature is announced and you're worried about falling behind. What does the lesson suggest?",
+      "options": [
+        "Ask your assistant to explain it, then try it on one real task",
+        "Switch to whichever assistant launched the newest feature",
+        "Follow every announcement closely so you never miss a change",
+        "Ignore it, since new features never matter for everyday use"
+      ],
+      "answer": 0,
+      "explain": "You don't need to chase every announcement, because context, iteration, verification and privacy work with any assistant. When a new feature appears, ask your assistant to explain it, then try it on one real task."
+    }
+  ]
+}

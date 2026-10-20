@@ -1,0 +1,38 @@
+{
+  "lesson": "proposals-and-sales-calls",
+  "questions": [
+    {
+      "q": "What is the lesson's pricing rule for AI-drafted proposals?",
+      "options": [
+        "AI sets prices from past proposals, and a person reviews only the final total",
+        "AI calculates totals from the scope blocks so the arithmetic stays consistent",
+        "AI leaves prices as placeholders; a person enters them and checks the math",
+        "AI suggests a price range, and the client picks the figure that fits their budget"
+      ],
+      "answer": 2,
+      "explain": "The lesson says AI never sets prices or calculates totals that go to a client unchecked. The proposal prompt leaves every price as a placeholder, and a person inserts prices from the pricing sheet and double-checks any arithmetic."
+    },
+    {
+      "q": "A bookkeeping firm owner wants an AI note-taker to record and transcribe her video sales call with a prospect. What should she do first?",
+      "options": [
+        "Ask the prospect for permission, because recording laws vary by place",
+        "Start recording quietly so the conversation feels natural and relaxed",
+        "Record only the audio, since that avoids the need for anyone's consent",
+        "Type full notes during the call as a backup in case the recording fails"
+      ],
+      "answer": 0,
+      "explain": "The lesson says to always ask permission before recording: recording laws vary, and some places require everyone on the call to consent. If she'd rather not record, she can jot a few words and dictate a voice memo straight after."
+    },
+    {
+      "q": "A small marketing agency's AI prep brief says a prospect is probably expanding into a new region, based on a job posting it found online. How should the owner handle this before the call?",
+      "options": [
+        "Open the call by congratulating them on the expansion to build rapport",
+        "Delete it from the brief, since nothing found online can be trusted",
+        "Copy it into the proposal's situation section as confirmed background",
+        "Treat it as an assumption to verify, not something to present as fact"
+      ],
+      "answer": 3,
+      "explain": "The prep prompt asks the AI to label assumptions clearly, and the lesson says to verify anything you plan to mention and never present a guess about their business as fact."
+    }
+  ]
+}

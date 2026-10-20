@@ -1,0 +1,38 @@
+{
+  "lesson": "anatomy-of-an-ai-workflow",
+  "questions": [
+    {
+      "q": "In the five-part anatomy of an AI workflow, where does the check belong?",
+      "options": [
+        "Only at the very end, after the action has already finished",
+        "Around the action: validate the output before, confirm the result after",
+        "Only before the model step, to clean up the incoming data",
+        "Inside the model step, by asking the AI to review its own answer"
+      ],
+      "answer": 1,
+      "explain": "The check wraps around the action. You validate the model's output before acting, then confirm the result afterwards, for example that the CRM really accepted the record."
+    },
+    {
+      "q": "Your enquiry workflow should send any deal above a set amount to a different team. How should you build that routing?",
+      "options": [
+        "Add the amount threshold to the prompt so the model picks the route",
+        "Add a second AI step whose only job is to read the amount",
+        "Ask the model to return the route along with its classification",
+        "Use a plain filter or router step on the amount field"
+      ],
+      "answer": 3,
+      "explain": "Routing on known values should be a deterministic step. AI is the wrong tool for anything a filter or formula can do exactly."
+    },
+    {
+      "q": "Your triage workflow gives very different outputs for similar enquiries from one run to the next. Using the anatomy, what is the most likely fix?",
+      "options": [
+        "Narrow the model step's task, define the output format and add examples",
+        "Add filters and de-duplication to the trigger so runs fire only once",
+        "Log every run and send failure alerts to a named owner",
+        "Add a check that confirms the CRM saved each record"
+      ],
+      "answer": 0,
+      "explain": "Output that varies wildly between runs usually points to a weak model step. The fix is to narrow the task, define the output format and add examples."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "lesson": "lead-response-and-follow-up",
+  "questions": [
+    {
+      "q": "According to the lesson, what one rule makes a follow-up sequence work?",
+      "options": [
+        "Send every follow-up within an hour of the quote going out",
+        "Every message references something specific to that person",
+        "Each message includes a deadline to create a sense of urgency",
+        "Follow-ups come from an automated address rather than a person"
+      ],
+      "answer": 1,
+      "explain": "The lesson says a generic \"just checking in\" is noise, while a message that mentions the prospect's timeline or concern is service. It also rules out guilt-tripping and fake deadlines."
+    },
+    {
+      "q": "A landscaping company has run AI-drafted replies by hand for a month and now connects its web form, AI drafts and CRM with a no-code tool. Which message should still always get a person's approval before it's sent?",
+      "options": [
+        "A pre-written note confirming the inquiry was received",
+        "The one-line lead summary saved into the CRM record",
+        "The follow-up tasks created on the cadence dates",
+        "A reply that confirms the price and scope of a job"
+      ],
+      "answer": 3,
+      "explain": "The lesson says to keep human approval permanently for anything involving price or scope. A simple, pre-written acknowledgment is the one thing it says you can send instantly without AI."
+    },
+    {
+      "q": "A cleaning business wants to win back customers who bought a spring deep clean in the last two years. Which approach follows the lesson?",
+      "options": [
+        "Describe the segment without names, then have a person send a useful check-in to those who agreed to contact",
+        "Paste the full customer list with emails so the AI can personalize each check-in by name and address",
+        "Have the AI email a discount automatically to everyone who has ever filled in the inquiry form",
+        "Wait for past customers to get back in touch on their own once they're ready to book again"
+      ],
+      "answer": 0,
+      "explain": "The lesson says to describe each segment to the AI without pasting names or contact details, then send a genuinely useful check-in from a real person, only to people you have permission to contact."
+    }
+  ]
+}

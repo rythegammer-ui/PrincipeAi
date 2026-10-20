@@ -1,0 +1,38 @@
+{
+  "lesson": "blueprint-content-pipeline",
+  "questions": [
+    {
+      "q": "In the status-driven content pipeline, which two stages always need a human, at minimum?",
+      "options": [
+        "Approving the brief and editing the draft",
+        "Writing the brief and repurposing for social",
+        "Running the self-check and scheduling posts",
+        "Adding the idea and writing the first draft"
+      ],
+      "answer": 0,
+      "explain": "A human touches the work at least twice: approving the brief and editing the draft. AI-written content should never publish without a human edit."
+    },
+    {
+      "q": "Your drafting step keeps producing posts with convincing statistics that nobody can trace to a source. What change does the lesson recommend?",
+      "options": [
+        "Ask the model to name a well-known source for every number",
+        "Forbid invented facts and have it leave a source-needed marker",
+        "Raise the effort setting so the model double-checks its numbers",
+        "Strip every number out of posts before they reach the editor"
+      ],
+      "answer": 1,
+      "explain": "The drafting prompt forbids invented statistics, quotes and studies and asks for a [SOURCE NEEDED] marker wherever a fact would help. The editor then finds a real source or deletes the claim."
+    },
+    {
+      "q": "The self-check step flags three unsupported claims in a draft that otherwise covers every key point. What happens next in the pipeline?",
+      "options": [
+        "The draft is blocked and sent back to the drafting step",
+        "The self-check step rewrites the claims in safer wording",
+        "The editor uses the flagged claims as a fact-checking list",
+        "The claims are deleted automatically before publishing"
+      ],
+      "answer": 2,
+      "explain": "Flagged claims don't block the draft. They become the editor's fact-checking list, so no claim slips through unchecked."
+    }
+  ]
+}

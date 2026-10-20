@@ -1,0 +1,38 @@
+{
+  "lesson": "errors-retries-and-review-queues",
+  "questions": [
+    {
+      "q": "Which of these failures should get automatic retries with increasing waits between attempts?",
+      "options": [
+        "An AI output that is missing a required field",
+        "A response whose stop reason is \"refusal\"",
+        "A timeout or rate limit from a busy service",
+        "An incoming message with only an attachment"
+      ],
+      "answer": 2,
+      "explain": "Only temporary errors, such as timeouts, rate limits and busy services, deserve automatic retries with backoff. Retrying a bad input or a refusal on autopilot just fails again."
+    },
+    {
+      "q": "Your CRM step timed out and was retried automatically, and now some leads appear twice in your CRM. What is the best fix?",
+      "options": [
+        "Give each run a unique key, check it before acting and use find-or-create",
+        "Turn off retries entirely so that every step only ever runs once",
+        "Increase the wait between retries to give the CRM more time to respond",
+        "Have a reviewer delete the duplicate records from the CRM each week"
+      ],
+      "answer": 0,
+      "explain": "An idempotency check prevents duplicates: a unique key per run, a check against the run log before any action, find-or-create instead of create, and recording the key once the action succeeds."
+    },
+    {
+      "q": "The AI step in your lead workflow is failing, and a new enquiry arrives through your form. Which fallback does the lesson recommend?",
+      "options": [
+        "Leave the submission unprocessed until someone notices the error",
+        "Retry the AI step every minute until it responds again",
+        "Discard the submission and ask the lead to try again later",
+        "Save the lead tagged \"unclassified\" and send your standard acknowledgment"
+      ],
+      "answer": 3,
+      "explain": "A non-AI fallback keeps things moving: the lead is still saved to the CRM tagged \"unclassified\" and gets your standard acknowledgment, so the customer never notices."
+    }
+  ]
+}

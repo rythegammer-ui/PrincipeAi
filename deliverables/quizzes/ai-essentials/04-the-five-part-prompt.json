@@ -1,0 +1,38 @@
+{
+  "lesson": "the-five-part-prompt",
+  "questions": [
+    {
+      "q": "Which part of a prompt does the lesson call the most important, and the one most people skip?",
+      "options": [
+        "Context: your situation and constraints",
+        "Role: who the AI should act as",
+        "Format: the shape of the answer",
+        "Examples: what good looks like"
+      ],
+      "answer": 0,
+      "explain": "Context tells the AI who's involved, what you've tried and which constraints matter. Since the assistant has never met you, it's what turns a generic answer into your answer."
+    },
+    {
+      "q": "Your AI answers keep coming back far longer than you want. Which part should you add to your prompt?",
+      "options": [
+        "A role, such as \"act as a friendly expert\"",
+        "An example of a reply you didn't like",
+        "A format, such as \"under 150 words, as bullets\"",
+        "A broader task, such as \"help me with this\""
+      ],
+      "answer": 2,
+      "explain": "Format tells the AI what shape the answer should take. If you don't say, you get the default, which is often longer than you want."
+    },
+    {
+      "q": "You want help with a goal but aren't sure what background the AI needs. What does the lesson suggest?",
+      "options": [
+        "Send a one-line request and accept whatever comes back",
+        "Ask the AI to ask you up to five questions before it answers",
+        "Write a long essay that covers every detail of your life",
+        "Give it a role and leave out the context entirely"
+      ],
+      "answer": 1,
+      "explain": "When you're unsure what to include, let the AI interview you with up to five questions first, so you end up with a great prompt without having to plan one."
+    }
+  ]
+}

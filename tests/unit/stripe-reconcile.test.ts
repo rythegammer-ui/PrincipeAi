@@ -7,9 +7,12 @@ type FakeSession = { id: string; status: "open" | "complete" | "expired"; paymen
 const mocks = vi.hoisted(() => {
   const sessions = new Map<string, unknown>();
   const calls: string[] = [];
+  // Completed sessions returned by checkout.sessions.list (payment-link checkouts the webhook may have missed).
+  const listed: unknown[] = [];
   return {
     sessions,
     calls,
+    listed,
     stripe: {
       checkout: {
         sessions: {
@@ -19,6 +22,7 @@ const mocks = vi.hoisted(() => {
             if (!session) throw new Error(`No such checkout.session: '${id}'`);
             return session;
           },
+          list: () => ({ autoPagingToArray: async () => [...listed] }),
         },
       },
     },
@@ -151,5 +155,60 @@ describe("Stripe checkout reconcile job", () => {
     expect(mocks.calls.slice(0, unreached().length)).toEqual(unreached().map((o) => o.stripeSessionId));
     // Paid and out-of-window orders are no longer candidates; Stripe-settled ones still wait for spare room.
     for (const skipped of [newPaid, retiredPaid, tooOld, tooNew, settled]) expect(mocks.calls).not.toContain(skipped.stripeSessionId);
+  });
+
+  it("fulfils payment-link checkouts whose webhook never arrived, once", async () => {
+    const db = await getDb();
+    const email = `link-reconcile-${randomUUID().slice(0, 8)}@example.com`;
+    const sessionId = `cs_test_${randomUUID().replace(/-/g, "")}`;
+    const linkSession = {
+      id: sessionId,
+      object: "checkout.session",
+      mode: "payment",
+      status: "complete",
+      payment_status: "paid",
+      payment_link: "plink_test_reconcile",
+      payment_intent: `pi_${randomUUID().slice(0, 12)}`,
+      livemode: false,
+      amount_total: priceCents,
+      currency: "usd",
+      client_reference_id: null,
+      metadata: { source: "principe-payment-link", courseId, courseSlug: "ai-essentials" },
+      customer_details: { email, name: "Link Buyer" },
+    };
+    // Our own checkouts and other people's payment links are left alone, and a payment refunded in full isn't delivered.
+    const ownCheckout = { ...linkSession, id: `cs_test_${randomUUID().replace(/-/g, "")}`, payment_link: null, metadata: {} };
+    const foreignLink = { ...linkSession, id: `cs_test_${randomUUID().replace(/-/g, "")}`, metadata: {} };
+    const refunded = {
+      ...linkSession,
+      id: `cs_test_${randomUUID().replace(/-/g, "")}`,
+      customer_details: { email: `refunded-${email}`, name: "Refunded Buyer" },
+      payment_intent: { id: `pi_${randomUUID().slice(0, 12)}`, object: "payment_intent", status: "succeeded", latest_charge: { id: "ch_refunded", object: "charge", refunded: true } },
+    };
+    mocks.listed.push(linkSession, ownCheckout, foreignLink, refunded);
+
+    for (let run = 0; run < 2; run++) {
+      const summary = await runScheduledJobs();
+      expect(summary.jobs.stripeCheckouts.ok).toBe(true);
+    }
+    const orders = await db.select().from(schema.orders).where(eq(schema.orders.email, email));
+    expect(orders).toHaveLength(1);
+    expect(orders[0]).toMatchObject({ status: "paid", stripeSessionId: sessionId, courseId, isTest: true, amountCents: priceCents });
+    // A site checkout paid, then refunded in full before the webhook (or this job) delivered it: marked refunded.
+    const early = await checkout(2 * HOUR, 2_000, {
+      status: "complete",
+      payment_status: "paid",
+      payment_intent: { id: `pi_${randomUUID().slice(0, 12)}`, object: "payment_intent", status: "succeeded", latest_charge: { id: "ch_x", object: "charge", refunded: true } } as never,
+    });
+    await runScheduledJobs();
+    expect((await reload([early])).get(early.id)?.status).toBe("refunded");
+    for (const other of [ownCheckout, foreignLink]) {
+      expect(await db.select().from(schema.orders).where(eq(schema.orders.stripeSessionId, other.id))).toHaveLength(0);
+    }
+    // The refunded one is recorded as refunded, so a late checkout event can't deliver it.
+    const refundedOrders = await db.select().from(schema.orders).where(eq(schema.orders.stripeSessionId, refunded.id));
+    expect(refundedOrders).toHaveLength(1);
+    expect(refundedOrders[0].status).toBe("refunded");
+    mocks.listed.length = 0;
   });
 });

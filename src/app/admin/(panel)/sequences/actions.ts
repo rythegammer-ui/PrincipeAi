@@ -23,7 +23,7 @@ import { aiText } from "@/lib/ai";
 import { assertAdmin } from "@/lib/auth";
 import { processEnrollment, recipientTemplateVars } from "@/lib/automations";
 import { logActivity, upsertContact } from "@/lib/crm";
-import { emailBusinessName, emailLayout, fillTemplate, markdownToEmailHtml, sendEmail } from "@/lib/email";
+import { buyLinkPattern, emailBusinessName, emailLayout, fillTemplate, markdownToEmailHtml, sendEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
 import { absoluteUrl, isValidEmail, normalizeEmail } from "@/lib/utils";
@@ -256,9 +256,15 @@ const ContentFields = z.object({
   body: z.string().max(BODY_MAX * 2),
 });
 
-/** The sample person's variables, built exactly like a real send's (business name from Settings, escaped body values). */
-async function sampleVars() {
-  return recipientTemplateVars(SAMPLE_PERSON, await emailBusinessName());
+/**
+ * The sample person's variables, built exactly like a real send's (business name from Settings, escaped body values).
+ * Buy links are filled with `buyerEmail` (the admin's own address for a test send) or none, never the sample
+ * person's: a test purchase through them must reach someone real.
+ */
+async function sampleVars(buyerEmail?: string) {
+  const vars = recipientTemplateVars(SAMPLE_PERSON, await emailBusinessName());
+  const buyLink = buyLinkPattern(buyerEmail);
+  return { subject: { ...vars.subject, "buy_link:*": buyLink }, body: { ...vars.body, "buy_link:*": buyLink } };
 }
 
 /** Renders a step exactly as it will be emailed (sample person, branded layout). */
@@ -281,7 +287,7 @@ export async function sendTestStepAction(input: { subject: string; body: string 
   if (!parsed.success || !parsed.data.subject.trim() || !parsed.data.body.trim()) return { ok: false, error: "Add a subject and body before sending a test." };
   const limit = await rateLimit(`admin-test-email:${session.email}`, 10, 600);
   if (!limit.ok) return { ok: false, error: "That's a lot of test emails. Please wait a few minutes." };
-  const vars = await sampleVars();
+  const vars = await sampleVars(session.email);
   const result = await sendEmail({
     to: session.email,
     subject: `[Test] ${fillTemplate(parsed.data.subject, vars.subject)}`,
@@ -308,7 +314,7 @@ Rules:
 - One clear call to action per email, written as a Markdown link using a placeholder URL.
 - Never invent client stories, testimonials, statistics, results, credentials or guarantees. If an example helps, make it clearly hypothetical ("imagine…", "for example…").
 - Markdown only: paragraphs, **bold**, lists, links and > quotes. No HTML, no images, no headings larger than ###.
-- Only these placeholders, written exactly like this: {{firstName}} {{name}} {{siteUrl}} {{bookUrl}} {{coursesUrl}} {{assessmentUrl}} {{guideUrl}} {{loginUrl}} {{businessName}}. Never invent other placeholders or real URLs.
+- Only these placeholders, written exactly like this: {{firstName}} {{name}} {{siteUrl}} {{bookUrl}} {{coursesUrl}} {{assessmentUrl}} {{guideUrl}} {{loginUrl}} {{businessName}}, plus {{buy_link:<course-slug>}} (straight to checkout for one course) using only the buy-link placeholders listed with the courses. Never invent other placeholders or real URLs.
 - Start with "Hi {{firstName}}," and sign off with "Talk soon," then "The {{businessName}} team" on its own line.
 - 90 to 220 words. Subject line under 70 characters, specific and curiosity-driven, no clickbait, no emoji.
 
@@ -337,7 +343,7 @@ export async function draftStepAction(input: { sequenceId: string; index: number
   const [settings, courses, meetingTypes] = await Promise.all([
     getSettings(),
     db
-      .select({ title: schema.courses.title, subtitle: schema.courses.subtitle })
+      .select({ title: schema.courses.title, subtitle: schema.courses.subtitle, slug: schema.courses.slug, priceCents: schema.courses.priceCents })
       .from(schema.courses)
       .where(eq(schema.courses.published, true))
       .orderBy(asc(schema.courses.sortOrder)),
@@ -354,7 +360,9 @@ export async function draftStepAction(input: { sequenceId: string; index: number
   const trigger = TRIGGER_META[seq.trigger];
   const user = [
     `Business: ${settings.businessName}. ${site.description}`,
-    courses.length ? `Courses: ${courses.map((c) => `${c.title} (${c.subtitle})`).join("; ")}` : "",
+    courses.length
+      ? `Courses: ${courses.map((c) => `${c.title} (${c.subtitle})${c.priceCents > 0 ? `, buy link {{buy_link:${c.slug}}}` : ""}`).join("; ")}`
+      : "",
     meetingTypes.length ? `Calls people can book: ${meetingTypes.map((m) => `${m.name}, ${m.durationMin} min, ${m.priceCents ? "paid" : "free"}`).join("; ")}` : "",
     "",
     `Automation: "${seq.name}"${seq.description ? ` (${seq.description})` : ""}`,

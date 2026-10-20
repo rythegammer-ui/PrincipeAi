@@ -47,6 +47,8 @@ export const PLACEHOLDERS = [
   { key: "loginUrl", description: "Student login" },
   { key: "businessName", description: "Your business name (Settings → Business)" },
 ] as const;
+// Plus {{buy_link:<course-slug>}}: a checkout link for that course (see fillTemplate and /buy/[slug]); the step
+// editor offers one per paid course.
 
 /** Sample person used for previews and test sends. */
 export const SAMPLE_PERSON = { firstName: "Alex", name: "Alex Rivera", email: "alex@example.com" } as const;
@@ -295,5 +297,6 @@ export const JOB_LABELS = {
   expiredOrders: "Abandoned checkouts expired",
   rateLimits: "Old rate-limit records cleared",
   loginTokens: "Expired login links cleared",
+  paymentLinks: "Stripe payment links updated",
 } as const;
 export type JobKey = keyof typeof JOB_LABELS;

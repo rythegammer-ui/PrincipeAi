@@ -56,7 +56,11 @@ export async function proxy(request: NextRequest) {
     if (ref && !ref.startsWith(request.nextUrl.origin)) {
       toSet.push({ name: "pa_ref", value: ref.slice(0, 500), maxAge: ATTRIBUTION_TTL });
     }
-    toSet.push({ name: "pa_land", value: (pathname + search).slice(0, 500), maxAge: ATTRIBUTION_TTL });
+    // Without an email address in the query (e.g. the /buy/<course>?email=… links in emails): it's stored on the contact.
+    const landing = new URLSearchParams(search);
+    landing.delete("email");
+    const landingQuery = landing.toString();
+    toSet.push({ name: "pa_land", value: (pathname + (landingQuery ? `?${landingQuery}` : "")).slice(0, 500), maxAge: ATTRIBUTION_TTL });
   }
 
   // First-touch UTM attribution.

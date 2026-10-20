@@ -25,7 +25,8 @@ export function getStripe(): Stripe | null {
 
 /** True when the configured key is a Stripe test-mode key. */
 export function stripeTestMode(): boolean {
-  const key = process.env.STRIPE_SECRET_KEY ?? "";
+  // Trimmed like getStripe(), so a pasted key with stray spaces is read in the mode it's used in.
+  const key = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
   return key.startsWith("sk_test_") || key.startsWith("rk_test_");
 }
 

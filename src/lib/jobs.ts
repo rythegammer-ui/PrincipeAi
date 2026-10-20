@@ -2,9 +2,20 @@ import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { and, asc, eq, gt, inArray, like, lt, notLike, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { processDueEnrollments } from "@/lib/automations";
+import { processDueEnrollments, upgradeSequenceCopy } from "@/lib/automations";
 import { releaseExpiredHolds, sendDueBookingReminders } from "@/lib/booking-service";
-import { failPendingOrder, fulfillOrder, UNDELIVERABLE_ALERT_PREFIX, UNDELIVERABLE_ALERT_TTL_MS } from "@/lib/payments";
+import { PaymentLinkSyncBusyError } from "@/lib/payment-links";
+import {
+  failPendingOrder,
+  fulfillOrder,
+  paymentLinkSyncBlocked,
+  recoverPaymentLinkCheckouts,
+  refundUndeliveredOrder,
+  sessionFullyRefunded,
+  syncCoursePaymentLinks,
+  UNDELIVERABLE_ALERT_PREFIX,
+  UNDELIVERABLE_ALERT_TTL_MS,
+} from "@/lib/payments";
 import { getStripe, paymentIntentId, type Stripe } from "@/lib/stripe";
 import type { JobKey } from "@/components/funnels/automation-utils";
 
@@ -102,8 +113,11 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
     if (!order.sessionId) continue;
     let closedByStripe = false;
     try {
-      const session = await stripe.checkout.sessions.retrieve(order.sessionId, { expand: ["payment_intent"] });
-      if (session.payment_status === "paid" || session.payment_status === "no_payment_required") {
+      const session = await stripe.checkout.sessions.retrieve(order.sessionId, { expand: ["payment_intent", "payment_intent.latest_charge"] });
+      // A payment refunded in full before anything was delivered: nothing to deliver, now or later.
+      if (sessionFullyRefunded(session)) {
+        if (await refundUndeliveredOrder(order.id)) continue;
+      } else if (session.payment_status === "paid" || session.payment_status === "no_payment_required") {
         await fulfillOrder(order.id, {
           stripePaymentIntentId: paymentIntentId(session.payment_intent),
           isTest: session.livemode === false,
@@ -136,19 +150,41 @@ async function reconcileStripeCheckouts(): Promise<{ count: number; detail?: str
       console.error("[jobs] Stripe reconcile could not update order", order.id, err);
     }
   }
+  // Then payment-link checkouts, which have no order until their webhook arrives, so they're found through Stripe.
+  let links = { checked: 0, recovered: 0, failed: 0 };
+  try {
+    links = await recoverPaymentLinkCheckouts(stripe, new Date(now - STRIPE_RECONCILE_WINDOW_MS));
+  } catch (err) {
+    links.failed++;
+    console.error("[jobs] payment-link checkout recovery failed", err);
+  }
   const notes = [
     `${candidates.length} checked`,
+    links.checked ? `${links.checked} payment-link checkout${links.checked === 1 ? "" : "s"} checked` : "",
     closed ? `${closed} closed by Stripe` : "",
     declined ? `${declined} payment${declined === 1 ? "" : "s"} declined` : "",
-    failed ? `${failed} failed` : "",
+    failed + links.failed ? `${failed + links.failed} failed` : "",
   ];
-  return { count: recovered, detail: notes.filter(Boolean).join(", ") };
+  return { count: recovered + links.recovered, detail: notes.filter(Boolean).join(", ") };
 }
 
-const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = {
+/** When this run of the jobs started (the cron route has 60 seconds for all of them). */
+type JobContext = { startedAt: number };
+
+/** Time the jobs may use in total: the cron's maxDuration (60s) less a margin to answer. */
+const JOBS_BUDGET_MS = 50_000;
+
+const JOBS: Record<JobKey, (ctx: JobContext) => Promise<{ count: number; detail?: string }>> = {
   async automations() {
+    // Default emails written before a feature existed get their update before anything is sent (once).
+    let upgraded = 0;
+    try {
+      upgraded = await upgradeSequenceCopy();
+    } catch (err) {
+      console.error("[jobs] email copy upgrade failed", err);
+    }
     const r = await processDueEnrollments();
-    return { count: r.sent, detail: `${r.processed} due` };
+    return { count: r.sent, detail: `${r.processed} due${upgraded ? `, ${upgraded} default email${upgraded === 1 ? "" : "s"} updated` : ""}` };
   },
   async bookingReminders() {
     return { count: await sendDueBookingReminders() };
@@ -191,6 +227,25 @@ const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = 
       .returning({ hash: schema.loginTokens.tokenHash });
     return { count: rows.length };
   },
+  // Last, so the clean-up jobs above always run within the cron's time limit. Catches up when a sync after a course
+  // change failed (or a link was changed in the Stripe dashboard).
+  async paymentLinks({ startedAt }) {
+    const blocked = paymentLinkSyncBlocked();
+    if (blocked) return { count: 0, detail: blocked };
+    const left = startedAt + JOBS_BUDGET_MS - Date.now();
+    if (left < 15_000) return { count: 0, detail: "skipped: not enough time left in this run" };
+    let result;
+    try {
+      result = await syncCoursePaymentLinks({ lockWaitMs: 5_000, signal: AbortSignal.timeout(left - 5_000) });
+    } catch (err) {
+      if (err instanceof PaymentLinkSyncBusyError) return { count: 0, detail: "another sync was running" };
+      throw err;
+    }
+    if (!result) return { count: 0 };
+    if (result.errors.length) throw new Error(result.errors.join("; "));
+    const changed = result.courses.filter((c) => c.status !== "unchanged" && c.status !== "not-for-sale").length + result.retired;
+    return { count: changed, detail: `${result.courses.filter((c) => c.url).length} live` };
+  },
 };
 
 /** Runs every scheduled job in order (holds are released before stale orders are expired). */
@@ -200,7 +255,7 @@ export async function runScheduledJobs(): Promise<JobsSummary> {
   for (const key of Object.keys(JOBS) as JobKey[]) {
     const t0 = Date.now();
     try {
-      const r = await JOBS[key]();
+      const r = await JOBS[key]({ startedAt: started });
       jobs[key] = { ok: true, count: r.count, ...(r.detail ? { detail: r.detail } : {}), ms: Date.now() - t0 };
     } catch (err) {
       console.error(`[jobs] ${key} failed`, err);

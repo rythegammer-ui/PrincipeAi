@@ -1,0 +1,38 @@
+{
+  "lesson": "emails-and-messages",
+  "questions": [
+    {
+      "q": "What's the golden rule for using AI to write messages?",
+      "options": [
+        "Let AI decide what to say, since it writes better",
+        "Use AI for formal emails only, never for texts",
+        "Paste the whole thread and let AI choose your reply",
+        "You bring the substance, and AI handles the wording"
+      ],
+      "answer": 3,
+      "explain": "AI is excellent at how to say something, but only you know what to say, so give it your key points and let it shape them."
+    },
+    {
+      "q": "You're upset and have drafted an angry reply to a message. What should you do before sending it?",
+      "options": [
+        "Send it right away, while your feelings are fresh and honest",
+        "Ask AI to make the reply sound even firmer and sharper",
+        "Ask AI how it will come across, then for a calmer version",
+        "Delete your draft and let AI reply without your input"
+      ],
+      "answer": 2,
+      "explain": "The lesson suggests asking how your draft is likely to come across, then rewriting it so it's honest about how you feel but calm and constructive."
+    },
+    {
+      "q": "AI drafted an email that sounds stiff and corporate, not like you. What's the best fix?",
+      "options": [
+        "Send it anyway, since polished messages always work best",
+        "Give it samples of your writing and do the final edit yourself",
+        "Ask it to add phrases like \"I hope this email finds you well\"",
+        "Ask it to make the whole email longer and more formal"
+      ],
+      "answer": 1,
+      "explain": "To keep your own voice, give AI a sample of your messages, ban the clichés and do the final edit yourself with a personal touch."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "lesson": "guardrails-and-human-in-the-loop",
+  "questions": [
+    {
+      "q": "On the permission ladder, what is the default policy for a level-3 action, such as sending an email or changing customer-facing data?",
+      "options": [
+        "Allow it, then log it and spot-check a sample of runs",
+        "Require a person's approval before the agent carries it out",
+        "Humans only, and the agent may never prepare the action",
+        "Allow it freely, because it only creates a draft for later"
+      ],
+      "answer": 1,
+      "explain": "Level 3 covers external or hard-to-undo actions and requires approval; level 2 is allow, log and spot-check, and level 4 is humans only, though the agent may prepare the work."
+    },
+    {
+      "q": "Reviewers approve your agent's \"add a tag\" action dozens of times a day and have stopped reading the requests. What does the lesson suggest?",
+      "options": [
+        "Add more detail to each request so reviewers slow down and read it",
+        "Require two reviewers for every approval to restore careful checking",
+        "Stop logging that action so the approval queue gets shorter",
+        "Ask for approval only where it matters and batch low-risk items into a daily digest"
+      ],
+      "answer": 3,
+      "explain": "This is approval fatigue, where approval becomes a rubber stamp; the lesson says to ask for approval only where it matters, batch low-risk items into a daily digest and track the results."
+    },
+    {
+      "q": "Before launch, you red-team your agent. Which test belongs on the lesson's checklist?",
+      "options": [
+        "Hide an instruction in an email it reads and see whether it follows it",
+        "Run only the five most typical requests to confirm the happy path works",
+        "Turn off logging to see how the agent behaves when nobody is watching",
+        "Give the agent admin rights to see what it does with extra power"
+      ],
+      "answer": 0,
+      "explain": "The red-team checklist includes hiding an instruction in an email or document the agent reads, alongside forbidden requests, tool errors, impossible tasks and checks on the kill switch and log."
+    }
+  ]
+}

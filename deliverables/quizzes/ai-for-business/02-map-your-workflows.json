@@ -1,0 +1,38 @@
+{
+  "lesson": "map-your-workflows",
+  "questions": [
+    {
+      "q": "When you describe work as trigger, steps and output, where does the lesson say AI opportunities usually sit?",
+      "options": [
+        "In the trigger, such as the email or form that starts the work",
+        "In the output, such as the booked call or the polite no",
+        "In the steps that involve reading, writing, sorting or remembering",
+        "In the handoffs between the different software tools you use"
+      ],
+      "answer": 2,
+      "explain": "The lesson says AI opportunities usually sit in the steps, especially those that involve reading, writing, summarizing, sorting or remembering to do something."
+    },
+    {
+      "q": "At a small dental office, the receptionist handles about 90 appointment requests a month, spending about 4 minutes on each. What goes in the inventory's Hours per month column?",
+      "options": [
+        "6 hours",
+        "9 hours",
+        "22.5 hours",
+        "36 hours"
+      ],
+      "answer": 0,
+      "explain": "The lesson defines hours per month as frequency × minutes ÷ 60, so 90 × 4 ÷ 60 gives 6 hours."
+    },
+    {
+      "q": "The owner of a 12-person print shop is about to interview staff about their recurring work. What does the lesson say to make clear at the start?",
+      "options": [
+        "That answers will be used to review each person's performance",
+        "That AI will soon take over the tasks they mention most often",
+        "That only tasks with exact, measured times will be counted",
+        "That the goal is removing drudgery, not replacing people"
+      ],
+      "answer": 3,
+      "explain": "The lesson says to state clearly that this is about removing drudgery, not replacing people, because fear produces polite, useless answers and honesty produces the best opportunities."
+    }
+  ]
+}

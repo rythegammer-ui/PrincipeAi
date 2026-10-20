@@ -1,0 +1,38 @@
+{
+  "lesson": "customer-support-with-ai",
+  "questions": [
+    {
+      "q": "Why does the lesson say to build the knowledge base before any AI answers customers directly?",
+      "options": [
+        "It lets the AI learn your tone of voice from past replies over time",
+        "It allows the assistant to approve refunds without involving a person",
+        "It removes the need for anyone to review the assistant's conversations",
+        "AI support is only as good as the approved content it answers from"
+      ],
+      "answer": 3,
+      "explain": "The lesson says AI support is only as good as the content behind it, so policy gaps should be decided, written down and added to the knowledge base before any AI faces a customer."
+    },
+    {
+      "q": "A plumbing company runs the knowledge-base prompt on 50 anonymized emails. Several themes come back marked \"POLICY GAP\", including whether weekend call-outs cost extra. What should the owner do next?",
+      "options": [
+        "Let the AI write its best guess at a policy and publish it on the website",
+        "Decide the answer, write it down and add it to the knowledge base",
+        "Let the team keep answering those questions however they think best",
+        "Drop those themes so the assistant only covers what it can already answer"
+      ],
+      "answer": 1,
+      "explain": "The lesson calls policy gaps gold: each one is a question the team has been answering inconsistently. The owner should decide the answer, write it down and add it to the knowledge base before any AI faces a customer."
+    },
+    {
+      "q": "A landscaping firm uses AI to draft support replies. A customer writes that a crew damaged their fence and asks for a refund. What should the drafting step produce?",
+      "options": [
+        "A warm apology with a partial refund offer, sent automatically",
+        "A reply quoting the standard refund policy and closing the ticket",
+        "An ESCALATE flag and a short summary for the manager to handle",
+        "A request for photos, with a promise of a credit once they arrive"
+      ],
+      "answer": 2,
+      "explain": "Damage is on the lesson's escalation list of situations that always go to a person. The reply prompt tells the AI to write \"ESCALATE\" with a short summary for the manager instead of drafting a resolution, and never to promise refunds or credits outside the policy."
+    }
+  ]
+}

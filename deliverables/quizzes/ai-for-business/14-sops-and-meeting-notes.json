@@ -1,0 +1,38 @@
+{
+  "lesson": "sops-and-meeting-notes",
+  "questions": [
+    {
+      "q": "In the lesson's SOP prompt, what should the AI do when a step seems to be missing from the expert's walkthrough?",
+      "options": [
+        "List it under \"Questions for the owner\" instead of inventing it",
+        "Fill in the most likely step based on common industry practice",
+        "Leave that part out and mention it briefly in the quality checks",
+        "Refuse to write the SOP until a new, complete recording is made"
+      ],
+      "answer": 0,
+      "explain": "The prompt tells the AI not to add steps the expert didn't describe and to list suspected gaps under \"Questions for the owner\". That section catches the steps experts skip because they've done them a thousand times."
+    },
+    {
+      "q": "A dental supply distributor plans to switch on an AI note-taker for its internal meetings. Which meeting should stay off the note-taker unless it's explicitly approved?",
+      "options": [
+        "The weekly sales pipeline review with the whole sales team",
+        "A monthly planning session for next quarter's marketing calendar",
+        "A performance review between a manager and one employee",
+        "A project kickoff with the warehouse team about a new layout"
+      ],
+      "answer": 2,
+      "explain": "The lesson says to decide which meetings are never recorded by an AI note-taker, such as HR conversations, performance reviews and legal discussions, and to keep sensitive meetings off note-takers unless explicitly approved."
+    },
+    {
+      "q": "After a team meeting at a small accounting firm, the AI summary marks three action items \"UNASSIGNED\" and \"NO DATE\". What does the lesson say this shows the owner?",
+      "options": [
+        "The AI mistranscribed the meeting, so the summary should be discarded",
+        "The meeting ended without real commitment on those three items",
+        "The note-taker needs a longer transcript to work out the owners",
+        "Those items were low priority and can safely be dropped from the list"
+      ],
+      "answer": 1,
+      "explain": "The lesson says the UNASSIGNED and NO DATE flags show, in black and white, where meetings end without commitment. After a few weeks, people start assigning owners during the meeting to avoid them."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "lesson": "decisions-and-brainstorming",
+  "questions": [
+    {
+      "q": "In a weighted comparison, why is it so useful to ask what would have to be true for the other option to be better?",
+      "options": [
+        "It reveals which assumptions the decision really hinges on",
+        "It lets the AI make the final choice so you don't have to",
+        "It guarantees that every score in the table is accurate",
+        "It makes the AI agree with the option you already prefer"
+      ],
+      "answer": 0,
+      "explain": "That question shows which assumptions the decision depends on. In the job-offer example, it revealed that the choice hinged on working from home two days a week, which is a question for the hiring manager."
+    },
+    {
+      "q": "You need ideas for a project, and the AI's first few suggestions feel obvious. What should you do?",
+      "options": [
+        "Pick the best of those first ideas, since early ideas are the strongest",
+        "Ask the AI which single idea it thinks you should go with",
+        "Ask for 20 ideas from safe to bold, then narrow them with your criteria",
+        "Judge each idea in detail as it arrives before asking for more"
+      ],
+      "answer": 2,
+      "explain": "Good brainstorming goes wide first, then narrows. The first few ideas are usually the obvious ones and the interesting ones come later, so ask for quantity and then pick the best fits for your constraints."
+    },
+    {
+      "q": "You're leaning toward a decision and want AI to stress-test it. Which prompt follows the lesson's advice?",
+      "options": [
+        "\"Isn't my option clearly the better choice here?\"",
+        "\"Give me the strongest honest case against my choice.\"",
+        "\"What should I do? Just tell me the right answer.\"",
+        "\"Confirm my reasoning so I can feel more confident.\""
+      ],
+      "answer": 1,
+      "explain": "Assistants tend to agree with you, so the honest challenger asks for the strongest case against your choice. Leading questions invite agreement, and \"What should I do?\" gets a generic answer."
+    }
+  ]
+}

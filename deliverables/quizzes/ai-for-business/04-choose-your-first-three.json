@@ -1,0 +1,38 @@
+{
+  "lesson": "choose-your-first-three",
+  "questions": [
+    {
+      "q": "Why does the lesson recommend starting with three AI projects rather than ten?",
+      "options": [
+        "Each needs an owner, setup and new habits, and three is what a small team can carry",
+        "Most AI tools limit how many separate projects a single account can run at once",
+        "With ten projects running, it becomes impossible to measure any of the baselines",
+        "Three projects is the minimum a business needs to justify buying a new AI tool"
+      ],
+      "answer": 0,
+      "explain": "The lesson says each project needs an owner, a little setup, testing and a change in someone's habits, and three in parallel is about as much as a small business can carry while still running day to day."
+    },
+    {
+      "q": "A four-person marketing agency has chosen meeting summaries as its quick win and weekly client reports as its core workflow. Which third project best completes the balanced portfolio?",
+      "options": [
+        "Writing SOPs for the office's internal onboarding checklist",
+        "A fully automated chatbot that answers client questions alone",
+        "Reactivating past clients with a consistent check-in campaign",
+        "Summarizing the transcripts of internal team meetings"
+      ],
+      "answer": 2,
+      "explain": "The third slot is a growth bet tied to revenue, and the lesson gives reactivating past customers as an example; a fully automated customer-facing chatbot is listed as a first-project trap."
+    },
+    {
+      "q": "Two weeks into an AI pilot for drafting quotes, a pet-grooming business owner feels it's saving time but can't show by how much. Which first-project trap from the lesson did she fall into?",
+      "options": [
+        "The pet project",
+        "No baseline",
+        "Side-of-desk projects",
+        "Buying a new tool first"
+      ],
+      "answer": 1,
+      "explain": "The lesson warns that if you don't measure 'before,' you can't prove 'after,' which is why every project needs a baseline measured before anything changes."
+    }
+  ]
+}

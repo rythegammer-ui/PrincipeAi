@@ -1,0 +1,38 @@
+{
+  "lesson": "campaigns-ads-and-offers",
+  "questions": [
+    {
+      "q": "Why does the lesson say to complete the offer worksheet before writing any campaign copy?",
+      "options": [
+        "Because AI can't write copy until a full price list exists",
+        "Because email rules require the offer to be documented first",
+        "Because even great copy can't rescue a weak offer",
+        "Because the worksheet replaces the need for a human review"
+      ],
+      "answer": 2,
+      "explain": "The lesson's first principle is to start with the offer, not the copy, because great copy can't rescue a weak offer; AI can then help pressure-test it."
+    },
+    {
+      "q": "A yoga studio's AI-drafted ad reads: 'Struggling with back pain? Join our class.' What's the problem, according to the lesson?",
+      "options": [
+        "It's too short to meet the platform's minimum length for ads",
+        "It doesn't include a guarantee of results for new members",
+        "It uses the problem angle instead of the outcome angle",
+        "It implies the viewer's health condition, which platforms reject"
+      ],
+      "answer": 3,
+      "explain": "The lesson's ad rules forbid wording that asserts or implies the viewer's personal characteristics, and notes that major ad platforms reject ads that call out sensitive attributes such as health."
+    },
+    {
+      "q": "A solo bookkeeper's AI-drafted 'last call' email says only five spots remain, but she has no real limit. What should she do before sending?",
+      "options": [
+        "Remove the false scarcity, since deadlines and limits must be real",
+        "Keep it, since urgency is a normal part of any last-call email",
+        "Ask AI to soften the wording so the limit sounds less certain",
+        "Send it now, then review it with fresh eyes the next morning"
+      ],
+      "answer": 0,
+      "explain": "The lesson's review checklist requires scarcity to be real, and the last-call email belongs in a sequence only if there's a real deadline."
+    }
+  ]
+}

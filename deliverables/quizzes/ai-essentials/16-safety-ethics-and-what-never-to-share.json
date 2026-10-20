@@ -1,0 +1,38 @@
+{
+  "lesson": "safety-ethics-and-what-never-to-share",
+  "questions": [
+    {
+      "q": "Now that scammers use AI, how should you judge whether a message might be a scam?",
+      "options": [
+        "By whether it contains spelling and grammar mistakes",
+        "By how professional and polished the message looks",
+        "By whether it uses your name and personal details",
+        "By what it asks for, like urgency, secrecy or gift cards"
+      ],
+      "answer": 3,
+      "explain": "AI lets scammers write polished, personalized messages, so bad spelling is no longer a giveaway. Urgency, secrecy, payment by gift card, wire transfer or crypto, or a \"verify your account\" link are red flags however professional it looks."
+    },
+    {
+      "q": "You get a panicked call that sounds exactly like your grandchild, asking for money urgently. What should you do?",
+      "options": [
+        "Send the money quickly, since the voice is clearly theirs",
+        "Hang up and call back on a number you already know",
+        "Ask the caller to text you a new number to confirm it's them",
+        "Stay on the line and ask for the details of where to send it"
+      ],
+      "answer": 1,
+      "explain": "Scammers can clone a voice from a short recording. If a call feels urgent and unusual, hang up and call back on a number you already know, and agree on a family code word ahead of time."
+    },
+    {
+      "q": "You want AI's help replying to a client, and the email thread includes their name and contract figures. What should you do?",
+      "options": [
+        "Describe it instead, using \"my client\" and rounded numbers",
+        "Paste the full thread, since AI needs every detail to help",
+        "Paste it, then delete the chat so it's gone everywhere",
+        "Avoid AI entirely, since it can never help with work email"
+      ],
+      "answer": 0,
+      "explain": "You can almost always get the same help by swapping specifics for descriptions, like \"my client\" instead of a name and rounded numbers instead of exact figures. Deleting a chat doesn't mean it's gone everywhere."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "lesson": "brand-voice-and-prompt-library",
+  "questions": [
+    {
+      "q": "According to the lesson, why does AI write in an 'average' voice by default?",
+      "options": [
+        "AI tools are set to a neutral tone for legal reasons",
+        "Businesses usually paste in too many writing samples",
+        "It has learned from an enormous range of writing",
+        "Voice settings only exist on paid business plans"
+      ],
+      "answer": 2,
+      "explain": "The lesson says AI defaults to an average voice because it has learned from an enormous range of writing, so you have to describe your voice explicitly and show examples."
+    },
+    {
+      "q": "A team member at a landscaping firm wrote a prompt that worked well the first time she used it. When should it join the team prompt library?",
+      "options": [
+        "After it has produced good results at least three times",
+        "Right away, so the rest of the team can start testing it",
+        "Once the owner approves its wording at a team meeting",
+        "After every person on the team has tried it at least once"
+      ],
+      "answer": 0,
+      "explain": "The lesson sets a quality bar: a prompt joins the library only after it has produced good results at least three times."
+    },
+    {
+      "q": "A florist tests her new brand voice guide, and the AI's rewrite of a product page still sounds stiff and salesy. What does the lesson suggest?",
+      "options": [
+        "Make the guide longer by adding every past email as a sample",
+        "Ask the AI to rewrite the page in a more casual style instead",
+        "Stop using the guide and write all product pages by hand",
+        "Add that rewrite to the guide as a 'not this' example"
+      ],
+      "answer": 3,
+      "explain": "In the testing step, the lesson says that wherever the result doesn't sound like you, add that example to the guide as a 'not this,' while keeping the guide to about one page."
+    }
+  ]
+}

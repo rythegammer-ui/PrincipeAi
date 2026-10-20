@@ -1,0 +1,38 @@
+{
+  "lesson": "set-up-your-ai-assistant",
+  "questions": [
+    {
+      "q": "What is the postcard rule?",
+      "options": [
+        "Keep every prompt short enough to fit on a postcard",
+        "Only use AI assistants for casual, everyday topics",
+        "Send important prompts twice and compare the answers",
+        "Write as if your message could be read by someone else"
+      ],
+      "answer": 3,
+      "explain": "The postcard rule means writing as if someone else could read your message, which keeps you careful by default about what you share."
+    },
+    {
+      "q": "You want help writing a tricky email about a client's situation. What's the safest way to ask?",
+      "options": [
+        "Include the client's full name, address and account number for accuracy",
+        "Swap identifying details for a description like \"a small-business owner in Ohio\"",
+        "Don't use AI at all, because sensitive topics can never be discussed",
+        "Paste everything in now and just delete the chat history afterwards"
+      ],
+      "answer": 1,
+      "explain": "You can still get help with sensitive topics by removing or swapping identifying details. A general description works just as well as a name and address."
+    },
+    {
+      "q": "You're about to download an AI assistant app on your phone. What should you check first?",
+      "options": [
+        "That the app has the word \"AI\" in its name",
+        "That it lists the most features in the store",
+        "That the developer is the official company",
+        "That it charges a fee, since free apps are fakes"
+      ],
+      "answer": 2,
+      "explain": "The lesson says to use the official app and check the developer name carefully, because copycat apps exist and some charge for things that are free."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "lesson": "health-legal-and-money-questions",
+  "questions": [
+    {
+      "q": "In the traffic-light system, what is the safest and most valuable way to use AI on health, legal and money topics?",
+      "options": [
+        "Getting a diagnosis or legal strategy you can act on right away",
+        "Understanding terms and preparing better questions for a professional",
+        "Confirming whether a contract is fair and enforceable where you live",
+        "Getting reassurance before deciding whether to see a professional"
+      ],
+      "answer": 1,
+      "explain": "Explaining terms, summarizing documents and preparing questions are green-light uses. Diagnosis, legal strategy and big money decisions are red: prepare with AI, then decide with a professional."
+    },
+    {
+      "q": "You're about to sign a lease and one clause confuses you. Which question to your AI assistant best follows the lesson's advice?",
+      "options": [
+        "\"Should I sign this lease, yes or no?\"",
+        "\"Is this clause fair and enforceable everywhere?\"",
+        "\"Can you reassure me this clause is standard?\"",
+        "\"What does this clause mean, and what should I ask?\""
+      ],
+      "answer": 3,
+      "explain": "Asking for a verdict like \"Should I sign this?\" is red, while asking what a clause means and what to ask is green. AI can help you spot what to ask, but it can't confirm a contract is fair or enforceable where you live."
+    },
+    {
+      "q": "You want AI to help you prepare for a doctor's appointment. What should you do before pasting your notes?",
+      "options": [
+        "Remove names, birth dates and record numbers, keeping only the details needed",
+        "Include your patient ID so the AI can match your notes to your records",
+        "Ask the AI to diagnose you first so you know what the doctor will say",
+        "Leave out where you live so the answer stays as general as possible"
+      ],
+      "answer": 0,
+      "explain": "The lesson says to strip out identifying details such as names, dates of birth and medical record numbers; \"a 45-year-old with type 2 diabetes\" is all the AI needs. You should also include your location and ask it not to diagnose you."
+    }
+  ]
+}

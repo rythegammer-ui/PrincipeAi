@@ -1,0 +1,38 @@
+{
+  "lesson": "business-prompt-framework",
+  "questions": [
+    {
+      "q": "According to the lesson, which part of the six-part business brief is the single most powerful thing you can add to a prompt?",
+      "options": [
+        "Constraints on length, tone and what to avoid",
+        "One or two examples of what 'good' looks like",
+        "A detailed description of the goal and success",
+        "A precise output format, such as a table"
+      ],
+      "answer": 1,
+      "explain": "The lesson calls examples, one or two samples of 'good,' the single most powerful thing you can add to a prompt."
+    },
+    {
+      "q": "A property manager asks AI to draft a lease renewal letter, but her notes don't include the new rent amount. Under the lesson's [CHECK] rule, what should the AI do?",
+      "options": [
+        "Estimate a typical rent increase based on the local market",
+        "Leave the rent out and avoid mentioning any change at all",
+        "Use last year's rent, since it's the closest known figure",
+        "Write [CHECK] where the rent belongs instead of guessing"
+      ],
+      "answer": 3,
+      "explain": "The [CHECK] rule tells the AI to use only the information provided and write [CHECK] where something is missing or unclear, so the gap is easy to find and fix before anything goes out."
+    },
+    {
+      "q": "A gym owner's prompt 'Write a welcome email for new members' keeps producing generic drafts. Which change best applies the lesson?",
+      "options": [
+        "Ask the AI to make the email longer and more enthusiastic",
+        "Run the same prompt several times until one sounds right",
+        "Add the goal, context, constraints, format and a past email he liked",
+        "Switch to a different AI assistant for all customer emails"
+      ],
+      "answer": 2,
+      "explain": "The lesson says vague delegation gets vague work; a full brief with goal, context, inputs, constraints and format, plus an example of 'good,' produces usable output."
+    }
+  ]
+}

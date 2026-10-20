@@ -1,0 +1,38 @@
+{
+  "lesson": "where-ai-pays-off",
+  "questions": [
+    {
+      "q": "According to the lesson, what separates a worthwhile AI project from a demo?",
+      "options": [
+        "It uses the newest and most capable AI tool on the market",
+        "You can name whether it creates time, quality, speed or revenue",
+        "It runs fully automatically, without anyone reviewing it",
+        "It replaces a whole role in the business, not just one task"
+      ],
+      "answer": 1,
+      "explain": "The lesson says every worthwhile AI project pays off in at least one of four ways (time, quality, speed or revenue), and if you can't name which, you have a demo, not a project."
+    },
+    {
+      "q": "A five-person plumbing company sends quotes but rarely follows up, because nobody has time. Using AI to draft a follow-up for every quote mainly creates which payoff?",
+      "options": [
+        "Time, because it cuts the hours spent writing each quote",
+        "Quality, because every quote gets the same structure and terms",
+        "Speed, because customers get their first reply within minutes",
+        "Revenue, because it adds follow-ups that weren't happening at all"
+      ],
+      "answer": 3,
+      "explain": "The lesson says revenue usually comes from work that wasn't happening at all, such as follow-ups nobody had time for, so fewer good jobs quietly go cold."
+    },
+    {
+      "q": "A café owner wants to start using AI this month. Which use best fits where the lesson says AI pays off?",
+      "options": [
+        "Drafting replies to common customer emails for staff to check",
+        "Letting AI decide next season's menu prices on its own",
+        "Having AI handle a difficult conversation with a supplier",
+        "Setting up AI for the stock count done twice a year"
+      ],
+      "answer": 0,
+      "explain": "Drafting is language work AI is strong at, with a person checking before sending; final pricing decisions, relationships and rare tasks are where the lesson says AI doesn't pay off yet."
+    }
+  ]
+}

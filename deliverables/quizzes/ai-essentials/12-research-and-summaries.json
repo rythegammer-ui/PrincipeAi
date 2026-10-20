@@ -1,0 +1,38 @@
+{
+  "lesson": "research-and-summaries",
+  "questions": [
+    {
+      "q": "Why is summarizing a document you provide a \"sweet spot\" for AI?",
+      "options": [
+        "AI can't make mistakes when it reads a document you paste in",
+        "AI remembers every document it was trained on, word for word",
+        "Documents are always short enough for AI to read in one go",
+        "AI is most reliable when it works from text right in front of it"
+      ],
+      "answer": 3,
+      "explain": "AI is most reliable when it works from text you provide, and least reliable when it relies on memory. That doesn't make it perfect, but asking it to show its work makes it far more trustworthy."
+    },
+    {
+      "q": "You want a summary of a long policy document that you can check quickly. What should you add to your prompt?",
+      "options": [
+        "A request to keep the whole summary to one short paragraph",
+        "A request for a short direct quote supporting each key point",
+        "A request to fill any gaps with its best guess, so nothing is missing",
+        "A request to say how confident it feels about the summary overall"
+      ],
+      "answer": 1,
+      "explain": "Supporting quotes let you check any point in seconds by searching for them in the original. Asking it to say \"not in the document\" rather than guessing stops it filling gaps."
+    },
+    {
+      "q": "You ask AI a research question and it answers with three source links. What should you do before relying on the answer?",
+      "options": [
+        "Trust it, since an answer that includes links is already verified",
+        "Ask the AI if it's sure, and accept the answer if it says yes",
+        "Open each link and check that it says what the AI claims",
+        "Find a news summary of the topic instead of the original source"
+      ],
+      "answer": 2,
+      "explain": "Treating cited sources as verified is a common mistake. Open each source, check that it works and says what the AI claims, and prefer original sources like official sites or the original study."
+    }
+  ]
+}

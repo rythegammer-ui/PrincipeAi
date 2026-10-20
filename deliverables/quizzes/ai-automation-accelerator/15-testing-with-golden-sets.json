@@ -1,0 +1,38 @@
+{
+  "lesson": "testing-with-golden-sets",
+  "questions": [
+    {
+      "q": "What is a golden test set?",
+      "options": [
+        "A set of prompts your AI provider has certified for production use",
+        "The best outputs your automation has produced, saved as examples",
+        "Real inputs paired with expected results, rerun after every change",
+        "A random sample of live runs that a person reviews each week"
+      ],
+      "answer": 2,
+      "explain": "A golden set is real inputs, anonymized where needed, each paired with the correct output or criteria, and you rerun it whenever the prompt, model, context documents or workflow changes."
+    },
+    {
+      "q": "A prompt change raises your category accuracy from 91% to 96%, but one \"must not\" case now fails. What should you do?",
+      "options": [
+        "Don't ship it, because safety rules require a perfect score",
+        "Ship it, because the overall score now beats your 95% threshold",
+        "Ship it now, then fix the failing case in next month's rerun",
+        "Delete the failing case, since one miss is normal variation"
+      ],
+      "answer": 0,
+      "explain": "The lesson sets 100% as the bar for every \"must not\" rule: if a change improves the overall score but breaks a \"must not\" case, it doesn't ship."
+    },
+    {
+      "q": "You plan to use a second AI step to grade draft replies against a checklist. What should you do before trusting its scores?",
+      "options": [
+        "Tell it to grade leniently at first so it doesn't fail good drafts",
+        "Run it once on the full set and accept its results as your baseline",
+        "Have it write the expected results so they match its grading style",
+        "Grade 20 drafts yourself, compare and tighten the checklist until you agree"
+      ],
+      "answer": 3,
+      "explain": "An AI grader is a tool, not an oracle, so the lesson says to grade 20 drafts yourself, compare and tighten the checklist wording if you and the grader often disagree."
+    }
+  ]
+}

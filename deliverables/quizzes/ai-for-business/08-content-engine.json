@@ -1,0 +1,38 @@
+{
+  "lesson": "content-engine",
+  "questions": [
+    {
+      "q": "In the content engine, how is the work divided between you and AI?",
+      "options": [
+        "You supply the thinking once, AI reshapes it, and you edit before publishing",
+        "AI comes up with the ideas, and you approve the monthly calendar",
+        "AI writes and publishes everything, and you review the results monthly",
+        "You write every piece yourself, and AI only schedules the posts"
+      ],
+      "answer": 0,
+      "explain": "The lesson defines the content engine as you supplying the thinking once, AI handling the reshaping into many formats, and a person editing before anything goes out."
+    },
+    {
+      "q": "A kitchen remodeler asks AI to 'write a blog post about kitchen renovations' and gets a generic article. What fix does the lesson recommend?",
+      "options": [
+        "Ask for a longer article with more keywords and subheadings",
+        "Generate ten versions and publish whichever performs best",
+        "Feed it customer questions, his opinions and anonymized job stories",
+        "Ask the AI to add statistics so the article stands out"
+      ],
+      "answer": 2,
+      "explain": "The lesson says AI-only content has no point of view or experience, and the fix is feeding the engine raw material only you have: customer questions, your opinions and anonymized stories from your work."
+    },
+    {
+      "q": "A pet-supply store owner's AI-drafted newsletter contains an [ADD EXAMPLE] marker and a statistic she doesn't recognize. What should happen before it goes out?",
+      "options": [
+        "Send it as is, since the pillar prompt already used the voice guide",
+        "Resolve the marker and remove or verify the unfamiliar statistic",
+        "Delete the marker but keep the statistic, since it adds credibility",
+        "Ask the AI whether the statistic is accurate and trust its answer"
+      ],
+      "answer": 1,
+      "explain": "The human edit pass requires every fact, number and claim to be true and yours, and every [ADD EXAMPLE] and [CHECK] marker to be resolved before anything is published."
+    }
+  ]
+}

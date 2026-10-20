@@ -1,0 +1,38 @@
+{
+  "lesson": "give-ai-your-context",
+  "questions": [
+    {
+      "q": "What belongs in your personal instructions?",
+      "options": [
+        "Your account numbers, so it can help with banking",
+        "Short, general facts and preferences for most chats",
+        "A detailed essay covering your whole life story",
+        "Specific health details, so answers are personalized"
+      ],
+      "answer": 1,
+      "explain": "Personal instructions should be short, general and free of sensitive details: who you are, what you use AI for and how you like your answers."
+    },
+    {
+      "q": "You're starting a months-long home renovation and will ask AI about it often. What's the best setup?",
+      "options": [
+        "A workspace, or a briefing note, with the project's background",
+        "Retyping the full background at the start of every new chat",
+        "Adding every renovation detail to your personal instructions",
+        "Running the entire project in one single, never-ending chat"
+      ],
+      "answer": 0,
+      "explain": "Workspaces are for ongoing areas like a renovation. If your assistant has no workspace feature, a short briefing note you paste in works everywhere."
+    },
+    {
+      "q": "You've used the same weekly-planning prompt three times this month. What does the lesson suggest?",
+      "options": [
+        "Retype it from memory each time so it stays fresh",
+        "Paste the whole prompt into your personal instructions",
+        "Stop using it, because repeated prompts stop working",
+        "Save it with blanks to fill in your \"My AI Prompts\" note"
+      ],
+      "answer": 3,
+      "explain": "Any prompt you use more than twice deserves to be saved as a template with blanks to fill in, in a note like \"My AI Prompts\"."
+    }
+  ]
+}

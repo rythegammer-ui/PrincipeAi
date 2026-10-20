@@ -1,0 +1,38 @@
+{
+  "lesson": "choose-what-to-automate",
+  "questions": [
+    {
+      "q": "Which two rules should guide the level of autonomy you give a new automation?",
+      "options": [
+        "Start at the highest level you can, then step down if problems appear",
+        "Use full autonomy for internal tasks and review only for customer ones",
+        "Pick the level that saves the most time, then add review later on",
+        "Start one level lower than you think, and promote with evidence"
+      ],
+      "answer": 3,
+      "explain": "Start one level lower than you think you need, and promote with evidence, not optimism, by deciding in advance what proof you need before moving up a level."
+    },
+    {
+      "q": "A candidate task scores 26 out of 30, but its cost-of-a-mistake score is 2 because errors could cause financial harm. How should you proceed?",
+      "options": [
+        "Run it fully autonomously, since the total is well above 22",
+        "Automate it, but have a human approve every single output",
+        "Drop it, since a score of 2 rules a task out completely",
+        "Automate it and spot-check a random sample each week"
+      ],
+      "answer": 1,
+      "explain": "The special rule says that if cost of a mistake scores 1 or 2, a human must approve every output, no matter how high the total score is."
+    },
+    {
+      "q": "A task runs 300 times a month. Automating it saves 4 minutes per run, but someone still spends 1 minute reviewing each output. Roughly what is the real monthly saving before upkeep and build time?",
+      "options": [
+        "About 20 hours a month",
+        "About 25 hours a month",
+        "About 15 hours a month",
+        "About 5 hours a month"
+      ],
+      "answer": 2,
+      "explain": "Hours saved are 300 x 4 / 60 = 20, and review time is 300 x 1 / 60 = 5 hours to subtract. That leaves about 15 hours before upkeep and build time."
+    }
+  ]
+}

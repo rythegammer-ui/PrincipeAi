@@ -1,0 +1,38 @@
+{
+  "lesson": "train-your-team",
+  "questions": [
+    {
+      "q": "Why does the lesson say AI champions should get a couple of hours of protected time each week?",
+      "options": [
+        "Volunteer enthusiasm fades quickly without protected time",
+        "Champions must approve every prompt before anyone uses it",
+        "Champions need the time to run all four training sessions alone",
+        "It lets champions review every AI output the team sends out"
+      ],
+      "answer": 0,
+      "explain": "The lesson says to give champions a couple of hours of protected time each week because volunteer enthusiasm fades quickly without it. Their role is to answer questions, maintain the prompt library, run show-and-tells and collect feedback."
+    },
+    {
+      "q": "At a 12-person insurance brokerage, an experienced account manager asks, \"Will this replace me?\" What does the lesson suggest the owner do?",
+      "options": [
+        "Promise that nobody's role will ever change, whatever happens",
+        "Share the intent, the tasks targeted and how freed-up time will be used",
+        "Put off the conversation until the training sessions are finished",
+        "Point out that AI makes mistakes, so it couldn't really replace anyone"
+      ],
+      "answer": 1,
+      "explain": "The lesson's honest response is to share your intent, show which tasks you're targeting and explain how freed-up time will be used. If roles will change, say how, because honesty builds more trust than reassurance."
+    },
+    {
+      "q": "A dental practice manager is planning hands-on AI practice for the front-desk team. Which approach does the lesson recommend?",
+      "options": [
+        "Use last week's real patient emails so the practice feels authentic",
+        "Skip practice and show one long demo of everything AI can do",
+        "Use realistic but fictional material, like AI-written practice exercises",
+        "Let each person practice alone on whatever tasks they happen to pick"
+      ],
+      "answer": 2,
+      "explain": "The lesson says practice works best with realistic but fictional material, so nobody is tempted to paste real customer data while learning. It includes a prompt that creates exercises with fictional sample input."
+    }
+  ]
+}

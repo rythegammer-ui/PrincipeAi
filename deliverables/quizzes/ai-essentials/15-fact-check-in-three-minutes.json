@@ -1,0 +1,38 @@
+{
+  "lesson": "fact-check-in-three-minutes",
+  "questions": [
+    {
+      "q": "What is the first step of the three-minute fact-check routine?",
+      "options": [
+        "Paste the answer into a second assistant for a second opinion",
+        "Open every link the AI gave you and read each one closely",
+        "Ask yourself what happens if the answer turns out to be wrong",
+        "Ask the AI \"Are you sure?\" and see whether its answer changes"
+      ],
+      "answer": 2,
+      "explain": "Step one takes ten seconds: ask \"What happens if this is wrong?\" Low-stakes answers need only a quick read-through, while high-stakes ones call for checking every specific claim."
+    },
+    {
+      "q": "AI gave you a detailed answer about what food you can bring through customs on an upcoming trip. What should you do?",
+      "options": [
+        "Compare the key claims with the official customs agency website",
+        "Ask the AI if it's sure, and trust the answer if it says yes",
+        "Check every sentence, including the general background details",
+        "Trust it, since a detailed and confident answer is usually right"
+      ],
+      "answer": 0,
+      "explain": "Getting customs rules wrong could mean a fine or confiscated items, so verify the key claims on the destination's official customs or border agency website. Asking \"Are you sure?\" is not a real check."
+    },
+    {
+      "q": "An AI answer includes a very precise statistic and a perfect-sounding expert quote, with no sources. What's the best move?",
+      "options": [
+        "Use both, since precise numbers are a sign of careful research",
+        "Ask the AI to rewrite the answer so it sounds less certain",
+        "Keep the statistic but drop the quote, since quotes are riskier",
+        "Search for the exact quote and look for a source for the statistic"
+      ],
+      "answer": 3,
+      "explain": "Precise statistics with no source and quotes that seem a little too perfect are red flags. Search for the exact quote or source, and if you can't find it anywhere, treat it as invented."
+    }
+  ]
+}

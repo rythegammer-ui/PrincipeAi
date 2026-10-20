@@ -1,0 +1,38 @@
+{
+  "lesson": "plan-anything",
+  "questions": [
+    {
+      "q": "What three things should every planning prompt include?",
+      "options": [
+        "A goal, your constraints and a useful format",
+        "A role, a deadline and a list of websites",
+        "A budget, a calendar and your account details",
+        "A question, a template and a word limit"
+      ],
+      "answer": 0,
+      "explain": "The lesson's planning formula is goal plus constraints plus format, because a plan is only useful if it fits your real life and the way you'll use it."
+    },
+    {
+      "q": "AI built you a great day-by-day itinerary for a trip. What should you do before booking anything?",
+      "options": [
+        "Book it all right away, since the itinerary is final",
+        "Confirm hours, prices and entry rules on official websites",
+        "Ask the AI if it's sure, and book if it says yes",
+        "Share your card number so the AI can check availability"
+      ],
+      "answer": 1,
+      "explain": "Opening hours, prices, closures and entry requirements change, so treat the itinerary as a smart first draft and confirm details on official websites."
+    },
+    {
+      "q": "You want AI's help building a monthly budget. What should you share with it?",
+      "options": [
+        "Your full bank statements and login details",
+        "Your account numbers so it can track spending",
+        "Rounded figures and your spending categories",
+        "Nothing at all, since AI can't help with money"
+      ],
+      "answer": 2,
+      "explain": "Categories and rounded numbers are all AI needs. Never share account numbers, logins or full statements, and double-check the totals with a calculator."
+    }
+  ]
+}

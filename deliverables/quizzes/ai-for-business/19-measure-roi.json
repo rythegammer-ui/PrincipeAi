@@ -1,0 +1,38 @@
+{
+  "lesson": "measure-roi",
+  "questions": [
+    {
+      "q": "In the lesson's ROI calculator, what should the \"minutes per task after\" figure include?",
+      "options": [
+        "Only the time the AI takes to generate the first draft",
+        "The average of the before and after times, for fairness",
+        "The whole new process, including time spent on review",
+        "The setup hours spread evenly across the month's tasks"
+      ],
+      "answer": 2,
+      "explain": "The lesson lists leaving review time out of the \"after\" figure as a common mistake. You measure the whole new process, not just how fast the AI generates a draft."
+    },
+    {
+      "q": "A garden center's quote-to-win rate rose after it started AI-drafted follow-ups, but that same month it cut prices and the spring season began. How should the owner treat the gain?",
+      "options": [
+        "Count the whole increase as AI ROI, since follow-ups began that month",
+        "Ignore revenue altogether and report only the hours the AI saved",
+        "Wait a full year before recording any result from the pilot at all",
+        "Compare like with like, weigh other explanations and state confidence"
+      ],
+      "answer": 3,
+      "explain": "The lesson warns against claiming every revenue change. Compare like with like, consider explanations such as seasonality or price changes, count it when the comparison is reasonable, and say how confident you are."
+    },
+    {
+      "q": "At the 30-day review, an auto repair shop's pilot of AI-drafted service reminders shows promising time savings but inconsistent results. What does the lesson's review table recommend?",
+      "options": [
+        "Standardize it now and train everyone, then fix problems as they appear",
+        "Improve the prompts, examples and inputs, then re-measure in two weeks",
+        "Stop it at once, since inconsistent results mean the pilot has failed",
+        "Automate it fully so that people can't introduce any inconsistency"
+      ],
+      "answer": 1,
+      "explain": "For results that are promising but inconsistent, the lesson says to improve prompts, examples and inputs, then re-measure in two weeks. Standardizing is for clear wins."
+    }
+  ]
+}

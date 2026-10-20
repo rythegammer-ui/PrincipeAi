@@ -1,0 +1,38 @@
+{
+  "lesson": "connect-your-apps",
+  "questions": [
+    {
+      "q": "Why should your workflow map the response block whose type is \"text\" instead of simply mapping the first item in the reply?",
+      "options": [
+        "The model can return a thinking block before its answer",
+        "The first item always holds the stop reason, not the answer",
+        "The first item repeats the prompt you sent to the model",
+        "Text blocks are the only kind a platform is able to map"
+      ],
+      "answer": 0,
+      "explain": "The reply is a list of content blocks, and the answer isn't always first because the model can return a thinking block before it. Mapping the text block gets you the actual answer."
+    },
+    {
+      "q": "Your AI step returns a category, but the stop reason is max_tokens. What should your workflow do next?",
+      "options": [
+        "Continue as normal, since a category came back",
+        "Treat it as a refusal and stop the workflow for good",
+        "Not act on it; raise the limit or shorten the input",
+        "Retry the same request until the stop reason changes"
+      ],
+      "answer": 2,
+      "explain": "A max_tokens stop reason means the output was cut off at the length limit. You raise the limit or shorten the input, and you never act on partial output."
+    },
+    {
+      "q": "You're adding a direct HTTP request to an AI provider in your automation platform. Which setup follows the lesson's advice?",
+      "options": [
+        "Type the API key into the request headers so it's easy to change",
+        "Keep the key in the credential store and use the structured body editor",
+        "Write the body as raw JSON so you can see exactly what is being sent",
+        "Set effort to high on every step so classifications are more careful"
+      ],
+      "answer": 1,
+      "explain": "The API key belongs in the platform's credential store, never typed into a step. The structured body editor keeps quotes and line breaks in customer text from breaking the request."
+    }
+  ]
+}

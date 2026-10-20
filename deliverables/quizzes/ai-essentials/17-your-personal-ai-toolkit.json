@@ -1,0 +1,38 @@
+{
+  "lesson": "your-personal-ai-toolkit",
+  "questions": [
+    {
+      "q": "Which three tests does the lesson use to spot a task that's a good candidate for AI?",
+      "options": [
+        "It's language-heavy, a first draft would help, and you can check the result",
+        "It's urgent, it involves numbers, and nobody else is available to help",
+        "It's creative, it's brand new to you, and the stakes are very high",
+        "It's repetitive, it takes hours, and you won't need to review the output"
+      ],
+      "answer": 0,
+      "explain": "The best candidates are language-heavy, like writing, reading, explaining, planning or organizing. They also benefit from a first draft, and you can tell whether the output is good."
+    },
+    {
+      "q": "Your prompt library has grown to 40 saved prompts, but you only ever use a few of them. What does the lesson suggest?",
+      "options": [
+        "Keep adding more, since a bigger library covers more situations",
+        "Delete the library and write every prompt from scratch each time",
+        "Keep a short library of the prompts you actually use",
+        "Switch to a new assistant, since a fresh start will help"
+      ],
+      "answer": 2,
+      "explain": "Collecting prompts you never use is a common mistake, and a short library you use beats a huge one you don't. The lesson suggests eight to twelve prompts for the things you do most."
+    },
+    {
+      "q": "You keep fixing the same problem in the answers from one of your saved prompts. What should you do?",
+      "options": [
+        "Keep fixing it by hand, since saved prompts shouldn't change",
+        "Ask AI to improve the prompt, keeping it short with the brackets",
+        "Stop using that prompt and type a new one from scratch each time",
+        "Try a different assistant each time until one gets it right"
+      ],
+      "answer": 1,
+      "explain": "When you notice you're fixing the same thing every time, improve the prompt. Paste it along with the usual issues and ask AI to improve it, keeping it short and keeping the brackets."
+    }
+  ]
+}

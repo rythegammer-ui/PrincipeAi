@@ -1,0 +1,38 @@
+{
+  "lesson": "what-an-agent-really-is",
+  "questions": [
+    {
+      "q": "What most distinguishes an agent from a workflow?",
+      "options": [
+        "An agent uses a language model, while a workflow never includes an AI step",
+        "An agent runs on a schedule, while a workflow only runs when a form is submitted",
+        "In an agent, the model decides the steps at run time; in a workflow, you decide them in advance",
+        "An agent is always cheaper and faster than a workflow because it skips unneeded steps"
+      ],
+      "answer": 2,
+      "explain": "The lesson defines the difference by who chooses the steps: you design a workflow's steps in advance, while an agent's model chooses them as it goes, trading predictability for flexibility."
+    },
+    {
+      "q": "You want to route every new form submission to one of three sales reps by region, and you could draw the flowchart in five minutes. What does the four-question test suggest?",
+      "options": [
+        "Build it as a workflow, because a task you can map in advance doesn't need an agent",
+        "Build an agent with broad tools so it can handle any future routing rule",
+        "Build an agent but cap it at ten steps so its costs stay predictable",
+        "Skip automation entirely, because routing decisions always need a person"
+      ],
+      "answer": 0,
+      "explain": "The first question asks whether the task is genuinely multi-step and hard to spell out in advance; if you can draw the flowchart, the lesson says to build the workflow."
+    },
+    {
+      "q": "Which of these tasks is the best fit for an agent, according to the lesson?",
+      "options": [
+        "Sending the same welcome email to every new subscriber the moment they sign up",
+        "Replying to website chats within a second, with identical compliance wording each time",
+        "Tagging a handful of invoices a month that a person can sort quickly by hand",
+        "Working out why an invoice doesn't match its order by checking two or three systems"
+      ],
+      "answer": 3,
+      "explain": "Agents shine on tasks with variable paths that require looking things up, like operations investigations, while fixed sequences, strict compliance, split-second responses and very low volumes are red flags."
+    }
+  ]
+}

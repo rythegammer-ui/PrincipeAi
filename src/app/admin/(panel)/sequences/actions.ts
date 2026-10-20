@@ -23,7 +23,7 @@ import { aiText } from "@/lib/ai";
 import { assertAdmin } from "@/lib/auth";
 import { processEnrollment, recipientTemplateVars } from "@/lib/automations";
 import { logActivity, upsertContact } from "@/lib/crm";
-import { emailBusinessName, emailLayout, fillTemplate, markdownToEmailHtml, sendEmail } from "@/lib/email";
+import { buyLinkPattern, emailBusinessName, emailLayout, fillTemplate, markdownToEmailHtml, sendEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
 import { absoluteUrl, isValidEmail, normalizeEmail } from "@/lib/utils";
@@ -256,9 +256,15 @@ const ContentFields = z.object({
   body: z.string().max(BODY_MAX * 2),
 });
 
-/** The sample person's variables, built exactly like a real send's (business name from Settings, escaped body values). */
-async function sampleVars() {
-  return recipientTemplateVars(SAMPLE_PERSON, await emailBusinessName());
+/**
+ * The sample person's variables, built exactly like a real send's (business name from Settings, escaped body values).
+ * Buy links are filled with `buyerEmail` (the admin's own address for a test send) or none, never the sample
+ * person's: a test purchase through them must reach someone real.
+ */
+async function sampleVars(buyerEmail?: string) {
+  const vars = recipientTemplateVars(SAMPLE_PERSON, await emailBusinessName());
+  const buyLink = buyLinkPattern(buyerEmail);
+  return { subject: { ...vars.subject, "buy_link:*": buyLink }, body: { ...vars.body, "buy_link:*": buyLink } };
 }
 
 /** Renders a step exactly as it will be emailed (sample person, branded layout). */
@@ -281,7 +287,7 @@ export async function sendTestStepAction(input: { subject: string; body: string 
   if (!parsed.success || !parsed.data.subject.trim() || !parsed.data.body.trim()) return { ok: false, error: "Add a subject and body before sending a test." };
   const limit = await rateLimit(`admin-test-email:${session.email}`, 10, 600);
   if (!limit.ok) return { ok: false, error: "That's a lot of test emails. Please wait a few minutes." };
-  const vars = await sampleVars();
+  const vars = await sampleVars(session.email);
   const result = await sendEmail({
     to: session.email,
     subject: `[Test] ${fillTemplate(parsed.data.subject, vars.subject)}`,

@@ -12,7 +12,7 @@ import { emailHasCourse, enrollInCourse } from "@/lib/courses";
 import { addLifetimeValue, captureLead, logActivity, upsertContact } from "@/lib/crm";
 import { emailBusinessName, escapeMarkdown, notifyOwner, sendEmail } from "@/lib/email";
 import { testCheckoutAllowed } from "@/lib/integrations";
-import { stripeInstallId, syncPaymentLinks, type PaymentLinkSyncResult } from "@/lib/payment-links";
+import { PaymentLinkSyncBusyError, stripeInstallId, syncPaymentLinks, type PaymentLinkSyncResult } from "@/lib/payment-links";
 import { rateLimit } from "@/lib/rate-limit";
 import { formatMeetingTime, getBusinessTimezone } from "@/lib/scheduling";
 import { getStripe, paymentIntentId, stripeDashboardUrl, stripeTestMode, type Stripe } from "@/lib/stripe";
@@ -737,9 +737,13 @@ export async function failPendingOrder(orderId: string): Promise<Order | null> {
 /** Why payment links can't be synced from here, or null when they can. */
 export function paymentLinkSyncBlocked(): string | null {
   if (!getStripe()) return "Stripe isn't connected. Add STRIPE_SECRET_KEY in your Vercel environment variables, then redeploy.";
-  if (livePaymentsBlocked()) return "Payments are turned off on this demo site.";
+  // Each instance of a demo has its own throwaway database, so each would make (and abandon) its own Stripe objects.
+  if (isDemoMode()) return "Payment links aren't created on a demo site.";
   // A preview deployment would point the links and the webhook at itself.
   if (process.env.VERCEL && process.env.VERCEL_ENV !== "production") return "Payment links are only synced from the production site.";
+  if (!stripeTestMode() && !/^https:\/\/(?!localhost|127\.0\.0\.1)/.test(absoluteUrl("/"))) {
+    return "Live payment links need the site's public https address: set NEXT_PUBLIC_SITE_URL.";
+  }
   return null;
 }
 
@@ -747,7 +751,7 @@ export function paymentLinkSyncBlocked(): string | null {
  * Brings every course's Stripe Payment Link up to date (src/lib/payment-links.ts), and sets up the Stripe webhook
  * endpoint if STRIPE_WEBHOOK_SECRET isn't set. Null when that can't be done here (see paymentLinkSyncBlocked).
  */
-export async function syncCoursePaymentLinks(): Promise<PaymentLinkSyncResult | null> {
+export async function syncCoursePaymentLinks(opts: { lockWaitMs?: number; signal?: AbortSignal } = {}): Promise<PaymentLinkSyncResult | null> {
   const stripe = getStripe();
   if (!stripe || paymentLinkSyncBlocked()) return null;
   return syncPaymentLinks({
@@ -756,7 +760,9 @@ export async function syncCoursePaymentLinks(): Promise<PaymentLinkSyncResult | 
     mode: stripeTestMode() ? "test" : "live",
     siteUrl: absoluteUrl("/"),
     currency: site.currency,
-    webhook: { envSecretSet: Boolean(process.env.STRIPE_WEBHOOK_SECRET?.trim()) },
+    // This runs on the live deployment, so it may retire the site's own endpoint once STRIPE_WEBHOOK_SECRET replaces it.
+    webhook: { envSecret: process.env.STRIPE_WEBHOOK_SECRET?.trim() || null, removeReplaced: true },
+    ...opts,
   });
 }
 
@@ -765,10 +771,12 @@ export function syncCoursePaymentLinksLater(): void {
   if (paymentLinkSyncBlocked()) return;
   after(async () => {
     try {
-      const result = await syncCoursePaymentLinks();
+      const result = await syncCoursePaymentLinks({ lockWaitMs: 15_000 });
       if (result?.errors.length) console.error("[payments] payment-link sync problems", result.errors);
     } catch (err) {
-      console.error("[payments] payment-link sync failed", err);
+      // A sync already running goes again when it finishes, so this change isn't lost.
+      if (err instanceof PaymentLinkSyncBusyError) console.info("[payments]", err.message);
+      else console.error("[payments] payment-link sync failed", err);
     }
   });
 }
@@ -792,8 +800,18 @@ export async function orderIdForCheckoutSession(session: Stripe.Checkout.Session
   if (existing) return existing.id;
   if (!opts.create || session.mode !== "payment" || session.status !== "complete") return null;
   // A link made by another database on the same Stripe account (e.g. a local copy): that site's sale, not ours.
-  const install = session.metadata?.install;
-  if (install && install !== (await stripeInstallId(db))) return null;
+  // Unless it names one of our courses (course ids are random per database): then it's ours from before a restore.
+  const meta = session.metadata ?? {};
+  if (meta.install && meta.install !== (await stripeInstallId(db))) {
+    const known =
+      meta.courseId && UUID.test(meta.courseId)
+        ? (await db.select({ id: schema.courses.id }).from(schema.courses).where(eq(schema.courses.id, meta.courseId)).limit(1)).length > 0
+        : false;
+    if (!known) {
+      console.warn("[payments] ignoring a checkout from another site's payment link", session.id);
+      return null;
+    }
+  }
   return createPaymentLinkOrder(session);
 }
 

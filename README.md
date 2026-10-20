@@ -81,6 +81,11 @@ Reset the local database with `npm run db:reset-local`.
    with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
    `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`, `charge.dispute.created`,
    `charge.dispute.closed`, and copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+   The daily scheduled job re-syncs the links (and retries a sync that failed), and the first run after this feature
+   ships adds course buy links to the two default sales emails, unless you've edited them.
+   **Rolling back** to a deployment from before payment links: switch the links off in Stripe (Payment links →
+   deactivate) and delete the endpoint the site created (Developers → Webhooks, described as created automatically by
+   the site), and remove `{{buy_link:…}}` from your automation emails, since older code can't fill it in.
 5. **Redeploy**, then sign in at `/admin` and visit **Settings**: it shows which integrations are connected and walks
    you through anything missing.
 6. **Speed Insights** (optional): in the Vercel project, open **Speed Insights** and enable it. The site already includes

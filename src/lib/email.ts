@@ -45,7 +45,7 @@ function placeholderArg(raw: string): string {
  * owner wrote by hand, which may quote {{…}} on purpose). Values are HTML-escaped when `escape` is true.
  * A placeholder can take an argument, `{{buy_link:ai-essentials}}`: it uses `vars["buy_link:ai-essentials"]`, else
  * `vars["buy_link:*"]` with `{arg}` replaced. The argument is normalized like a slug, so `{{buy_link: AI_Essentials}}`
- * works too.
+ * works too. `{{word: text}}` whose word takes no argument is left as typed (e.g. a quoted prompt template).
  */
 export function fillTemplate(template: string, vars: TemplateVars, escape = false, keepUnknown = false): string {
   return template.replace(/\{\{\s*(\w+)(?:\s*:([^{}]*))?\s*\}\}/g, (match: string, key: string, rawArg: string | undefined) => {
@@ -54,10 +54,12 @@ export function fillTemplate(template: string, vars: TemplateVars, escape = fals
       v = vars[key];
     } else {
       const arg = placeholderArg(rawArg);
-      if (arg) {
-        v = vars[`${key}:${arg}`];
-        const pattern = vars[`${key}:*`];
-        if ((v === undefined || v === null) && pattern !== undefined && pattern !== null) v = String(pattern).replaceAll("{arg}", arg);
+      const pattern = vars[`${key}:*`];
+      if (pattern === undefined || pattern === null) {
+        v = arg ? vars[`${key}:${arg}`] : undefined;
+        if (v === undefined || v === null) return match;
+      } else if (arg) {
+        v = vars[`${key}:${arg}`] ?? String(pattern).replaceAll("{arg}", arg);
       }
     }
     if (v === undefined || v === null) return keepUnknown ? match : "";

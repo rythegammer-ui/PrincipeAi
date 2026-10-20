@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Order } from "@/db/schema";
 import { logActivity } from "@/lib/crm";
@@ -68,6 +68,22 @@ async function orderForPayment(value: string | Stripe.PaymentIntent | null): Pro
 async function handleRefund(charge: Stripe.Charge) {
   const order = await orderForPayment(charge.payment_intent);
   if (!order) return;
+  if (charge.refunded && (order.status === "pending" || order.status === "expired")) {
+    // Refunded before it was delivered (e.g. the checkout event failed and Stripe hadn't retried yet): nothing to
+    // take back, but a later retry of the checkout event, or the success page, must not deliver it now.
+    const db = await getDb();
+    const [stopped] = await db
+      .update(schema.orders)
+      .set({ status: "refunded" })
+      .where(and(eq(schema.orders.id, order.id), inArray(schema.orders.status, ["pending", "expired"])))
+      .returning({ id: schema.orders.id });
+    if (stopped && order.contactId) {
+      await logActivity(order.contactId, "note", `Refunded ${order.description} before it was delivered`, {
+        meta: { orderId: order.id, amountCents: order.amountCents, refund: true, source: "stripe", accessRevoked: false },
+      });
+    }
+    if (stopped) return;
+  }
   if (charge.refunded) {
     // Full refund: mark refunded and remove the course access bought with this order.
     await refundOrder(order.id, { revokeAccess: true, source: "stripe", reason: "Refunded in Stripe" });

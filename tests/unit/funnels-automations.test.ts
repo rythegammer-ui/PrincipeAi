@@ -160,7 +160,7 @@ describe("scheduled jobs", () => {
     ]);
 
     const summary = await runScheduledJobs();
-    expect(Object.keys(summary.jobs)).toEqual(["automations", "bookingReminders", "stripeCheckouts", "paymentLinks", "expiredHolds", "expiredOrders", "rateLimits", "loginTokens"]);
+    expect(Object.keys(summary.jobs)).toEqual(["automations", "bookingReminders", "stripeCheckouts", "expiredHolds", "expiredOrders", "rateLimits", "loginTokens", "paymentLinks"]);
     expect(summary.ok).toBe(true);
 
     const status = async (id: string) => (await db.select().from(schema.orders).where(eq(schema.orders.id, id)))[0].status;

@@ -1,7 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { getDb, schema } from "@/db";
-import { sequenceCopyUpgrades } from "@/db/seed-content/sequences";
+import { seedSequences, sequenceCopyUpgrades } from "@/db/seed-content/sequences";
 import { COPY_UPGRADES_KEY, upgradeSequenceCopy } from "@/lib/automations";
 
 type DB = Awaited<ReturnType<typeof getDb>>;
@@ -16,7 +16,14 @@ async function stepFor(db: DB, sequence: string, subject: string) {
   return row;
 }
 
-const setBody = async (db: DB, id: string, body: string) => db.update(schema.sequenceSteps).set({ body }).where(eq(schema.sequenceSteps.id, id));
+/** As seeded (never edited: updated_at stays at created_at), or as saved by the owner in the editor. */
+const setBody = async (db: DB, id: string, body: string) =>
+  db.update(schema.sequenceSteps).set({ body, updatedAt: sql`${schema.sequenceSteps.createdAt}` }).where(eq(schema.sequenceSteps.id, id));
+const ownerSaves = async (db: DB, id: string, body: string) =>
+  db
+    .update(schema.sequenceSteps)
+    .set({ body, updatedAt: sql`${schema.sequenceSteps.createdAt} + interval '1 hour'` })
+    .where(eq(schema.sequenceSteps.id, id));
 
 describe("default email copy upgrades", () => {
   let db: DB;
@@ -39,13 +46,43 @@ describe("default email copy upgrades", () => {
     expect((await stepFor(db, assessment.sequence, assessment.subject)).body).toContain("Our courses are great");
 
     // The owner later removes the links again: a later run doesn't put them back.
-    await setBody(db, guideStep.id, current.replace(guide.to, guide.from));
+    await ownerSaves(db, guideStep.id, current.replace(guide.to, guide.from));
     expect(await upgradeSequenceCopy()).toBe(0);
     expect((await stepFor(db, guide.sequence, guide.subject)).body).toContain(guide.from);
     expect((await stepFor(db, guide.sequence, guide.subject)).body).not.toContain(guide.to);
 
     const [marker] = await db.select().from(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY));
     expect(marker.value).toEqual(sequenceCopyUpgrades.map((u) => u.id));
+  });
+
+  it("leaves emails the owner edited, paragraphs they extended, and waits while the courses aren't for sale", async () => {
+    await db.delete(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY));
+    const guideStep = await stepFor(db, guide.sequence, guide.subject);
+    const assessmentStep = await stepFor(db, assessment.sequence, assessment.subject);
+    // Each email as an older version seeded it: today's seed copy with the old paragraph.
+    const seeded = (u: (typeof sequenceCopyUpgrades)[number]) =>
+      seedSequences.find((q) => q.name === u.sequence)!.steps.find((st) => st.subject === u.subject)!.body.replace(u.to, u.from);
+    const oldGuide = seeded(guide);
+    const oldAssessment = seeded(assessment);
+
+    // A course it pitches is unpublished: nothing changes and the upgrade isn't used up.
+    await setBody(db, guideStep.id, oldGuide);
+    await setBody(db, assessmentStep.id, oldAssessment);
+    await db.update(schema.courses).set({ published: false }).where(eq(schema.courses.slug, "ai-for-business"));
+    expect(await upgradeSequenceCopy()).toBe(0);
+    expect((await stepFor(db, guide.sequence, guide.subject)).body).toBe(oldGuide);
+    expect((await db.select().from(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY)))).toHaveLength(0);
+    await db.update(schema.courses).set({ published: true }).where(eq(schema.courses.slug, "ai-for-business"));
+
+    // The owner saved the guide email (any edit), and added a line to the assessment paragraph.
+    await ownerSaves(db, guideStep.id, oldGuide);
+    await setBody(db, assessmentStep.id, oldAssessment.replace(assessment.from, `${assessment.from} Use code SAVE10.`));
+    expect(await upgradeSequenceCopy()).toBe(0);
+    expect((await stepFor(db, guide.sequence, guide.subject)).body).toBe(oldGuide);
+    expect((await stepFor(db, assessment.sequence, assessment.subject)).body).toContain("Use code SAVE10.");
+    expect((await stepFor(db, assessment.sequence, assessment.subject)).body).not.toContain(assessment.to);
+    const done = await db.select().from(schema.settings).where(eq(schema.settings.key, COPY_UPGRADES_KEY));
+    expect(done[0].value).toEqual(sequenceCopyUpgrades.map((u) => u.id));
   });
 
   it("only records the upgrades for a database seeded with the new copy", async () => {

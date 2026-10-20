@@ -18,17 +18,34 @@ export type SeedSequence = {
 
 const SIGN_OFF = "Talk soon,\nThe {{businessName}} team";
 
-/* Course pitches with direct buy links. `sequenceCopyUpgrades` (applied by scripts/migrate.ts) adds the links to
- * databases seeded before they existed, wherever the owner hasn't rewritten that paragraph. */
+/* Course pitches with direct buy links. `sequenceCopyUpgrades` (applied by the scheduled automations job) adds the
+ * links to databases seeded before they existed, in steps the owner hasn't edited. */
 const GUIDE_SELF_PACED_V1 = `**If you'd like to learn at your own pace**, our [courses]({{coursesUrl}}) take you from the basics to building real workflows, with an AI tutor inside every lesson to answer your questions as you go.`;
 const GUIDE_SELF_PACED = `${GUIDE_SELF_PACED_V1} Most people start with **[AI Essentials]({{buy_link:ai-essentials}})**; if you run a business, go straight to **[AI for Business Owners]({{buy_link:ai-for-business}})**.`;
 const ASSESSMENT_SELF_PACED_V1 = `Prefer to learn on your own? Our [courses]({{coursesUrl}}) follow the same step-by-step path, with an AI tutor in every lesson.`;
 const ASSESSMENT_SELF_PACED = `${ASSESSMENT_SELF_PACED_V1} You can [start AI Essentials today]({{buy_link:ai-essentials}}), or [AI for Business Owners]({{buy_link:ai-for-business}}) if you're bringing AI into a company.`;
 
-/** Paragraph rewrites for existing databases: `from` is replaced by `to` in that sequence step, once per `id`. */
-export const sequenceCopyUpgrades: { id: string; sequence: string; subject: string; from: string; to: string }[] = [
-  { id: "buy-links-guide", sequence: "Free Guide Nurture", subject: "Your next step with AI", from: GUIDE_SELF_PACED_V1, to: GUIDE_SELF_PACED },
-  { id: "buy-links-assessment", sequence: "Assessment Follow-up", subject: "Let's turn your AI plan into results", from: ASSESSMENT_SELF_PACED_V1, to: ASSESSMENT_SELF_PACED },
+/**
+ * Paragraph rewrites for existing databases: the paragraph `from` becomes `to` in that sequence step, once per `id`,
+ * only in steps nobody has edited and only while the `requires` courses are for sale (see upgradeSequenceCopy).
+ */
+export const sequenceCopyUpgrades: { id: string; sequence: string; subject: string; from: string; to: string; requires: string[] }[] = [
+  {
+    id: "buy-links-guide",
+    sequence: "Free Guide Nurture",
+    subject: "Your next step with AI",
+    from: GUIDE_SELF_PACED_V1,
+    to: GUIDE_SELF_PACED,
+    requires: ["ai-essentials", "ai-for-business"],
+  },
+  {
+    id: "buy-links-assessment",
+    sequence: "Assessment Follow-up",
+    subject: "Let's turn your AI plan into results",
+    from: ASSESSMENT_SELF_PACED_V1,
+    to: ASSESSMENT_SELF_PACED,
+    requires: ["ai-essentials", "ai-for-business"],
+  },
 ];
 
 export const seedSequences: SeedSequence[] = [

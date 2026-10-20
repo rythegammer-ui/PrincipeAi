@@ -38,7 +38,8 @@ async function syncStripe(db: DB) {
       mode,
       siteUrl,
       currency: site.currency,
-      webhook: { envSecretSet: Boolean(process.env.STRIPE_WEBHOOK_SECRET?.trim()) },
+      // The live deployment, not this build step, removes a replaced endpoint (see syncPaymentLinks).
+      webhook: { envSecret: process.env.STRIPE_WEBHOOK_SECRET?.trim() || null, removeReplaced: false },
       signal: stop.signal,
     });
     for (const line of describeSync(result)) console.log(`[migrate]   ${line}`);

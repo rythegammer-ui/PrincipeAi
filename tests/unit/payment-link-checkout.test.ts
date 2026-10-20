@@ -149,12 +149,34 @@ describe("Stripe payment-link checkouts", () => {
     expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: ours } }))).status).toBe(200);
     expect((await ordersFor(ours.id))[0]).toMatchObject({ status: "paid", courseId: course.id });
 
-    // A link made by another database on the same Stripe account (a local copy, say): that site's sale.
+    // A link made by another database on the same Stripe account (a local copy, say) for its own course: that site's sale.
     const theirs = linkSession(`theirs-${randomUUID().slice(0, 8)}@example.com`, {
-      metadata: { source: PAYMENT_LINK_SOURCE, install: "another-database", courseId: course.id, courseSlug: course.slug },
+      metadata: { source: PAYMENT_LINK_SOURCE, install: "another-database", courseId: randomUUID(), courseSlug: course.slug },
     });
     expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: theirs } }))).status).toBe(200);
     expect(await ordersFor(theirs.id)).toHaveLength(0);
+
+    // One naming our course is ours, whatever its install id (made before this database was restored).
+    const restored = linkSession(`restored-${randomUUID().slice(0, 8)}@example.com`, {
+      metadata: { source: PAYMENT_LINK_SOURCE, install: "before-the-restore", courseId: course.id, courseSlug: course.slug },
+    });
+    expect((await POST(signedRequest({ type: "checkout.session.completed", data: { object: restored } }))).status).toBe(200);
+    expect((await ordersFor(restored.id))[0]).toMatchObject({ status: "paid", courseId: course.id });
+  });
+
+  it("never delivers an order refunded before it was fulfilled", async () => {
+    const email = `refunded-early-${randomUUID().slice(0, 8)}@example.com`;
+    // A delayed payment: the order exists, still pending.
+    const session = linkSession(email, { payment_status: "unpaid" });
+    await POST(signedRequest({ type: "checkout.session.completed", data: { object: session } }));
+    expect((await ordersFor(session.id))[0].status).toBe("pending");
+    // Refunded in full in Stripe, then a (late or retried) success event arrives.
+    const refund = { id: "ch_early", object: "charge", payment_intent: session.payment_intent, refunded: true, amount_refunded: course.priceCents };
+    expect((await POST(signedRequest({ type: "charge.refunded", data: { object: refund } }))).status).toBe(200);
+    expect((await ordersFor(session.id))[0].status).toBe("refunded");
+    expect((await POST(signedRequest({ type: "checkout.session.async_payment_succeeded", data: { object: { ...session, payment_status: "paid" } } }))).status).toBe(200);
+    expect((await ordersFor(session.id))[0].status).toBe("refunded");
+    expect(await emailHasCourse(email, course.id)).toBe(false);
   });
 
   it("doesn't enroll a buyer in a different course that took over a deleted course's slug", async () => {
@@ -252,6 +274,10 @@ describe("Stripe payment-link checkouts", () => {
     // Text the owner typed keeps double braces it doesn't mean as placeholders (e.g. a prompt template).
     expect(fillTemplate("Hi {{firstName}}: reply to {{name}} at {{company}} {{x:y}}", { firstName: "Ana" }, false, true)).toBe(
       "Hi Ana: reply to {{name}} at {{company}} {{x:y}}",
+    );
+    // `{{word: text}}` was never a placeholder: automation emails keep sending it as written.
+    expect(fillTemplate("Try {{role: marketing manager}} and {{https://example.com}}.", defaultTemplateVars("Principe"))).toBe(
+      "Try {{role: marketing manager}} and {{https://example.com}}.",
     );
     const vars = recipientTemplateVars({ name: "Ana", email: "ana+promo@example.com" }, "Principe");
     expect(fillTemplate("[Buy]({{buy_link:ai-essentials}})", vars.body)).toBe("[Buy](https://principe.example/buy/ai-essentials?email=ana%2Bpromo%40example.com)");

@@ -4,6 +4,7 @@ import { and, asc, eq, gt, inArray, like, lt, notLike, or, sql } from "drizzle-o
 import { getDb, schema } from "@/db";
 import { processDueEnrollments, upgradeSequenceCopy } from "@/lib/automations";
 import { releaseExpiredHolds, sendDueBookingReminders } from "@/lib/booking-service";
+import { PaymentLinkSyncBusyError } from "@/lib/payment-links";
 import {
   failPendingOrder,
   fulfillOrder,
@@ -181,16 +182,6 @@ const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = 
   },
   // Before holds and stale orders are released, so a paid checkout whose webhook was missed is delivered instead.
   stripeCheckouts: reconcileStripeCheckouts,
-  // Catches up when a sync after a course change failed (or a link was changed in the Stripe dashboard).
-  async paymentLinks() {
-    const blocked = paymentLinkSyncBlocked();
-    if (blocked) return { count: 0, detail: blocked };
-    const result = await syncCoursePaymentLinks();
-    if (!result) return { count: 0 };
-    if (result.errors.length) throw new Error(result.errors.join("; "));
-    const changed = result.courses.filter((c) => c.status !== "unchanged" && c.status !== "not-for-sale").length + result.retired;
-    return { count: changed, detail: `${result.courses.filter((c) => c.url).length} live` };
-  },
   async expiredHolds() {
     return { count: await releaseExpiredHolds() };
   },
@@ -226,6 +217,23 @@ const JOBS: Record<JobKey, () => Promise<{ count: number; detail?: string }>> = 
       .where(lt(schema.loginTokens.expiresAt, new Date(Date.now() - LOGIN_TOKEN_RETENTION_MS)))
       .returning({ hash: schema.loginTokens.tokenHash });
     return { count: rows.length };
+  },
+  // Last, so the clean-up jobs above always run within the cron's time limit. Catches up when a sync after a course
+  // change failed (or a link was changed in the Stripe dashboard).
+  async paymentLinks() {
+    const blocked = paymentLinkSyncBlocked();
+    if (blocked) return { count: 0, detail: blocked };
+    let result;
+    try {
+      result = await syncCoursePaymentLinks({ lockWaitMs: 5_000, signal: AbortSignal.timeout(30_000) });
+    } catch (err) {
+      if (err instanceof PaymentLinkSyncBusyError) return { count: 0, detail: "another sync was running" };
+      throw err;
+    }
+    if (!result) return { count: 0 };
+    if (result.errors.length) throw new Error(result.errors.join("; "));
+    const changed = result.courses.filter((c) => c.status !== "unchanged" && c.status !== "not-for-sale").length + result.retired;
+    return { count: changed, detail: `${result.courses.filter((c) => c.url).length} live` };
   },
 };
 

@@ -13,7 +13,8 @@
  *
  * Every object it manages is stamped with this database's install id (`metadata.install`). Another database using
  * the same Stripe account (a local copy, a preview with its own database) only ever touches its own objects, and
- * the webhook ignores checkouts from links it didn't make.
+ * the webhook ignores checkouts from links it didn't make. Links naming one of this database's courses count as
+ * its own whatever their install id (course ids are random per database), so a restored database keeps them.
  *
  * No "server-only": the build script imports this. Callers pass the database and the Stripe client.
  * OWNER: courses & payments.
@@ -258,11 +259,22 @@ function inactiveMessage(siteUrl: string): string {
   return `This checkout link is no longer active. See ${siteUrl}/courses for our current courses and prices.`;
 }
 
-/* One sync at a time (build, Admin → Courses, and the sync after a course change can overlap): a lease row in
- * `settings`, taken over if its holder died without releasing it. */
+/* One sync at a time (build, Admin → Courses, the daily job and the sync after a course change can overlap): a lease
+ * row in `settings`, renewed between courses and taken over if its holder died without releasing it. A sync that
+ * finds the lease taken asks the running one to go again when it finishes (RESYNC_KEY), so its change isn't missed
+ * even if it gives up waiting. */
 const LOCK_KEY = "stripePaymentLinkSync:lock";
+const RESYNC_KEY = "stripePaymentLinkSync:again";
 const LOCK_TTL_MS = 3 * 60_000;
 const LOCK_WAIT_MS = 60_000;
+
+/** Thrown when another sync held the lease for longer than the caller was willing to wait (it will run again for us). */
+export class PaymentLinkSyncBusyError extends Error {
+  constructor() {
+    super("Another payment-link sync is still running; it will pick up the latest changes when it finishes.");
+    this.name = "PaymentLinkSyncBusyError";
+  }
+}
 
 async function acquireSyncLock(db: DB, token: string): Promise<boolean> {
   const rows = await db
@@ -277,6 +289,21 @@ async function acquireSyncLock(db: DB, token: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/** Extends the lease; throws when another sync took it over (this one ran past the TTL), so two never run at once. */
+async function renewSyncLock(db: DB, token: string): Promise<void> {
+  const rows = await db
+    .update(schema.settings)
+    .set({ updatedAt: new Date() })
+    .where(and(eq(schema.settings.key, LOCK_KEY), sql`${schema.settings.value}->>'token' = ${token}`))
+    .returning({ key: schema.settings.key });
+  if (rows.length === 0) throw new Error("Lost the payment-link sync lock to another sync");
+}
+
+async function takeResyncRequest(db: DB): Promise<boolean> {
+  const rows = await db.delete(schema.settings).where(eq(schema.settings.key, RESYNC_KEY)).returning({ key: schema.settings.key });
+  return rows.length > 0;
+}
+
 async function releaseSyncLock(db: DB, token: string): Promise<void> {
   await db.delete(schema.settings).where(and(eq(schema.settings.key, LOCK_KEY), sql`${schema.settings.value}->>'token' = ${token}`));
 }
@@ -288,8 +315,13 @@ type SyncInput = {
   /** Absolute site URL (e.g. https://principeai.com); a trailing slash is ignored. */
   siteUrl: string;
   currency: string;
-  /** Also create the webhook endpoint when none is configured (skipped when STRIPE_WEBHOOK_SECRET is set). */
-  webhook?: { envSecretSet: boolean };
+  /**
+   * Also look after the webhook endpoint. `envSecret` is STRIPE_WEBHOOK_SECRET (null when unset): with one set, the
+   * site's own endpoint is kept if it is that endpoint, and otherwise removed, but only when `removeReplaced` (a sync
+   * running on the live deployment, which can verify with the env secret; never the build step, which runs before
+   * the deployment that has it goes live).
+   */
+  webhook?: { envSecret: string | null; removeReplaced: boolean };
   /** How long to wait for another sync to finish (default one minute). */
   lockWaitMs?: number;
   /** Stops the sync between Stripe calls (e.g. when a build step times out). */
@@ -303,16 +335,33 @@ type SyncInput = {
  * One course failing doesn't stop the others; failures are listed in `errors`.
  */
 export async function syncPaymentLinks(input: SyncInput): Promise<PaymentLinkSyncResult> {
+  const { db } = input;
+  const siteUrl = input.siteUrl.replace(/\/+$/, "");
+  // Buyers are sent back to this address after paying: never a local or plain-http one for real money.
+  if (input.mode === "live" && !isPublicHttps(siteUrl)) {
+    throw new Error(`Live payment links need the site's public https address, not ${siteUrl} (set NEXT_PUBLIC_SITE_URL).`);
+  }
   const token = randomUUID();
   const deadline = Date.now() + (input.lockWaitMs ?? LOCK_WAIT_MS);
-  while (!(await acquireSyncLock(input.db, token))) {
-    if (Date.now() > deadline) throw new Error("Another payment-link sync is still running. Try again in a minute.");
+  let asked = false;
+  while (!(await acquireSyncLock(db, token))) {
+    if (!asked) {
+      await upsertSetting(db, RESYNC_KEY, true);
+      asked = true;
+    }
+    if (Date.now() >= deadline) throw new PaymentLinkSyncBusyError();
+    input.signal?.throwIfAborted();
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   try {
     let result: PaymentLinkSyncResult;
     try {
-      result = await runSync(input);
+      // Changes made while this ran (another caller asked for a resync) get one more pass, at most twice.
+      for (let pass = 0; ; pass++) {
+        await takeResyncRequest(db);
+        result = await runSync({ ...input, siteUrl }, token);
+        if (pass >= 2 || !(await takeResyncRequest(db))) break;
+      }
     } catch (err) {
       await upsertSetting(input.db, LAST_SYNC_KEY, { at: new Date().toISOString(), mode: input.mode, errors: [errorMessage(err)] }).catch(() => {});
       throw err;
@@ -324,9 +373,12 @@ export async function syncPaymentLinks(input: SyncInput): Promise<PaymentLinkSyn
   }
 }
 
-async function runSync(input: SyncInput): Promise<PaymentLinkSyncResult> {
-  const { db, stripe, mode, currency } = input;
-  const siteUrl = input.siteUrl.replace(/\/+$/, "");
+function isPublicHttps(url: string): boolean {
+  return url.startsWith("https://") && !/^https:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(url);
+}
+
+async function runSync(input: SyncInput, token: string): Promise<PaymentLinkSyncResult> {
+  const { db, stripe, mode, currency, siteUrl } = input;
   const redirectUrl = `${siteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
   const result: PaymentLinkSyncResult = { mode, courses: [], retired: 0, webhook: null, errors: [] };
   const install = await stripeInstallId(db);
@@ -346,11 +398,14 @@ async function runSync(input: SyncInput): Promise<PaymentLinkSyncResult> {
 
   // This database's links in Stripe, by course. An earlier link for the same price is switched back on rather than
   // replaced (so links already sent work again), a lost database row is recovered, and stray active links are retired.
-  // Links made by another database on the same Stripe account are never touched.
+  // Links made by another database on the same Stripe account are never touched: ours carry this install id or name
+  // one of these courses (a restored database gets a new install id but keeps its course ids).
+  const courseIds = new Set(courses.map((c) => c.id));
   const all = await stripe.paymentLinks.list({ limit: 100 }).autoPagingToArray({ limit: 5000 });
   const linksByCourse = new Map<string, Stripe.PaymentLink[]>();
   for (const link of all) {
-    if (link.metadata?.source !== PAYMENT_LINK_SOURCE || link.metadata.install !== install || !link.metadata.courseId) continue;
+    const meta = link.metadata;
+    if (meta?.source !== PAYMENT_LINK_SOURCE || !meta.courseId || (meta.install !== install && !courseIds.has(meta.courseId))) continue;
     const list = linksByCourse.get(link.metadata.courseId) ?? [];
     list.push(link);
     linksByCourse.set(link.metadata.courseId, list);
@@ -364,6 +419,7 @@ async function runSync(input: SyncInput): Promise<PaymentLinkSyncResult> {
 
   for (const course of courses) {
     input.signal?.throwIfAborted();
+    await renewSyncLock(db, token);
     const current = stored.get(course.id);
     const candidates = activeLinks(course.id);
     try {
@@ -450,7 +506,6 @@ async function runSync(input: SyncInput): Promise<PaymentLinkSyncResult> {
   }
 
   // Courses that were deleted: switch their links off and drop the rows.
-  const courseIds = new Set(courses.map((c) => c.id));
   for (const courseId of linksByCourse.keys()) {
     if (courseIds.has(courseId)) continue;
     for (const link of activeLinks(courseId)) {
@@ -467,8 +522,11 @@ async function runSync(input: SyncInput): Promise<PaymentLinkSyncResult> {
 
   if (input.webhook) {
     input.signal?.throwIfAborted();
+    await renewSyncLock(db, token);
     try {
-      result.webhook = await ensureWebhookEndpoint(db, stripe, mode, siteUrl, input.webhook.envSecretSet, install);
+      result.webhook = await ensureWebhookEndpoint(db, stripe, mode, siteUrl, input.webhook, install);
+      // Webhooks still can't be verified: the owner has to act, so it counts as a problem.
+      if (result.webhook.status === "unmanaged") result.errors.push(`Webhook endpoint: ${result.webhook.detail}`);
     } catch (err) {
       result.webhook = { status: "failed", detail: errorMessage(err) };
       result.errors.push(`Webhook endpoint: ${errorMessage(err)}`);
@@ -479,21 +537,23 @@ async function runSync(input: SyncInput): Promise<PaymentLinkSyncResult> {
 
 /**
  * Makes sure Stripe sends this site's checkout and refund events. Uses STRIPE_WEBHOOK_SECRET's endpoint when that's
- * set (removing the one the site made, so events aren't handled twice); otherwise creates (or keeps up to date) an
- * endpoint of its own and stores its signing secret.
+ * set (removing the one the site made, if it's a different one, so events aren't handled twice); otherwise creates
+ * (or keeps up to date) an endpoint of its own and stores its signing secret.
  */
 async function ensureWebhookEndpoint(
   db: DB,
   stripe: Stripe,
   mode: StripeMode,
   siteUrl: string,
-  envSecretSet: boolean,
+  options: NonNullable<SyncInput["webhook"]>,
   install: string,
 ): Promise<NonNullable<PaymentLinkSyncResult["webhook"]>> {
   const key = `${WEBHOOK_PREFIX}${mode}`;
-  if (envSecretSet) {
+  if (options.envSecret) {
     const stored = await readWebhook(db, mode);
-    if (!stored) return { status: "env" };
+    // No endpoint of ours, or the owner put our own endpoint's secret in STRIPE_WEBHOOK_SECRET: nothing to remove.
+    if (!stored || stored.secret === options.envSecret) return { status: "env" };
+    if (!options.removeReplaced) return { status: "env", detail: "The site's own endpoint is removed by the next sync on the live site" };
     try {
       await stripe.webhookEndpoints.del(stored.endpointId);
     } catch (err) {
@@ -503,7 +563,7 @@ async function ensureWebhookEndpoint(
     return { status: "env", detail: "Removed the endpoint the site had created: STRIPE_WEBHOOK_SECRET's endpoint is used instead" };
   }
   const url = `${siteUrl}/api/stripe/webhook`;
-  if (!url.startsWith("https://") || /\/\/(localhost|127\.0\.0\.1)[:/]/.test(url)) {
+  if (!isPublicHttps(url)) {
     return { status: "skipped", detail: "Stripe can only send webhooks to a public https address" };
   }
   const stored = await readWebhook(db, mode);
@@ -527,7 +587,7 @@ async function ensureWebhookEndpoint(
   if (foreign) {
     return {
       status: "unmanaged",
-      detail: `A webhook endpoint for ${url} already exists in Stripe (${foreign.id}). Add its signing secret as STRIPE_WEBHOOK_SECRET.`,
+      detail: `A webhook endpoint for ${url} that the site didn't create already exists in Stripe (${foreign.id}). Copy its signing secret (Stripe → Developers → Webhooks) into STRIPE_WEBHOOK_SECRET in Vercel and redeploy, or delete that endpoint and sync again.`,
     };
   }
   // One of ours whose secret isn't stored any more (e.g. a new database): Stripe won't show the secret again, so replace it.

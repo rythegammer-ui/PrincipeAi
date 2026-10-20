@@ -84,8 +84,9 @@ export function PaymentLinksPanel({
         )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {/* Announces the wait; the result Alert below announces itself. */}
         <p role="status" aria-live="polite" className="sr-only">
-          {pending ? "Syncing with Stripe…" : result ? (result.ok ? result.message : result.error) : ""}
+          {pending ? "Syncing with Stripe…" : ""}
         </p>
         {stripe === "missing" && (
           <Alert tone="info">Connect Stripe (Settings → Integrations) to create payment links. Until then, the buy links below open each course&apos;s sales page.</Alert>

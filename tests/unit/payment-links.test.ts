@@ -18,6 +18,9 @@ import {
 } from "@/lib/payment-links";
 
 const SITE = "https://principe.example";
+/** Sync options for the webhook: no STRIPE_WEBHOOK_SECRET, or the owner's own endpoint's secret (on the live site). */
+const NO_ENV_SECRET = { envSecret: null, removeReplaced: true };
+const OWNER_SECRET = { envSecret: "whsec_owner_made_this_endpoint", removeReplaced: true };
 
 /** An in-memory Stripe with just the calls the sync makes. `created` counts objects created per kind. */
 function fakeStripe() {
@@ -237,39 +240,120 @@ describe("Stripe payment-link sync", () => {
   it("creates its own webhook endpoint once, and stays out of the way of one set up by hand", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     // Local addresses can't receive webhooks.
-    expect((await sync({ siteUrl: "http://localhost:3000", webhook: { envSecretSet: false } })).webhook?.status).toBe("skipped");
+    expect((await sync({ siteUrl: "http://localhost:3000", webhook: NO_ENV_SECRET })).webhook?.status).toBe("skipped");
     // STRIPE_WEBHOOK_SECRET already set: nothing to do.
-    expect((await sync({ webhook: { envSecretSet: true } })).webhook?.status).toBe("env");
+    expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("env");
     expect(fake.created.endpoints).toBe(0);
 
-    const first = await sync({ webhook: { envSecretSet: false } });
+    const first = await sync({ webhook: NO_ENV_SECRET });
     expect(first.webhook?.status).toBe("created");
     const [endpoint] = [...fake.endpoints.values()];
     expect(endpoint).toMatchObject({ url: `${SITE}/api/stripe/webhook`, enabled_events: STRIPE_WEBHOOK_EVENTS });
     expect(await readWebhookSecret(db, "test")).toBe(`whsec_${endpoint.id as string}_secret`);
     expect(await readWebhookSecret(db, "live")).toBeNull();
 
-    expect((await sync({ webhook: { envSecretSet: false } })).webhook?.status).toBe("ok");
+    expect((await sync({ webhook: NO_ENV_SECRET })).webhook?.status).toBe("ok");
     // Someone narrowed its events in the dashboard: they're put back.
     fake.endpoints.set(endpoint.id as string, { ...endpoint, enabled_events: ["charge.refunded"] });
-    expect((await sync({ webhook: { envSecretSet: false } })).webhook?.status).toBe("updated");
+    expect((await sync({ webhook: NO_ENV_SECRET })).webhook?.status).toBe("updated");
     expect(fake.endpoints.get(endpoint.id as string)?.enabled_events).toEqual(STRIPE_WEBHOOK_EVENTS);
     expect(fake.created.endpoints).toBe(1);
 
     // A different site address with an endpoint the owner made by hand: left alone, and the owner is told why.
     fake.endpoints.set("we_manual", { id: "we_manual", url: "https://other.example/api/stripe/webhook", status: "enabled", metadata: {}, enabled_events: ["*"] });
     await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:test"));
-    const manual = await sync({ siteUrl: "https://other.example", webhook: { envSecretSet: false } });
+    const manual = await sync({ siteUrl: "https://other.example", webhook: NO_ENV_SECRET });
     expect(manual.webhook?.status).toBe("unmanaged");
+    // Webhooks can't be verified until the owner acts, so it's reported as a problem.
+    expect(manual.errors.join(" ")).toMatch(/STRIPE_WEBHOOK_SECRET/);
     expect(fake.endpoints.has("we_manual")).toBe(true);
 
-    // Back on our own address, then STRIPE_WEBHOOK_SECRET is added: the site's own endpoint goes, so events aren't handled twice.
-    expect((await sync({ webhook: { envSecretSet: false } })).webhook?.status).toBe("created");
+    // Back on our own address, then STRIPE_WEBHOOK_SECRET is added.
+    expect((await sync({ webhook: NO_ENV_SECRET })).webhook?.status).toBe("created");
     const ours = [...fake.endpoints.values()].find((e) => e.url === `${SITE}/api/stripe/webhook`)!;
-    expect(await readWebhookSecret(db, "test")).not.toBeNull();
-    expect((await sync({ webhook: { envSecretSet: true } })).webhook?.status).toBe("env");
+    const ourSecret = (await readWebhookSecret(db, "test"))!;
+    // It's our own endpoint's secret: the endpoint stays.
+    expect((await sync({ webhook: { envSecret: ourSecret, removeReplaced: true } })).webhook?.status).toBe("env");
+    expect(fake.endpoints.has(ours.id as string)).toBe(true);
+    // Another endpoint's secret, seen by the build step: the endpoint stays until the live site (which has the secret) syncs.
+    expect((await sync({ webhook: { ...OWNER_SECRET, removeReplaced: false } })).webhook?.status).toBe("env");
+    expect(fake.endpoints.has(ours.id as string)).toBe(true);
+    expect(await readWebhookSecret(db, "test")).toBe(ourSecret);
+    // On the live site: the site's own endpoint goes, so events aren't handled twice.
+    expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("env");
     expect(fake.endpoints.has(ours.id as string)).toBe(false);
     expect(await readWebhookSecret(db, "test")).toBeNull();
+  });
+
+  it("refuses to point live links at a local or plain-http address", async () => {
+    await expect(syncPaymentLinks({ db, stripe: fakeStripe().stripe, mode: "live", siteUrl: "http://localhost:3000", currency: "usd" })).rejects.toThrow(
+      /public https address/,
+    );
+    await expect(syncPaymentLinks({ db, stripe: fakeStripe().stripe, mode: "live", siteUrl: "https://localhost", currency: "usd" })).rejects.toThrow(
+      /public https address/,
+    );
+  });
+
+  it("keeps a restored database's links: they name its courses", async () => {
+    const [course] = await paidCourses();
+    const link = (await readPaymentLinks(db, "test")).get(course.id)!;
+    const oldInstall = await stripeInstallId(db);
+    // Restored from before the first sync: install id and stored links gone, Stripe objects still there.
+    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeInstallId"));
+    for (const c of await paidCourses()) await db.delete(schema.settings).where(eq(schema.settings.key, paymentLinkKey("test", c.id)));
+    const before = { ...fake.created };
+    const result = await sync();
+    expect(result.errors).toEqual([]);
+    expect(fake.created.links).toBe(before.links);
+    const newInstall = await stripeInstallId(db);
+    expect(newInstall).not.toBe(oldInstall);
+    expect((await readPaymentLinks(db, "test")).get(course.id)?.paymentLinkId).toBe(link.paymentLinkId);
+    // Restamped with the new install id.
+    expect(fake.links.get(link.paymentLinkId)?.metadata.install).toBe(newInstall);
+  });
+
+  it("never runs two syncs at once, even when one outlives its lease", async () => {
+    const stalled = fakeStripe();
+    // While this sync lists links, another one takes over its lease (as if it had run past the TTL).
+    const list = stalled.stripe.paymentLinks.list.bind(stalled.stripe.paymentLinks);
+    (stalled.stripe.paymentLinks as { list: unknown }).list = (params: Stripe.PaymentLinkListParams) => {
+      const page = list(params);
+      const all = page.autoPagingToArray.bind(page);
+      return Object.assign(page, {
+        autoPagingToArray: async (o: { limit: number }) => {
+          await db.update(schema.settings).set({ value: { token: "someone-else" } }).where(eq(schema.settings.key, "stripePaymentLinkSync:lock"));
+          return all(o);
+        },
+      });
+    };
+    await expect(syncPaymentLinks({ db, stripe: stalled.stripe, mode: "live", siteUrl: SITE, currency: "usd" })).rejects.toThrow(/Lost the payment-link sync lock/);
+    expect(stalled.created.links).toBe(0);
+    await db.delete(schema.settings).where(eq(schema.settings.key, "stripePaymentLinkSync:lock"));
+  });
+
+  it("goes again when a change arrives while it's running", async () => {
+    const slow = fakeStripe();
+    let lists = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const list = slow.stripe.paymentLinks.list.bind(slow.stripe.paymentLinks);
+    (slow.stripe.paymentLinks as { list: unknown }).list = (params: Stripe.PaymentLinkListParams) => {
+      lists++;
+      const page = list(params);
+      const first = lists === 1;
+      return Object.assign(
+        (async () => (first ? gate.then(() => page) : page))(),
+        { autoPagingToArray: async (o: { limit: number }) => (first ? gate.then(() => page.autoPagingToArray(o)) : page.autoPagingToArray(o)) },
+      );
+    };
+    const live = (o: Partial<Parameters<typeof syncPaymentLinks>[0]> = {}) => syncPaymentLinks({ db, stripe: slow.stripe, mode: "live", siteUrl: SITE, currency: "usd", ...o });
+    const running = live();
+    await new Promise((r) => setTimeout(r, 50));
+    // A course change while it runs: this caller doesn't wait, but asks the running sync to go again.
+    await expect(live({ lockWaitMs: 0 })).rejects.toThrow(/still running/);
+    release();
+    expect((await running).errors).toEqual([]);
+    expect(lists).toBe(2);
   });
 
   it("never touches the links or webhook of another database on the same Stripe account", async () => {
@@ -281,8 +365,9 @@ describe("Stripe payment-link sync", () => {
     });
     other.endpoints.set("we_foreign", { id: "we_foreign", url: `${SITE}/api/stripe/webhook`, status: "enabled", metadata: { source: "principe-webhook", install: "another-database" }, enabled_events: STRIPE_WEBHOOK_EVENTS });
     await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:live"));
-    const result = await syncPaymentLinks({ db, stripe: other.stripe, mode: "live", siteUrl: SITE, currency: "usd", webhook: { envSecretSet: false } });
+    const result = await syncPaymentLinks({ db, stripe: other.stripe, mode: "live", siteUrl: SITE, currency: "usd", webhook: NO_ENV_SECRET });
     expect(result.retired).toBe(0);
+    expect(result.errors).toHaveLength(1);
     expect(other.links.get(foreignLink.id)?.active).toBe(true);
     expect(result.webhook?.status).toBe("unmanaged");
     expect(other.endpoints.has("we_foreign")).toBe(true);

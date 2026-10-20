@@ -22,6 +22,7 @@ export type SettingsFormState = {
 
 const TEXT_KEYS = [
   "businessName",
+  "mailingAddress",
   "timezone",
   "notifyEmail",
   "aiAssistantName",
@@ -46,6 +47,22 @@ function isSafeHref(value: string): boolean {
 const SettingsSchema = z
   .object({
     businessName: z.string().trim().min(1, "Enter your business name.").max(80, "Keep it under 80 characters."),
+    // One address line per line: spaces tidied, blank lines dropped.
+    mailingAddress: z
+      .string()
+      .transform((v) =>
+        v
+          .split(/\r?\n/)
+          .map((line) => line.replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .join("\n"),
+      )
+      .pipe(
+        z
+          .string()
+          .max(300, "Keep the address under 300 characters.")
+          .refine((v) => v.split("\n").length <= 6, "Use 6 lines or fewer."),
+      ),
     timezone: z.string().refine(isSupportedTimezone, "Choose a timezone from the list."),
     notifyEmail: z
       .string()

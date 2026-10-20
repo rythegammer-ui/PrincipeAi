@@ -29,6 +29,15 @@ export function emailStatus({ email, live }: { email: boolean; live: boolean }):
 }
 
 /**
+ * The postal address the US CAN-SPAM Act requires in every marketing email (Settings → Business → Mailing address).
+ * Marketing emails still go out without it, so it stays flagged until it is set.
+ */
+export function mailingAddressStatus(address: string): ItemStatus {
+  if (address.trim()) return { status: "ready", statusLabel: "Set" };
+  return { status: "attention", statusLabel: "Missing — required by law" };
+}
+
+/**
  * Stripe's checklist entry, from what's configured and how checkout actually behaves: `mode` is checkoutMode() and
  * `liveKeyBlocked` is livePaymentsBlocked() (a demo deployment refuses a live key, since its orders would be lost).
  */

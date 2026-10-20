@@ -8,7 +8,7 @@ export type IntegrationStatus = "ready" | "attention" | "optional";
 export type IntegrationItem = {
   id: string;
   title: string;
-  /** Environment variables involved (shown as code). */
+  /** Environment variables involved (shown under the title; none for a setting made in the admin). */
   envVars: string[];
   status: IntegrationStatus;
   /** Short status text, e.g. "Connected", "Demo mode". */
@@ -70,7 +70,7 @@ export function IntegrationsChecklist({ items, live = false }: { items: Integrat
                   <span className="flex min-w-0 flex-1 flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                     <span className="w-full min-w-0 sm:w-auto sm:flex-1">
                       <span className="block font-medium text-zinc-900">{item.title}</span>
-                      <span className="block truncate text-xs text-zinc-500">{item.envVars.join(" · ")}</span>
+                      {item.envVars.length > 0 && <span className="block truncate text-xs text-zinc-500">{item.envVars.join(" · ")}</span>}
                     </span>
                     <Badge tone={s.tone} className="sm:shrink-0">
                       {item.statusLabel}

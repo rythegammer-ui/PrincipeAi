@@ -389,7 +389,9 @@ describe("sales team", () => {
     await db.update(schema.agentCommissions).set({ availableAt: new Date(Date.now() - DAY) }).where(eq(schema.agentCommissions.id, commission.id));
     expect((await agentBalance(jane.id)).owedCents).toBe(commission.amountCents);
     vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_principe_unit_tests_only");
-    onTestFinished(() => vi.unstubAllEnvs());
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
     expect((await agentBalance(jane.id)).owedCents).toBe(0);
     expect(await recordPayout({ agentId: jane.id, by: "owner@example.com" })).toBeNull();
     expect((await monthlySales(jane.id)).thisMonth).toBe(0);

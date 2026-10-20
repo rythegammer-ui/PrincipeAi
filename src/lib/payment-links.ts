@@ -585,13 +585,24 @@ async function ensureWebhookEndpoint(
   const mine = stored ? endpoints.find((e) => e.id === stored.endpointId) : undefined;
   const coversAll = (e: Stripe.WebhookEndpoint) =>
     e.status === "enabled" && (e.enabled_events.includes("*") || STRIPE_WEBHOOK_EVENTS.every((ev) => e.enabled_events.includes(ev)));
+  // Keeps the site's endpoint pointed at this address, enabled and subscribed to every event. True if it changed.
+  const repair = async (endpoint: Stripe.WebhookEndpoint, saved: StoredWebhook): Promise<boolean> => {
+    const events = endpoint.enabled_events;
+    const missing = !events.includes("*") && STRIPE_WEBHOOK_EVENTS.some((e) => !events.includes(e));
+    if (endpoint.url === url && !missing && endpoint.status === "enabled") return false;
+    await stripe.webhookEndpoints.update(endpoint.id, { url, enabled_events: STRIPE_WEBHOOK_EVENTS, disabled: false });
+    if (endpoint.url !== url) await upsertSetting(db, key, { ...saved, url });
+    return true;
+  };
 
   if (options.envSecret) {
-    // STRIPE_WEBHOOK_SECRET's endpoint, as far as Stripe shows it: one at this address, not made by a site, getting every event.
+    // STRIPE_WEBHOOK_SECRET's endpoint, as far as Stripe shows it: one at this address, not made by a site, getting
+    // every event, and proven by an event of this mode that verified with the secret (the webhook route records it).
     const replacement = endpoints.find((e) => e.url === url && e.metadata?.source !== WEBHOOK_SOURCE && coversAll(e));
-    if (mine) {
-      const proven = Boolean(replacement) && (await envWebhookVerified(db, mode, options.envSecret));
+    const proven = Boolean(replacement) && (await envWebhookVerified(db, mode, options.envSecret));
+    if (stored && mine) {
       if (!proven || !options.removeReplaced) {
+        await repair(mine, stored);
         return {
           status: "env",
           detail: "The site's own endpoint stays until STRIPE_WEBHOOK_SECRET's endpoint receives every event and has delivered one; meanwhile each event is handled once",
@@ -603,18 +614,12 @@ async function ensureWebhookEndpoint(
     }
     // The site's endpoint was deleted in Stripe: its secret is of no use any more.
     if (stored) await db.delete(schema.settings).where(eq(schema.settings.key, key));
-    if (replacement) return { status: "env" };
-    // Nothing at this address gets every event in this mode, so STRIPE_WEBHOOK_SECRET can't be enough on its own
-    // (e.g. a test-mode secret with a live key): the site makes its own endpoint, below.
+    if (proven) return { status: "env" };
+    // STRIPE_WEBHOOK_SECRET hasn't shown it works in this mode (a test-mode secret with a live key, a different
+    // endpoint's secret, or simply no event yet): the site makes its own endpoint too, below. Each event is handled
+    // once, and a later sync retires the site's endpoint once the secret has proven itself.
   } else if (stored && mine) {
-    const events = mine.enabled_events;
-    const missing = !events.includes("*") && STRIPE_WEBHOOK_EVENTS.some((e) => !events.includes(e));
-    if (mine.url !== url || missing || mine.status !== "enabled") {
-      await stripe.webhookEndpoints.update(mine.id, { url, enabled_events: STRIPE_WEBHOOK_EVENTS, disabled: false });
-      if (mine.url !== url) await upsertSetting(db, key, { ...stored, url });
-      return { status: "updated" };
-    }
-    return { status: "ok" };
+    return (await repair(mine, stored)) ? { status: "updated" } : { status: "ok" };
   }
 
   const sameUrl = endpoints.filter((e) => e.url === url);

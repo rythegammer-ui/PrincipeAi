@@ -297,6 +297,24 @@ describe("Stripe payment-link sync", () => {
     fake.endpoints.delete("we_owner");
     expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("created");
     expect(await readWebhookSecret(db, "test")).not.toBeNull();
+    const kept = [...fake.endpoints.values()].find((e) => e.url === url && (e.metadata as Record<string, string>).source === "principe-webhook")!;
+    // While it's kept, it's kept working: disabled in the dashboard, it's switched back on.
+    fake.endpoints.set(kept.id as string, { ...kept, status: "disabled" });
+    expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("env");
+    expect(fake.endpoints.get(kept.id as string)).toMatchObject({ disabled: false });
+
+    // A hand-made endpoint gets every event but its secret was never proven in this mode (a new secret, say): the
+    // site's endpoint is made / kept alongside it rather than trusting the secret blindly.
+    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:envVerified:test"));
+    fake.endpoints.delete(kept.id as string);
+    await db.delete(schema.settings).where(eq(schema.settings.key, "stripeWebhook:test"));
+    fake.endpoints.set("we_owner2", { id: "we_owner2", url, status: "enabled", metadata: {}, enabled_events: ["*"] });
+    expect((await sync({ webhook: OWNER_SECRET })).webhook?.status).toBe("created");
+    // Proven: the live site retires the site's endpoint.
+    await markEnvWebhookVerified(db, "test", OWNER_SECRET.envSecret);
+    expect((await sync({ webhook: OWNER_SECRET })).webhook?.detail).toMatch(/Removed/);
+    expect(await readWebhookSecret(db, "test")).toBeNull();
+    expect(fake.endpoints.has("we_owner2")).toBe(true);
   });
 
   it("refuses to point live links at a local or plain-http address", async () => {

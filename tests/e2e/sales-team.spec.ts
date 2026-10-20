@@ -132,6 +132,7 @@ test.describe("sales team", () => {
 
     // A student (signed in, but not on the sales team) sees no agent data, and no sign-in link is sent to them.
     await signInAsStudent(page, uniqueEmail("student-not-agent"), "/learn");
+    await expect(page).toHaveURL(/\/learn/);
     await page.goto("/agent");
     await expect(page.getByRole("heading", { level: 1, name: /sales team/i })).toBeVisible();
     await expect(page.getByRole("list", { name: "Your numbers" })).toHaveCount(0);

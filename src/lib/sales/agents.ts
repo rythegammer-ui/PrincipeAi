@@ -119,13 +119,14 @@ export function agentLinks(code: string): AgentLinks {
 export async function approveAgent(id: string, by: string): Promise<SalesAgent | null> {
   const db = await getDb();
   const [agent] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.id, id)).limit(1);
-  if (!agent || agent.status === "approved") return agent ?? null;
+  // Applicants, and paused agents being turned back on. Declined and removed people apply again first.
+  if (!agent || (agent.status !== "applied" && agent.status !== "paused")) return null;
   const code = agent.code ?? (await uniqueCode(agent));
   const firstApproval = !agent.approvedAt;
   const [approved] = await db
     .update(schema.salesAgents)
     .set({ status: "approved", code, reviewedBy: by, reviewedAt: new Date(), approvedAt: agent.approvedAt ?? new Date() })
-    .where(and(eq(schema.salesAgents.id, id), ne(schema.salesAgents.status, "approved")))
+    .where(and(eq(schema.salesAgents.id, id), inArray(schema.salesAgents.status, ["applied", "paused"])))
     .returning();
   if (!approved) return null;
   const program = await getSalesProgram();

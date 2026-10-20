@@ -45,7 +45,7 @@ export async function approveAgentAction(_prev: SalesFormState, fd: FormData): P
   if (!id.success) return { error: "Invalid request." };
   const agent = await approveAgent(id.data, session.email);
   refresh(id.data);
-  if (!agent) return { error: "That agent couldn't be found." };
+  if (!agent) return { error: "Only new applications and paused agents can be approved." };
   return { ok: true, message: `${agent.name} is active. We emailed them their referral link (${agent.code}).` };
 }
 
@@ -132,11 +132,12 @@ export async function addAdjustmentAction(_prev: SalesFormState, fd: FormData): 
 }
 
 export async function voidCommissionAction(_prev: SalesFormState, fd: FormData): Promise<SalesFormState> {
-  const session = await assertAdmin();
+  await assertAdmin();
   const parsed = z.object({ id: Id, agentId: Id }).safeParse({ id: str(fd, "id"), agentId: str(fd, "agentId") });
   if (!parsed.success) return { error: "Invalid request." };
+  // The reason can show in the agent's own dashboard, so it carries no admin details.
   const reason = str(fd, "reason").slice(0, 150);
-  const done = await voidCommission(parsed.data.id, `${reason || "Cancelled"} (by ${session.email})`);
+  const done = await voidCommission(parsed.data.id, reason || "Cancelled by the team");
   refresh(parsed.data.agentId);
   if (!done) return { error: "Only unpaid entries can be cancelled. For a paid one, add a negative correction." };
   return { ok: true, message: "Entry cancelled." };

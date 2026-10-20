@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redactSpeedInsightsUrl } from "@/components/analytics/speed-insights-redact";
+import { isSafeSpeedInsightsRoute, redactSpeedInsightsUrl } from "@/components/analytics/speed-insights-redact";
 
 const SITE = "https://principe.ai";
 
@@ -33,5 +33,37 @@ describe("Speed Insights URL redaction", () => {
 
   it("sends nothing when the URL can't be parsed", () => {
     expect(redactSpeedInsightsUrl("not a url")).toBeNull();
+  });
+});
+
+describe("Speed Insights route check", () => {
+  it("accepts parametrized and static routes", () => {
+    for (const route of [
+      undefined,
+      "",
+      "/",
+      "/courses/[slug]",
+      "/booking/[token]",
+      "/book/confirmed/[token]",
+      "/checkout/test/[orderId]",
+      "/learn/[courseSlug]/[lessonSlug]",
+      "/admin/contacts/[id]",
+      "/free-guide/thank-you",
+    ]) {
+      expect(isSafeSpeedInsightsRoute(route), String(route)).toBe(true);
+    }
+  });
+
+  it("rejects raw private links (an unmatched URL falls back to its raw path)", () => {
+    expect(isSafeSpeedInsightsRoute("/booking/sometoken123/extra")).toBe(false);
+    expect(isSafeSpeedInsightsRoute("/unsubscribe/tok999/x")).toBe(false);
+    expect(isSafeSpeedInsightsRoute("/assessment/results/toka1/zz")).toBe(false);
+    expect(isSafeSpeedInsightsRoute("/booking/0123456789abcdef0123456789abcdef")).toBe(false);
+  });
+
+  it("rejects segments built from query text or unusual characters", () => {
+    expect(isSafeSpeedInsightsRoute("/[jane@example.com]")).toBe(false);
+    expect(isSafeSpeedInsightsRoute("/Some_Page")).toBe(false);
+    expect(isSafeSpeedInsightsRoute("/courses/a%20b")).toBe(false);
   });
 });

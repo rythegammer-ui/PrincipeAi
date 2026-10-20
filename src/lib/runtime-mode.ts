@@ -34,7 +34,7 @@ export function isDemoMode(): boolean {
  * True inside a deployed Vercel runtime. `vercel env pull` writes VERCEL=1 (and VERCEL_ENV=development) into
  * .env.local, which `next dev` loads too, so VERCEL alone doesn't mean "deployed".
  */
-function deployedOnVercel(): boolean {
+export function deployedOnVercel(): boolean {
   return Boolean(process.env.VERCEL) && process.env.NODE_ENV === "production" && process.env.VERCEL_ENV !== "development";
 }
 

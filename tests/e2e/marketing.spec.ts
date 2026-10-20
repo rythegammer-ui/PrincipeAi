@@ -17,6 +17,9 @@ const PUBLIC_PAGES = [
   "/privacy",
   "/terms",
   "/login",
+  "/sales-team",
+  "/sales-team/terms",
+  "/agent/login",
 ];
 
 test.describe("marketing site", () => {
@@ -98,7 +101,7 @@ test.describe("mobile @mobile", () => {
     expect(errors).toEqual([]);
   });
 
-  for (const path of ["/courses", "/free-guide", "/assessment", "/book/ai-strategy-call", "/courses/ai-essentials"]) {
+  for (const path of ["/courses", "/free-guide", "/assessment", "/book/ai-strategy-call", "/courses/ai-essentials", "/sales-team"]) {
     test(`${path} fits a 390px screen @mobile`, async ({ page }) => {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();

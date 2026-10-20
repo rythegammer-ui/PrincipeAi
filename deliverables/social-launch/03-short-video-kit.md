@@ -191,8 +191,8 @@ One CTA per video, at the very end. Use the line from each script; they all foll
 | TikTok hashtags | No hard cap found; 3–5 specific ones recommended | [R] | 4 per caption |
 | Instagram hashtags | **Hard cap of 5** per Reel | [R], since Dec 2025 | 5 or fewer, **including** the comment keyword hashtag. Counts are stated on every caption |
 | Instagram caption length | Not in the research file | Unverified here | Every caption is under 900 characters |
-| YouTube Shorts title | 100 characters | UNVERIFIED | Every title is 70 characters or fewer; counts stated |
-| YouTube Shorts description | Not verified | UNVERIFIED | Short; 3 clickable hashtags; **no URLs** (not clickable on Shorts) |
+| YouTube Shorts title | 100 characters | [V] YouTube Help 57404 | Every title is 70 characters or fewer; counts stated |
+| YouTube Shorts description | 5,000 characters | [V] YouTube Help 57404 | Short; 3 clickable hashtags; **no URLs** (not clickable on Shorts) |
 | Facebook Reels hashtags | 1–3; low impact | UNVERIFIED | Cross-post the Instagram caption as is; if posting natively, keep the keyword hashtag plus 1–2 others |
 | Length that still gets recommended | Instagram: Reels over 3 min aren't recommended to new audiences [V]. Shorts: up to 3 min [V] | Verified | Every script is 30–75 seconds |
 
@@ -232,7 +232,7 @@ All three go to all four video platforms at once: LD-01 at 9:00 ET, LD-02 at 13:
 | **CTA goes to** | Home page `/` (both paths and both free offers) |
 | **Source** | `src/app/(marketing)/page.tsx` (hero, `HOW_IT_WORKS`, trust line); `src/config/site.ts` (tagline); `src/app/(marketing)/about/page.tsx` (`VALUES`) |
 
-**Prep:** a screen recording scrolling the home page on your phone (hero → two paths → Assess, Learn, Implement). The "AI tutor" line at 0:21 is tagged **[CONFIRM: AI key live in production]**: keep it only if `ANTHROPIC_API_KEY` is live in production (the tutor falls back to plain text without it). Otherwise use the alternative line under it. **PRICE:** the Instagram caption names all three course prices; check them in Admin → Courses that morning.
+**Prep:** a screen recording scrolling the home page on your phone (hero → two paths → Assess, Learn, Implement). The "AI tutor" line at 0:21 is tagged **[CONFIRM: AI key live in production]**: keep it only if `ANTHROPIC_API_KEY` is live in production (the tutor falls back to plain text without it). Film both versions in batch A (L-17): the tagged line and the alternative line under it. Export both cuts at the L-11 edit, then schedule the one that matches the key on L-1 · Mon Nov 9 ([calendar](02-launch-calendar.md), 3.6). **PRICE:** the Instagram caption names all three course prices; check them in Admin → Courses that morning.
 
 **No-face option:** scroll the home page for the whole video (hero, the two paths, Assess · Learn · Implement), with your voice-over or on-screen text (1.9).
 
@@ -268,7 +268,7 @@ And it works in three steps. Assess: take the free AI Readiness Assessment and g
 
 **[CONFIRM: AI key live in production]** Learn: short, practical lessons with an AI tutor beside you, or one-on-one coaching on your real work. Implement: use your new workflows straight away, or have us design and build the systems with your team.
 
-*If the key isn't live, say this line instead:* "Learn: short, practical lessons, or one-on-one coaching on your real work."
+*Alternative line (film it too; this cut posts if the key isn't live on L-1):* "Learn: short, practical lessons, or one-on-one coaching on your real work."
 
 *0:45 · Promise and CTA*
 
@@ -3808,7 +3808,7 @@ The [launch calendar](02-launch-calendar.md) decides every date. This table copi
 - [ ] TikTok: "Your brand" disclosure on, Commercial Music Library only. YouTube: altered content "No"; no URL in the description
 - [ ] Instagram: 5 hashtags or fewer (including the keyword hashtag); Facebook: link in the first comment
 - [ ] Per-post link copied from the block (never retyped). Its `utm_campaign` matches the calendar date; if you moved the video, change only the campaign (2.1)
-- [ ] Any **[CONFIRM: AI key live in production]** line kept only if the key is live; otherwise the alternative line is used (LD-01)
+- [ ] Any **[CONFIRM: AI key live in production]** line kept only if the key is live; otherwise the alternative cut is scheduled (LD-01, filmed both ways in batch A)
 - [ ] YouTube Related video set as the block says (needs advanced features; until they're on, skip it and rely on the spoken CTA and link YT-1)
 - [ ] 15 minutes blocked after posting to reply to comments and send any manual DMs
 
@@ -3817,7 +3817,7 @@ The [launch calendar](02-launch-calendar.md) decides every date. This table copi
 ## 7. Confirm before posting (open items)
 
 1. **Prices** in Admin → Courses and Admin → Availability, the morning of LD-01 (its Instagram caption is the only one that names prices).
-2. **`ANTHROPIC_API_KEY` in production.** Check it on L-20 (Wed Oct 21). If it still isn't live by L-1 (Mon Nov 9), use LD-01's alternative line without "AI tutor". No video says the assessment plan is "written by Claude"; add that only with **[CONFIRM: AI key live in production]**.
+2. **`ANTHROPIC_API_KEY` in production.** Check it on L-20 (Wed Oct 21). LD-01 is filmed both ways in batch A (L-17) and edited both ways on L-11; if the key still isn't live on L-1 (Mon Nov 9), schedule the cut with the alternative line, without "AI tutor". No video says the assessment plan is "written by Claude"; add that only with **[CONFIRM: AI key live in production]**.
 3. **TikTok business verification** review time is unknown. Until it's approved, use the TikTok CTA ending and answer KIT, READY and WORKFLOW DMs by hand with the links in [profile setup](01-profile-setup.md) (TT-2 to TT-4).
 4. **Meta comment-to-message** needs three hashtag triggers (`#prompts`, `#aiready`, `#aiworkflow`); the number of triggers allowed is reported by vendors, not verified.
 5. **YouTube Related videos** need advanced feature access (YouTube Help) and depend on the long-form plan (calendar, section 8). Check Studio → Settings → Channel → Feature eligibility before L+0; until advanced features are on, no Short can carry a Related video, so the spoken CTA and link YT-1 do the work. Once they're on, go back and set it on every Short already posted. LC-08 goes live on L+0; until a Short's own match is live, point it at LC-08.

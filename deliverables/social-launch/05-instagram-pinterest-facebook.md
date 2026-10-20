@@ -863,7 +863,7 @@ _176 characters_
 - **Per-post link:** `https://principeai.com/consulting?utm_source=instagram&utm_medium=social&utm_campaign=evergreen&utm_content=vc-12#apply`
 - **Also on the Facebook Page:** L+63 · Tue Jan 12 · 9:30 ET · cross-post · campaign `ny-2027` (4.4; first comment below the caption)
 - **Link delivered by:** a same-day Story share, and the main bio link IG-1 (`/links` → "Have AI built for your business"). No comment keyword on this one
-- **Source:** `src/db/seed-content/course-ai-for-business.ts` → `business-context-safely` ("The traffic-light data rules", "Anonymize before you paste") and `ai-usage-policy` (opening, template section 2, key takeaways); `src/app/(marketing)/consulting/page.tsx` → services
+- **Source:** `src/db/seed-content/course-ai-for-business.ts` → `business-context-safely` ("The traffic-light data rules", "Anonymize before you paste") and `ai-usage-policy` (opening, template section 2, "Regulated industries", key takeaways); `src/app/(marketing)/consulting/page.tsx` → services
 
 **Slides**
 
@@ -874,7 +874,7 @@ _176 characters_
 5. **T2 Teach.** Headline: "«Red»: restricted". Body: "Personal data about customers or staff, health or financial details, ID and account numbers, payment details, passwords and API keys, legal matters, anything under a confidentiality agreement. Rule: it stays out unless explicitly approved."
 6. **T2 Teach.** Headline: "Anonymize «before» you paste". Body: "Replace names with roles ('the customer,' 'Client A') · Remove email addresses, phone numbers, street addresses and account numbers · Round figures when exact values don't matter · Summarize a long thread instead of pasting all of it".
 7. **T2 Teach, ink background.** Headline: "One line for «personal» accounts". Body: "'Personal or free AI accounts: Green data only; never customer or confidential company information.'" Source line: "From the AI usage policy template in AI for Business Owners".
-8. **T2 Teach.** Headline: "Permission «and» guardrails". Body: "A clear policy gives permission and guardrails; a ban just hides AI use. Keep it short, name an owner and review it regularly."
+8. **T2 Teach.** Headline: "Permission «and» guardrails". Body: "A clear policy gives permission and guardrails; a ban just hides AI use. Keep it short, name an owner and review it regularly." Small line: "In a regulated field (healthcare, finance, legal, insurance or work with children), there are extra rules. Get professional advice for your sector."
 9. **T5 CTA.** Headline: "Want it rolled out «with» your team?" Body (Geist 36 px): "Team AI training & policy is part of our done-with-you service." Pill: "Link in my profile". Small line: "Free discovery call · clear written quote before any work begins".
 
 **Caption**
@@ -886,13 +886,15 @@ Green (public): website content, published prices, marketing materials. OK in an
 Amber (internal): internal processes, unpublished pricing, non-personal business data. Only in business-grade tools you've approved, with training on your data turned off.
 Red (restricted): personal data about customers or staff, health or financial details, passwords, legal matters. It stays out unless explicitly approved.
 
+In a regulated field (healthcare, finance, legal, insurance or work with children), there are extra rules. Get professional advice for your sector before you finalize your policy.
+
 Your team is very likely using AI already, possibly on personal accounts. A clear policy gives permission and guardrails; a ban just hides AI use.
 
 Want help rolling this out? Team AI training and policy is part of our done-with-you AI service. Tap the link in my profile, then "Have AI built for your business", to apply for a free discovery call. You'll get a clear written scope and quote before any work begins.
 
 #aiforbusiness #smallbusiness #aitools #businesstips
 ```
-_958 / 2,200 characters · 4 / 5 hashtags_
+_1,139 / 2,200 characters · 4 / 5 hashtags_
 
 **Facebook cross-post (L+63 · Tue Jan 12).** Paste the caption above without the hashtags and without the last call-to-action line (the comment keyword or "Tap … in my profile"), end with "Link in the first comment.", then post this first comment from the Page:
 
@@ -2627,18 +2629,18 @@ Black Friday at Principe AI: [YOUR OFFER: e.g. "15% off any course with code XXX
 
 AI Essentials: Use AI in Everyday Life. $47, 18 lessons, for beginners.
 AI for Business Owners: The Implementation Playbook. $297, 20 lessons.
-AI Automation Accelerator: Build Workflows & Agents. $497, 18 lessons.
+AI Automation Accelerator: Build Workflows & Agents. $497, 18 lessons. Tool subscriptions and AI usage are paid separately.
 
 Not sure which fits? Read a free preview lesson first, or take the free 3-minute AI Readiness Assessment; it recommends a starting point.
 
 https://principeai.com/courses?utm_source=facebook&utm_medium=social&utm_campaign=bf-2026&utm_content=vc-72
 ```
-_658 characters_
+_711 characters_
 
 **Instagram Story (3 frames)**
 
 1. **S1.** "Black Friday at Principe AI: «[YOUR OFFER: …]»". Small line: "Until [DATE AND TIME, ET]".
-2. **S1.** The three course names with their prices, Geist 40 px.
+2. **S1.** The three course names with their prices, Geist 40 px. Small line: "Tool subscriptions and AI usage are paid separately."
 3. **S1 + link sticker** ("See the courses"). "Read a «free» lesson first. No signup."
 
 ---
@@ -2659,7 +2661,7 @@ Why:
 
 **Name and audience.** `Practical AI for Small Business Owners (by Principe AI)`, or `Practical AI Made Simple (by Principe AI)` if you'd rather serve both paths (then keep the Monday and Wednesday posts general and alternate life and business examples). Why business owners only: a group works best when members share one identity and one kind of problem. Small business owners, freelancers and solopreneurs are also the buyers of coaching, the business course and done-with-you work, and they're the people in the groups you'll be answering in (4.7). The "For your life" path is served by Instagram and Pinterest.
 
-**Setup** (L+53 · Sat Jan 2 or L+54 · Sun Jan 3, if the group is a go): create it as the Page, private, with Admin Assist and the group description, as in [profile setup](01-profile-setup.md), section 6.3. Turn on the group rules agreement for new members [V].
+**Setup** (L+38 · Fri Dec 18, in the holiday batch, if the L+34 check passed): create it as the Page, private, with Admin Assist and the group description, as in [profile setup](01-profile-setup.md), section 6.3, and draft VC-73. Turn on the group rules agreement for new members [V]. Send your personal invitations on L+53 · Sat Jan 2 and L+54 · Sun Jan 3, so the group is ready on L+55 · Mon Jan 4.
 
 **Membership questions** (the exact number allowed is UNVERIFIED; these are three)
 

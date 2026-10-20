@@ -62,11 +62,11 @@ Every link follows the final convention in [tools, measurement and compliance](0
 | Link | Pattern |
 |---|---|
 | **Post link** (in a post, your first reply, a Threads text attachment or the newsletter) | `https://principeai.com{PATH}?utm_source={linkedin, x, threads or bluesky}&utm_medium=social&utm_campaign={campaign}&utm_content=tp-NN` |
-| **DM link** (a message you send by hand to someone who asked) | `https://principeai.com{PATH}?utm_source=linkedin&utm_medium=dm&utm_campaign=evergreen&utm_content={dm-kit, dm-ready, dm-workflow or tp-NN}` |
+| **DM link** (a message you send by hand to someone who asked) | `https://principeai.com{PATH}?utm_source=linkedin&utm_medium=dm&utm_campaign=evergreen&utm_content={dm-kit, dm-ready, dm-workflow, dm-call, dm-courses or tp-NN}` |
 
 - **`utm_source`**: `linkedin`, `x`, `threads` or `bluesky`, never a variant. Admin → Funnels groups leads on this field. The LinkedIn newsletter is `linkedin` too.
 - **`utm_campaign`** follows the day the post goes out, as in the calendar: `launch` from L-7 to L+13 (Tue Nov 3 to Mon Nov 23), `evergreen` from L+14 (Tue Nov 24) to Fri Jan 1 and again from February, `ny-2027` from Jan 2 to 31, and `bf-2026` only for TP-16 version A with a real promotion code. DM links are always `evergreen`. If you move a post into another phase, change only this value.
-- **`utm_content`**: the post ID in lowercase, such as `tp-09`. Short posts use the same ID on all three platforms, and `utm_source` tells them apart. DM links use the keyword values whichever post prompted them: `dm-kit` for the Starter Kit (`/free-guide`), `dm-ready` for the assessment (`/assessment`) and `dm-workflow` for the free lesson Anatomy of an AI Workflow. A DM to any other page keeps the post ID, because the convention has no DM value for it yet.
+- **`utm_content`**: the post ID in lowercase, such as `tp-09`. Short posts use the same ID on all three platforms, and `utm_source` tells them apart. DM links use the keyword values whichever post prompted them: `dm-kit` for the Starter Kit (`/free-guide`), `dm-ready` for the assessment (`/assessment`) and `dm-workflow` for the free lesson Anatomy of an AI Workflow. A DM you write by hand outside the three keywords uses the ID of the post it replies to, or `dm-call` (`/book/ai-strategy-call`) and `dm-courses` (`/courses`) for a general question about calls or courses.
 - **Where you'll see them:** the platform shows in Admin → Funnels → Attribution → "Channel (UTM source)". The campaign is in the contacts CSV export. The post ID (or the `dm-` value) shows only on each contact's own page ([content bank](07-content-bank.md), 2b).
 - **Don't** link or tag `/guide`, `/free-guide/thank-you`, `/assessment/results/…`, `/booking/…` or `/book/confirmed/…`. Starter Kit links always go to `/free-guide`. **Do** open every link in a private window once before you use it ([tools, measurement and compliance](08-tools-measurement-compliance.md), 2.8).
 
@@ -189,7 +189,7 @@ Start free:
 Go further when you're ready:
 - AI Essentials: Use AI in Everyday Life ($47, 18 lessons)
 - AI for Business Owners: The Implementation Playbook ($297, 20 lessons)
-- AI Automation Accelerator: Build Workflows & Agents ($497, 18 lessons)
+- AI Automation Accelerator: Build Workflows & Agents ($497, 18 lessons; tool subscriptions and AI usage are paid separately)
 - 1:1 AI Coaching Session ($150, 60 minutes on your real work)
 - Done-with-you AI implementation: after a free discovery call, you get a written blueprint with a clear quote before any work begins.
 
@@ -199,7 +199,7 @@ Start with the free kit: https://principeai.com/free-guide?utm_source=linkedin&u
 
 #AI #SmallBusiness #Productivity
 ```
-*Count: LinkedIn 1,224/3,000*
+*Count: LinkedIn 1,277/3,000*
 
 **Reshare line** (Page → repost TP-01, no link needed):
 
@@ -461,7 +461,7 @@ https://principeai.com/courses?utm_source=bluesky&utm_medium=social&utm_campaign
 - **Two lanes only:** practical AI for business owners and professionals, and AI for everyday life. These match the site's "For your business" and "For your life" paths. Keeping to two topics helps LinkedIn's ranking work out what you're about [L15].
 - **Company Page:** the day after each profile post, reshare it to the Page at 10:00 ET with one line of context. TP-32 and TP-33 are Page-only posts on their own dates [L22].
 - **Links:** none in these posts except TP-16, TP-37 and TP-38. To anyone who asks, send the post's **DM link** (shown under each post).
-- **Images:** use real screenshots of your own prompts and answers, cropped so they show no personal data. No AI images of people [L25]. Brand: violet with gold accents, dark "ink" bands, Geist with Instrument Serif italic for one accent word.
+- **Images:** use real screenshots of your own prompts and answers, cropped so they show no personal data. No AI images of people [L25]. Brand: violet with gold accents, dark "ink" bands, Geist with Instrument Serif italic for one accent word. Add alt text that describes each screenshot, including its key words (LinkedIn, X, Threads and Bluesky images all have an alt-text field). A LinkedIn document carousel has no alt-text field, so name each slide's key point in the post text too ([tools, measurement and compliance](08-tools-measurement-compliance.md), 4.2).
 
 The dates for TP-09 to TP-38 are on each post and in section 7.
 

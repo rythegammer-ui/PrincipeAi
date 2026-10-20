@@ -254,7 +254,7 @@ The "Automated message" line tells people a bot is answering, which Meta asks fo
 
 - Settings → Account privacy: **public**. Turn on "Allow public photos and videos to appear in search engine results" (checked: public professional accounts can be indexed).
 - Accounts Center: connect the **Principe AI Facebook Page**. Meta Business Suite and cross-posting need this.
-- Sharing to Facebook: set Reels to **share to the Principe AI Page automatically**, so the Page gets every Reel (the menu name varies; check in the app).
+- Sharing to Facebook: set Reels to **share to the Principe AI Page automatically**, so the Page gets every Reel (the menu name varies; check in the app). Instagram can't boost a Reel that was shared to Facebook ([08](08-tools-measurement-compliance.md), 5.3). If you might boost a Reel, switch sharing off for that one and post it to the Page separately.
 - Hidden Words: turn on "Hide comments" and "Advanced comment filtering". Add a custom list: `crypto`, `forex`, `bitcoin`, `investment opportunity`, `telegram`, `whatsapp me`, `earn $`, `promote it on`, `followers`. Add `collab` too if spam collaboration offers get annoying.
 - Messages and story replies: let **everyone** message you and reply to Stories (people will DM KIT). Under Connected tools, turn on **"Allow access to messages"**, so the automations can answer.
 - Tags and mentions: allow from everyone, but approve tags by hand.

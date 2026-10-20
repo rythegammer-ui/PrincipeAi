@@ -155,14 +155,14 @@ All values **lowercase, no spaces, hyphens only**. Funnels lowercases the source
 | `utm_source` | Where the link sits. **A fixed list: never vary it**, because it's the only field Funnels groups by. A cross-post takes the source of the platform it appears on (a Facebook copy of an Instagram Reel is `facebook`) | Platforms: `instagram`, `tiktok`, `youtube`, `linkedin`, `x`, `threads`, `facebook`, `pinterest`, `reddit`, `bluesky`. Off-platform: `podcast`, `newsletter` (someone else's email newsletter), `community` (a Slack, Discord or forum that isn't one of the platforms), `local` (talks, libraries, flyers), `partner` |
 | `utm_medium` | How the link was placed | `bio`: profile, bio and channel links, page buttons, Highlight frames that link · `social`: organic posts, captions, first comments, Story link stickers, pins, video descriptions · `dm`: DM auto-replies and DMs you send by hand · `paid_social`: boosts and ads · `referral`: podcasts, partners, talks, newsletter swaps |
 | `utm_campaign` | The date it goes out (table below) | `launch`, `evergreen`, `bf-2026`, `ny-2027` |
-| `utm_content` | Which post or link | The post ID in lower case: `ld-01`, `sv-07`, `tp-12`, `vc-05`, `lc-03`, or `cb-12` when you post a bank idea as it stands. `bio` for the main bio link. `bio-kit`, `bio-assessment`, `bio-free-lesson`, `bio-courses`, `bio-call` for extra bio links. `button` for page call-to-action buttons. `dm-kit`, `dm-ready`, `dm-workflow` for DM keyword replies. `<post-id>-<partnername>` for podcasts, partners and newsletters (`lc-43-showname`) |
+| `utm_content` | Which post or link | The post ID in lower case: `ld-01`, `sv-07`, `tp-12`, `vc-05`, `lc-03`, or `cb-12` when you post a bank idea as it stands. `bio` for the main bio link. `bio-kit`, `bio-assessment`, `bio-free-lesson`, `bio-courses`, `bio-call` for extra bio links. `button` for page call-to-action buttons. `dm-kit`, `dm-ready`, `dm-workflow` for DM keyword replies. `dm-call`, `dm-courses` or the ID of the post they reply to for DM replies you send by hand outside the three keywords (always `utm_medium=dm` and `evergreen`). `<post-id>-<partnername>` for podcasts, partners and newsletters (`lc-43-showname`) |
 | `utm_term` | Not used. The site stores it, but nothing reports on it | Leave it off |
 
 **Which `utm_campaign`**
 
 | When it goes out | `utm_campaign` |
 |---|---|
-| Bios, profile links, page buttons, Highlights, every pin, DM keyword replies and outreach material, whatever the date | `evergreen` |
+| Bios, profile links, page buttons, Highlights, every pin, all DM replies (keyword or by hand) and outreach material, whatever the date | `evergreen` |
 | L-7 to L+13 (Tue Nov 3 to Mon Nov 23). Nothing posts on Tue Nov 3, Election Day | `launch` |
 | After L+13 (from Tue Nov 24), including the holiday slow-down (Dec 21 to Jan 1) | `evergreen` |
 | Thanksgiving to Cyber Monday (Thu Nov 26 to Mon Nov 30) **promotion posts only**, and only with a real Stripe promotion code that has a real end date. Value posts that week stay `evergreen` | `bf-2026` |

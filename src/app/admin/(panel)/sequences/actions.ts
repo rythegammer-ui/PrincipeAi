@@ -23,7 +23,7 @@ import { aiText } from "@/lib/ai";
 import { assertAdmin } from "@/lib/auth";
 import { processEnrollment, recipientTemplateVars } from "@/lib/automations";
 import { logActivity, upsertContact } from "@/lib/crm";
-import { buyLinkPattern, emailBusinessName, emailLayout, fillTemplate, markdownToEmailHtml, sendEmail } from "@/lib/email";
+import { buyLinkPattern, emailBusinessName, emailLayout, emailMailingAddress, fillTemplate, markdownToEmailHtml, sendEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
 import { absoluteUrl, isValidEmail, normalizeEmail } from "@/lib/utils";
@@ -277,7 +277,7 @@ export async function previewStepAction(input: { subject: string; body: string }
   return {
     ok: true,
     subject: fillTemplate(parsed.data.subject, vars.subject),
-    html: emailLayout(markdownToEmailHtml(body), { unsubscribeUrl: absoluteUrl("/unsubscribe/preview") }),
+    html: emailLayout(markdownToEmailHtml(body), { unsubscribeUrl: absoluteUrl("/unsubscribe/preview"), mailingAddress: await emailMailingAddress() }),
   };
 }
 

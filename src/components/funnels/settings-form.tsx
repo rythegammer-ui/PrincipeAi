@@ -54,7 +54,11 @@ export function SettingsForm({ settings, timezones }: { settings: Settings; time
       {state.error && <Alert tone="error">{state.error}</Alert>}
       {state.ok && state.message && <Alert tone="success">{state.message}</Alert>}
 
-      <Group icon={Building2} title="Business" description="The name your emails and AI assistant use, and the timezone your calendar runs on.">
+      <Group
+        icon={Building2}
+        title="Business"
+        description="The name your emails and AI assistant use, the postal address on your marketing emails, and the timezone your calendar runs on."
+      >
         <div className="grid gap-4 md:grid-cols-2">
           <Field
             label="Business name"
@@ -79,6 +83,23 @@ export function SettingsForm({ settings, timezones }: { settings: Settings; time
             </Select>
           </Field>
         </div>
+        <Field
+          label="Mailing address"
+          htmlFor="s-mailingAddress"
+          error={fe.mailingAddress}
+          hint="Required by law in marketing emails (US CAN-SPAM Act): it's printed in the footer of every automation and broadcast email. A street address, a PO box or a USPS-registered private mailbox all work, so you don't have to share your home address."
+        >
+          <Textarea
+            id="s-mailingAddress"
+            name="mailingAddress"
+            defaultValue={text("mailingAddress")}
+            placeholder={"PO Box 1234\nAustin, TX 78701"}
+            maxLength={300}
+            rows={3}
+            className="min-h-20"
+            aria-invalid={Boolean(fe.mailingAddress)}
+          />
+        </Field>
       </Group>
 
       <Group icon={Bell} title="Notifications" description="Get an email the moment something important happens.">

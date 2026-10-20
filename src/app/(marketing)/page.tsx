@@ -32,6 +32,7 @@ import { site } from "@/config/site";
 import { starterKit } from "@/content/starter-kit";
 import { listPublishedCourses } from "@/lib/courses";
 import { getActiveMeetingType } from "@/lib/scheduling";
+import { socialProfiles } from "@/lib/social";
 import { absoluteUrl, cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -147,6 +148,7 @@ export default async function HomePage() {
     getActiveMeetingType("ai-strategy-call"),
     getActiveMeetingType("ai-coaching-session"),
   ]);
+  const social = socialProfiles();
 
   return (
     <>
@@ -160,6 +162,7 @@ export default async function HomePage() {
           description: site.description,
           slogan: site.tagline,
           parentOrganization: { "@type": "Organization", name: site.company },
+          ...(social.length > 0 && { sameAs: social.map((s) => s.url) }),
         }}
       />
 

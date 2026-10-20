@@ -6,6 +6,11 @@ import { site } from "@/config/site";
 /** Admin-editable settings (stored in the `settings` table, with code defaults). */
 export type Settings = {
   businessName: string;
+  /**
+   * Postal address printed in the footer of every marketing email, as the US CAN-SPAM Act requires (street address,
+   * PO box or USPS-registered private mailbox). One line per address line; "" until the owner sets it.
+   */
+  mailingAddress: string;
   /** Where new-lead / booking / purchase notifications go. */
   notifyEmail: string;
   /** IANA timezone used to interpret availability rules. */
@@ -28,6 +33,7 @@ export type Settings = {
 
 export const DEFAULT_SETTINGS: Settings = {
   businessName: site.name,
+  mailingAddress: "",
   notifyEmail: site.contactEmail,
   timezone: site.timezone,
   announcement: "New: take the free 3-minute AI Readiness Assessment →",

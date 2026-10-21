@@ -31,8 +31,9 @@ for (const agent of [false, true]) {
   }
 }
 
-// Overview: every frame side by side, a quick way to review or share the set.
-const rows = [...new Set(written.map((f) => dirname(f)))].map((dir) => written.filter((f) => dirname(f) === dir));
+// Overview: every Story frame side by side, a quick way to review or share the set (feed images have other sizes).
+const stories = written.filter((f) => !f.startsWith("feed/"));
+const rows = [...new Set(stories.map((f) => dirname(f)))].map((dir) => stories.filter((f) => dirname(f) === dir));
 const thumbs = rows
   .map((row) => `<div class="row"><h2>${dirname(row[0])}</h2><div>${row.map((f) => `<img src="${pathToFileURL(join(outDir, f)).href}">`).join("")}</div></div>`)
   .join("");

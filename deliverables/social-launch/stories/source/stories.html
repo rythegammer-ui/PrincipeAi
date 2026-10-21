@@ -161,6 +161,18 @@
   .kit .mono b { color: var(--gold-300); font-weight: 500; }
 
   .score { display: flex; gap: 40px; align-items: center; }
+
+  /* Feed images: a 4:5 post image and a 2:3 Pin, not Stories, so they use their own sizes and margins */
+  .frame.feed { width: 1080px; height: 1350px; }
+  .frame.pin { width: 1000px; height: 1500px; }
+  .frame.feed .safe { inset: 96px 90px 90px; }
+  .frame.pin .safe { inset: 100px 80px 0; }
+  .pin h2 { font-size: 100px; }
+  .pin .li { font-size: 44px; gap: 24px; }
+  .pin .li svg { width: 54px; height: 54px; background: var(--gold-400); }
+  .pin .li .d { flex: none; width: 112px; font-size: 26px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--brand-600); padding-top: 12px; }
+  .band { margin: 0 -80px; height: 180px; flex: none; display: flex; align-items: center; justify-content: center; gap: 18px; background: var(--ink); color: #fff; font-size: 40px; font-weight: 600; letter-spacing: -.01em; }
+  .band span { color: var(--gold-300); }
   .ring { flex: none; width: 250px; height: 250px; }
 </style>
 </head>
@@ -381,6 +393,48 @@
       <div class="url">principeai.com/sales-team<svg class="i" viewBox="0 0 24 24" width="44" height="44" data-icon="arrow-down"></svg></div>
     </div>
     <div class="sticker-room"></div>
+  </div>
+</section>
+
+
+<!-- ============================== FEED IMAGES (not Stories) ============================== -->
+
+<!-- TP-01 LinkedIn launch image: "the launch banner (violet with a gold accent, 'Learn AI. Implement AI. Grow with AI.')" -->
+<section class="frame feed bg-violet" data-out="feed/launch-banner-1080x1350.png">
+  <svg class="spark" style="right:-300px;bottom:-320px;width:1000px;height:1000px;color:rgba(255,255,255,.06);transform:rotate(14deg)" viewBox="0 0 24 24"><path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2z"/></svg>
+  <div class="safe">
+    <div class="lockup"><span class="tile"><svg viewBox="0 0 24 24"><path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2z" fill="#fff"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z" fill="#fec84b"/></svg></span>Principe AI</div>
+    <div class="grow"></div>
+    <div class="pill"><span class="dot"></span>Now live</div>
+    <div class="stack" style="gap:6px;margin-top:40px">
+      <h2 style="font-size:128px">Learn AI.</h2>
+      <h2 style="font-size:128px">Implement AI.</h2>
+      <h2 style="font-size:128px"><em>Grow</em> with AI.</h2>
+    </div>
+    <p class="lead" style="margin-top:44px;max-width:880px">Practical AI for your life and your business, in plain English.</p>
+    <div class="grow"></div>
+    <div class="footer"><b>principeai.com</b><span>Start free: the AI Starter Kit</span></div>
+  </div>
+</section>
+
+<!-- VC-50 Pinterest Pin, template P3 Checklist: the seven day titles from src/content/starter-kit.ts -->
+<section class="frame pin bg-tint" data-out="feed/pinterest-vc-50-1000x1500.png">
+  <div class="safe">
+    <div class="eyebrow">Free AI Starter Kit</div>
+    <h2 style="margin-top:20px">7 days to make AI <em>genuinely</em> useful</h2>
+    <div class="grow"></div>
+    <div class="list" style="gap:22px">
+      <div class="li"><span class="d">Day 1</span><span>Meet your AI assistant</span></div>
+      <div class="li"><span class="d">Day 2</span><span>Learn the 5-part prompt</span></div>
+      <div class="li"><span class="d">Day 3</span><span>Clear a message you've been avoiding</span></div>
+      <div class="li"><span class="d">Day 4</span><span>Plan something real</span></div>
+      <div class="li"><span class="d">Day 5</span><span>Learn something faster</span></div>
+      <div class="li"><span class="d">Day 6</span><span>Make a clearer decision</span></div>
+      <div class="li"><span class="d">Day 7</span><span>Build your AI toolkit</span></div>
+    </div>
+    <div class="grow"></div>
+    <p class="small" style="font-size:36px;margin-bottom:44px">Free · about 10 minutes a day</p>
+    <div class="band">principeai.com <span>·</span> Free AI Starter Kit</div>
   </div>
 </section>
 

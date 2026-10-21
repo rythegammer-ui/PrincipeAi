@@ -18,7 +18,7 @@ Last updated: Wed Oct 21, 2026 (L-20).
 | 8 | YouTube channel | Done; **ID/advanced-features verification pending** |
 | 9 | LinkedIn personal profile | Done |
 | 10 | LinkedIn Company Page | **Blocked:** see "LinkedIn Company Page" below |
-| 11 | Threads, X, Bluesky, Pinterest website link | Threads and Bluesky done. X running in Claude in Chrome. Pinterest website link not confirmed |
+| 11 | Threads, X, Bluesky, Pinterest website link | Threads, Bluesky and X done (X: Professional, Business, Education). Left: X header image re-upload, X Link Spotlight (check the mobile app), Pinterest website link |
 | 12 | Reddit (personal account About and link; brand account reserved only) | Prompt given; waiting for the rules table |
 
 ## Waiting on something

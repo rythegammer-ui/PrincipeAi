@@ -21,6 +21,7 @@ Last updated: Wed Oct 21, 2026 (L-20).
 | 11 | Threads, X, Bluesky, Pinterest website link | Threads, Bluesky and X done (X: Professional, Business, Education). Left: X header image re-upload, X Link Spotlight (check the mobile app), Pinterest website link |
 | 12 | Reddit (personal account About and link; brand account reserved only) | Prompt given; waiting for the rules table |
 | 14 | Filming pack for batch A (Sat Oct 24): LD-01 to LD-03, SV-01 | Ready: [filming/batch-a-sat-oct-24.md](filming/batch-a-sat-oct-24.md) |
+| 15 | Schedule batch A in Postiz | **LD-01 scheduled** for Tue Nov 10, 9:00 am ET (14:00 UTC) on Instagram (PrincipeAi), Facebook (with first-comment link), YouTube Shorts and TikTok (DM KIT caption, "Your brand" label). File `1021.mp4`. Postiz post IDs: IG `cmvibh5m50csepg0y9mwfvqgf`, FB `cmvibh5z40csgpg0yj84g1l69`, YT `cmvibh6vd0csipg0yf869zh5y`, TikTok `cmvibh78c0csjpg0yd3jn0pqj`. LD-02, LD-03, SV-01 to come |
 | 13 | Profile links on the website (footer, `/links`, search-engine data) | Done for YouTube, Instagram, X, Threads, Facebook, Pinterest, Bluesky and TikTok. **LinkedIn Company Page** added once it exists |
 
 ## Waiting on something

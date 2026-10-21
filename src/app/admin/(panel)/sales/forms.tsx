@@ -31,8 +31,9 @@ function Feedback({ state, className }: { state: SalesFormState; className?: str
 
 /**
  * A form posting to a server action, with a submit button and the action's error / success message below it.
- * It submits through a transition rather than `<form action>`, so React doesn't clear what the admin typed when the
- * action returns an error; the fields are reset only after a success (unless `resetOnSuccess` is false).
+ * Once hydrated it submits through a transition (onSubmit), so React doesn't clear what the admin typed when the
+ * action returns an error; the fields are reset only after a success (unless `resetOnSuccess` is false). The form
+ * keeps `action` too, so a submit before the page has hydrated is still an ordinary server-action POST.
  */
 export function ActionForm({
   action,
@@ -69,7 +70,9 @@ export function ActionForm({
   return (
     <form
       ref={formRef}
+      action={formAction}
       onSubmit={(e) => {
+        // Handled here (React sees the transition and skips its own submit, which would reset the fields first).
         e.preventDefault();
         if (isPending || disabled) return;
         const data = new FormData(e.currentTarget);
@@ -123,11 +126,13 @@ export function ConfirmAction({
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState<SalesFormState, FormData>(action, {});
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
-  // Where keyboard focus goes: the confirm button when the step opens, back to the trigger when it's dismissed.
-  const focusNext = useRef<"trigger" | "confirm" | null>(null);
+  const panelRef = useRef<HTMLFormElement>(null);
+  const id = useId();
+  // Where keyboard focus goes: the confirm panel itself when the step opens (not its destructive button, so a double
+  // Enter can't confirm), back to the trigger when it's dismissed.
+  const focusNext = useRef<"trigger" | "panel" | null>(null);
   useEffect(() => {
-    const target = focusNext.current === "confirm" ? confirmRef.current : focusNext.current === "trigger" ? triggerRef.current : null;
+    const target = focusNext.current === "panel" ? panelRef.current : focusNext.current === "trigger" ? triggerRef.current : null;
     target?.focus();
     focusNext.current = null;
   }, [open]);
@@ -141,7 +146,7 @@ export function ConfirmAction({
           size="sm"
           className="min-h-11 self-start sm:min-h-8"
           onClick={() => {
-            focusNext.current = "confirm";
+            focusNext.current = "panel";
             setOpen(true);
           }}
         >
@@ -153,11 +158,27 @@ export function ConfirmAction({
     );
   }
   return (
-    <form action={formAction} className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3 text-left shadow-soft">
+    <form
+      ref={panelRef}
+      action={formAction}
+      tabIndex={-1}
+      role="group"
+      aria-labelledby={`${id}-title`}
+      aria-describedby={description ? `${id}-desc` : undefined}
+      className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3 text-left shadow-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+    >
+      <span id={`${id}-title`} className="sr-only">
+        {confirmLabel}
+        {subject ? ` ${subject}` : ""}?
+      </span>
       {Object.entries(hidden).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
-      {description && <p className="text-xs text-zinc-600">{description}</p>}
+      {description && (
+        <p id={`${id}-desc`} className="text-xs text-zinc-600">
+          {description}
+        </p>
+      )}
       {children}
       <div className="flex flex-wrap gap-1.5">
         <Button
@@ -171,7 +192,7 @@ export function ConfirmAction({
         >
           Keep
         </Button>
-        <SubmitButton ref={confirmRef} variant={confirmVariant} size="sm" className="min-h-11 sm:min-h-8" pendingText="Working…">
+        <SubmitButton variant={confirmVariant} size="sm" className="min-h-11 sm:min-h-8" pendingText="Working…">
           {confirmLabel}
           {about}
         </SubmitButton>

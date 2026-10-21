@@ -13,7 +13,7 @@ import { checkoutMode, livePaymentsBlocked } from "@/lib/payments";
 import { getSettings } from "@/lib/settings";
 import { stripeTestMode } from "@/lib/stripe";
 import { absoluteUrl } from "@/lib/utils";
-import { emailStatus, isLiveDeployment, paymentsStatus } from "./integration-status";
+import { emailStatus, isLiveDeployment, mailingAddressStatus, paymentsStatus } from "./integration-status";
 import { groupTimezones, supportedTimezones } from "./timezones";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -21,7 +21,7 @@ export const metadata: Metadata = { title: "Settings" };
 const VERCEL_ENV = "Vercel → your project → Settings → Environment Variables";
 
 /** `autoWebhook`: the payment-link sync created the Stripe webhook endpoint itself (no STRIPE_WEBHOOK_SECRET needed). */
-function integrationItems(live: boolean, autoWebhook: boolean): IntegrationItem[] {
+function integrationItems(live: boolean, autoWebhook: boolean, mailingAddress: string): IntegrationItem[] {
   const s = integrations();
   // In production /api/cron refuses every call without CRON_SECRET (see authorizeCron).
   const cronRequired = !s.cron && process.env.NODE_ENV === "production";
@@ -132,6 +132,34 @@ function integrationItems(live: boolean, autoWebhook: boolean): IntegrationItem[
       ],
     },
     {
+      id: "mailing-address",
+      title: "Mailing address (marketing emails)",
+      envVars: [],
+      ...mailingAddressStatus(mailingAddress),
+      summary: (
+        <>
+          US law (the CAN-SPAM Act) requires your postal address in every marketing email. Once it&apos;s set, it appears in the footer of every
+          automation and broadcast email, next to the unsubscribe link. Receipts, booking confirmations and sign-in emails don&apos;t change.
+          {!mailingAddress.trim() && s.email && (
+            <>
+              {" "}
+              <strong>Automation emails are going out without it right now.</strong>
+            </>
+          )}
+        </>
+      ),
+      steps: [
+        <>Choose the address to show. A street address, a PO box or a private mailbox registered with the USPS all count, so you don&apos;t have to publish your home address.</>,
+        <>
+          Enter it under{" "}
+          <a href="#s-mailingAddress" className="font-medium text-brand-700 underline-offset-2 hover:underline">
+            Business → Mailing address
+          </a>{" "}
+          at the top of this page and click <strong>Save settings</strong>.
+        </>,
+      ],
+    },
+    {
       id: "ai",
       title: "AI (Claude)",
       envVars: ["ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"],
@@ -229,9 +257,9 @@ export default async function SettingsPage() {
           <h2 id="integrations" className="scroll-mt-20 text-xl font-semibold tracking-tight text-zinc-900">
             Integrations
           </h2>
-          <p className="mt-1 text-sm text-zinc-500">Connect these in Vercel to take the platform live. Each one takes a few minutes.</p>
+          <p className="mt-1 text-sm text-zinc-500">Set these up to take the platform live. Each one takes a few minutes.</p>
         </div>
-        <IntegrationsChecklist items={integrationItems(live, autoWebhook)} live={live} />
+        <IntegrationsChecklist items={integrationItems(live, autoWebhook, settings.mailingAddress)} live={live} />
       </section>
 
       <section aria-labelledby="tools-heading" className="flex flex-col gap-4">

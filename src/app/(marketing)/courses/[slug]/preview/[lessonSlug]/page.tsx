@@ -9,6 +9,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Markdown } from "@/components/ui/markdown";
 import { getStudent } from "@/lib/auth";
 import { getCourseWithCurriculum, getLesson, isEnrolled } from "@/lib/courses";
+import { shareMetadata } from "@/lib/seo";
 import { pluralize, truncate } from "@/lib/utils";
 
 type Params = { slug: string; lessonSlug: string };
@@ -18,10 +19,14 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   const data = await getCourseWithCurriculum(slug);
   const lesson = data?.lessons.find((l) => l.slug === lessonSlug && l.isPreview);
   if (!data || !lesson) return { title: "Lesson not found" };
+  const description = truncate(lesson.summary || data.course.subtitle, 160);
+  const url = `/courses/${slug}/preview/${lessonSlug}`;
   return {
     title: `${lesson.title} (free lesson) — ${data.course.title}`,
-    description: truncate(lesson.summary || data.course.subtitle, 160),
-    alternates: { canonical: `/courses/${slug}/preview/${lessonSlug}` },
+    description,
+    alternates: { canonical: url },
+    // Social posts link to preview lessons, so give them their own share card instead of the generic site one.
+    ...shareMetadata({ title: `Free lesson: ${lesson.title}`, description, url, type: "article" }),
   };
 }
 

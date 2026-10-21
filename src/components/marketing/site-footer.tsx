@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { site } from "@/config/site";
 import { Logo } from "@/components/ui/misc";
+import { socialProfiles } from "@/lib/social";
 
 const columns = [
   {
@@ -32,6 +33,7 @@ const columns = [
 ];
 
 export function SiteFooter() {
+  const social = socialProfiles();
   return (
     <footer className="border-t border-zinc-200 bg-zinc-50">
       <div className="container-page grid gap-10 py-14 md:grid-cols-[1.4fr_repeat(3,1fr)]">
@@ -43,6 +45,22 @@ export function SiteFooter() {
               {site.contactEmail}
             </a>
           </p>
+          {social.length > 0 && (
+            <ul aria-label={`${site.name} on social media`} className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+              {social.map((s) => (
+                <li key={s.key}>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="me noopener noreferrer"
+                    className="text-sm text-zinc-600 transition-colors hover:text-zinc-900"
+                  >
+                    {s.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         {columns.map((col) => (
           <div key={col.title}>

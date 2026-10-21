@@ -20,12 +20,17 @@ export const site = {
   /** Owner's timezone — availability rules for scheduling are interpreted in this zone. */
   timezone: process.env.BUSINESS_TIMEZONE ?? "America/New_York",
   currency: "usd",
+  /** Full profile URLs (https://…). Filled ones are linked in the footer and in search-engine structured data. */
   social: {
-    youtube: "",
-    instagram: "",
+    youtube: "https://www.youtube.com/@PrincipeAi",
+    instagram: "https://www.instagram.com/principe.ai/",
     linkedin: "",
-    x: "",
-    tiktok: "",
+    x: "https://x.com/PrincipeAi",
+    tiktok: "https://www.tiktok.com/@principeai",
+    threads: "https://www.threads.com/@principe.ai",
+    facebook: "https://www.facebook.com/profile.php?id=61595512175708",
+    pinterest: "https://www.pinterest.com/principeconsults/",
+    bluesky: "https://bsky.app/profile/principeai.bsky.social",
   },
   /** Add real client testimonials here. Sections that use them are hidden while this is empty. */
   testimonials: [] as { quote: string; name: string; role: string }[],

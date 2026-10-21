@@ -131,13 +131,16 @@ export function suggestAgentCode(name: string, random: () => number = Math.rando
 }
 
 /**
- * True when two addresses reach the same inbox, ignoring case and a "+tag" (jane+x@gmail.com is jane@gmail.com):
- * an agent's own purchase never earns them commission.
+ * True when two addresses reach the same inbox, ignoring case and a "+tag" (jane+x@gmail.com is jane@gmail.com), and
+ * for Gmail the dots and googlemail.com: an agent's own purchase never earns them commission. A different address of
+ * theirs can't be detected, which is why payouts are reviewed by an admin.
  */
 export function sameMailbox(a: string, b: string): boolean {
   const canon = (email: string) => {
-    const [local = "", domain = ""] = email.trim().toLowerCase().split("@");
-    return `${local.split("+")[0]}@${domain}`;
+    const [rawLocal = "", rawDomain = ""] = email.trim().toLowerCase().split("@");
+    const domain = rawDomain === "googlemail.com" ? "gmail.com" : rawDomain;
+    const local = rawLocal.split("+")[0];
+    return `${domain === "gmail.com" ? local.replace(/\./g, "") : local}@${domain}`;
   };
   return canon(a) === canon(b);
 }

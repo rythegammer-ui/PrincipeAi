@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { DateTime } from "luxon";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import { getDb, schema } from "@/db";
 import { assertAdmin } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { approveAgent, rejectAgent, setAgentCode, setAgentStatus } from "@/lib/sales/agents";
-import { addAgentAdjustment, PayoutChangedError, recordPayout, voidCommission } from "@/lib/sales/commissions";
+import { addAgentAdjustment, cancelChallenge, PayoutChangedError, recordPayout, voidCommission } from "@/lib/sales/commissions";
 import { MAX_RATE_BPS } from "@/lib/sales/game";
 import { getSalesProgram, saveSalesProgram } from "@/lib/sales/program";
 import { getBusinessTimezone } from "@/lib/scheduling";
@@ -267,13 +267,8 @@ export async function cancelChallengeAction(_prev: SalesFormState, fd: FormData)
   await assertAdmin();
   const id = Id.safeParse(str(fd, "challengeId"));
   if (!id.success) return { error: "Invalid request." };
-  const db = await getDb();
-  const [row] = await db
-    .update(schema.agentChallenges)
-    .set({ cancelledAt: new Date() })
-    .where(and(eq(schema.agentChallenges.id, id.data), isNull(schema.agentChallenges.awardedAt), isNull(schema.agentChallenges.cancelledAt)))
-    .returning({ id: schema.agentChallenges.id });
+  const cancelled = await cancelChallenge(id.data);
   revalidatePath("/admin/sales", "layout");
-  if (!row) return { error: "Only challenges that haven't been awarded yet can be cancelled." };
+  if (!cancelled) return { error: "Only challenges that haven't been awarded yet can be cancelled." };
   return { ok: true, message: "Challenge cancelled." };
 }

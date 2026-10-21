@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { AgentChallenge, AgentCommission, AgentPayout, Order, SalesAgent } from "@/db/schema";
 import { logActivity } from "@/lib/crm";
@@ -7,7 +7,7 @@ import { getBusinessTimezone } from "@/lib/scheduling";
 import { emailAgent, dashboardLink } from "@/lib/sales/emails";
 import { commissionFor, formatRate, monthBounds, sameMailbox, standing } from "@/lib/sales/game";
 import { getSalesProgram } from "@/lib/sales/program";
-import { approvedAgentByCode, claimActive, claimContactFor } from "@/lib/sales/referrals";
+import { agentByCode, claimActive, claimContactFor } from "@/lib/sales/referrals";
 import { stripeTestMode } from "@/lib/stripe";
 import { escapeMarkdown, formatDate, formatMoney, pluralize } from "@/lib/utils";
 
@@ -46,9 +46,21 @@ export function countingSale() {
 /** Marks an unpaid commission as waiting on a chargeback (see holdAgentSaleForDispute). */
 export const DISPUTE_NOTE = "On hold: the payment is disputed";
 
+/**
+ * A disputed sale waits at most this long past its own payable date: Stripe resolves disputes within about 75 days,
+ * and if the close event never arrives the commission isn't stuck for ever (a dispute lost later still claws it back).
+ */
+const DISPUTE_HOLD_CAP_DAYS = 120;
+
 /** Held rows an admin can pay now: past their hold, not waiting on a dispute, real money. */
-function payableNow(now: Date | ReturnType<typeof sql>) {
-  return and(eq(c.status, "held"), lte(c.availableAt, now as Date), sql`${c.note} is distinct from ${DISPUTE_NOTE}`, realMoney());
+function payableNow(at: Date | SQL) {
+  const now = at instanceof Date ? sql`${at.toISOString()}::timestamptz` : at;
+  return and(
+    eq(c.status, "held"),
+    sql`${c.availableAt} <= ${now}`,
+    sql`(${c.note} is distinct from ${DISPUTE_NOTE} or ${c.availableAt} <= ${now} - make_interval(days => ${DISPUTE_HOLD_CAP_DAYS}))`,
+    realMoney(),
+  );
 }
 
 async function salesBetween(agentId: string, from: Date, to: Date): Promise<number> {
@@ -70,34 +82,43 @@ export async function monthlySales(agentId: string, now = new Date(), tz?: strin
   return { thisMonth, lastMonth };
 }
 
-/** Approved, and already active when `at` came (a sale made while they were paused never earns, even once resumed). */
-function activeAt(agent: SalesAgent, at: Date): boolean {
-  return agent.status === "approved" && (!agent.reviewedAt || agent.reviewedAt.getTime() <= at.getTime());
-}
+type Credit = { agent: SalesAgent; paused: boolean };
 
 /**
  * The agent a paid order is credited to:
- * 1. the customer's agent: a claim made before they paid that still holds (an admin's assignment always does), whose
- *    agent was active when they paid; otherwise
+ * 1. the customer's agent: a claim made before they paid that still holds (an admin's assignment always does);
+ *    otherwise
  * 2. the agent whose link the checkout came through (orders.agent_code), who then becomes the customer's agent, unless
  *    another agent's claim still holds.
  * A claim made after paying only counts for later purchases, so whether the webhook or the success page records the
- * purchase first never changes the outcome. Never the agent buying for themself.
+ * purchase first never changes the outcome. Never the agent buying for themself. `paused`: the agent it belongs to was
+ * paused when it sold, so it earns nothing (recorded as such, so it isn't credited later when they're resumed).
  */
-async function creditedAgent(order: Order, contactId: string, soldAt: Date): Promise<SalesAgent | null> {
+async function creditedAgent(order: Order, contactId: string, soldAt: Date): Promise<Credit | null> {
   const db = await getDb();
   const { attributionDays } = await getSalesProgram();
   const [ref] = await db.select().from(schema.agentReferrals).where(eq(schema.agentReferrals.contactId, contactId)).limit(1);
+  let pausedHolder: SalesAgent | null = null;
   if (ref && ref.createdAt.getTime() <= soldAt.getTime()) {
     const [holder] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.id, ref.agentId)).limit(1);
-    if (holder && activeAt(holder, soldAt) && (ref.source === "manual" || claimActive(ref.createdAt, attributionDays, soldAt.getTime()))) {
-      return sameMailbox(order.email, holder.email) ? null : holder;
+    const holds = ref.source === "manual" || claimActive(ref.createdAt, attributionDays, soldAt.getTime());
+    if (holder && holds && !sameMailbox(order.email, holder.email)) {
+      if (holder.status === "approved") return { agent: holder, paused: false };
+      if (holder.status === "paused") {
+        // An admin's assignment stays theirs while paused; a link claim doesn't hold against another agent's link.
+        if (ref.source === "manual") return { agent: holder, paused: true };
+        pausedHolder = holder;
+      }
     }
   }
-  if (!order.agentCode) return null;
-  const agent = await approvedAgentByCode(order.agentCode);
-  if (!agent || !activeAt(agent, soldAt) || sameMailbox(order.email, agent.email)) return null;
-  return (await claimContactFor(contactId, agent, soldAt)) ? agent : null;
+  if (order.agentCode) {
+    const agent = await agentByCode(order.agentCode);
+    if (agent && !sameMailbox(order.email, agent.email)) {
+      if (agent.status === "paused") return { agent, paused: true };
+      if (await claimContactFor(contactId, agent, soldAt)) return { agent, paused: false };
+    }
+  }
+  return pausedHolder ? { agent: pausedHolder, paused: true } : null;
 }
 
 /**
@@ -107,8 +128,31 @@ async function creditedAgent(order: Order, contactId: string, soldAt: Date): Pro
 export async function recordAgentSale(order: Order, contactId: string): Promise<AgentCommission | null> {
   if (order.itemType !== "course" || order.status !== "paid" || order.amountCents <= 0) return null;
   const soldAt = order.paidAt ?? new Date();
-  const agent = await creditedAgent(order, contactId, soldAt);
-  if (!agent) return null;
+  const credit = await creditedAgent(order, contactId, soldAt);
+  if (!credit) return null;
+  const { agent } = credit;
+  if (credit.paused) {
+    // Sold while paused: no commission, recorded so the daily sweep doesn't credit it once they're resumed.
+    const db = await getDb();
+    await db
+      .insert(c)
+      .values({
+        agentId: agent.id,
+        kind: "sale",
+        orderId: order.id,
+        contactId,
+        saleCents: order.amountCents,
+        amountCents: 0,
+        currency: order.currency,
+        status: "void",
+        voidedAt: soldAt,
+        voidReason: "Sold while your account was paused",
+        isTest: order.isTest,
+        createdAt: soldAt,
+      })
+      .onConflictDoNothing({ target: c.orderId, where: sql`${c.kind} = 'sale'` });
+    return null;
+  }
   const db = await getDb();
   const program = await getSalesProgram();
 
@@ -136,7 +180,7 @@ export async function recordAgentSale(order: Order, contactId: string): Promise<
       // When it sold (the daily sweep may record it later): months, levels and challenges go by this.
       createdAt: soldAt,
     })
-    .onConflictDoNothing({ target: [c.orderId, c.kind] })
+    .onConflictDoNothing({ target: c.orderId, where: sql`${c.kind} = 'sale'` })
     .returning();
   if (!row) return null;
 
@@ -148,16 +192,19 @@ export async function recordAgentSale(order: Order, contactId: string): Promise<
     meta: { agentId: agent.id, orderId: order.id, commissionCents: amountCents, rateBps: after.level.rateBps },
   }).catch((err) => console.error("[sales] activity log failed", err));
 
+  if (order.isTest && livePayments()) {
+    // A test payment on a live site: recorded, but it isn't money and doesn't count (see livePayments).
+    await emailAgent(agent, "A test purchase came through your link", [
+      `Someone made a test purchase of **${escapeMarkdown(order.description)}** through your link. Test purchases aren't real money: they're never paid out and don't count toward your level, challenges or the leaderboard.`,
+      dashboardLink(),
+    ]);
+    return row;
+  }
   const levelUp = after.index > before.index;
   const sales = thisMonth + 1;
-  // A test payment on a live site: recorded, but it isn't money and doesn't count (see livePayments).
-  const notCounted = order.isTest && livePayments();
   await emailAgent(agent, `You made a sale! +${formatMoney(amountCents, order.currency)} commission`, [
     `A customer you referred just bought **${escapeMarkdown(order.description)}** for ${formatMoney(order.amountCents, order.currency)}. Your commission: **${formatMoney(amountCents, order.currency)}** (${formatRate(after.level.rateBps)}, ${escapeMarkdown(after.level.name)} level).`,
-    order.isTest &&
-      (notCounted
-        ? "_This was a test purchase, so no real money changed hands and it isn't paid out or counted toward your level._"
-        : "_This was a test purchase, so no real money changed hands._"),
+    order.isTest && "_This was a test purchase, so no real money changed hands._",
     `It becomes payable on **${formatDate(availableAt, {}, tz)}**, once the refund window has passed. Sales this month: **${sales}**.`,
     levelUp
       ? `🚀 **Level up: you're now ${escapeMarkdown(after.level.name)}!** Every sale earns ${formatRate(after.level.rateBps)} for the rest of this month and all of next month.`
@@ -175,38 +222,32 @@ export async function recordAgentSale(order: Order, contactId: string): Promise<
  */
 export async function reverseAgentSale(orderId: string, reason: string): Promise<"voided" | "clawback" | null> {
   const db = await getDb();
-  const [sale] = await db.select().from(c).where(and(eq(c.orderId, orderId), eq(c.kind, "sale"))).limit(1);
-  if (!sale || sale.status === "void" || sale.voidedAt) return null;
-  let outcome: "voided" | "clawback" | null = null;
-  const [voided] = await db
-    .update(c)
-    .set({ status: "void", voidedAt: new Date(), voidReason: reason.slice(0, 200) })
-    .where(and(eq(c.id, sale.id), eq(c.status, "held")))
-    .returning({ id: c.id });
-  if (voided) {
-    outcome = "voided";
-  } else {
-    // Already paid (perhaps a moment ago): it stops counting, and what was paid comes off the next payout.
-    const [marked] = await db
-      .update(c)
-      .set({ voidedAt: new Date(), voidReason: reason.slice(0, 200) })
-      .where(and(eq(c.id, sale.id), eq(c.status, "paid"), isNull(c.voidedAt)))
-      .returning({ id: c.id });
-    if (marked) {
-      await takeBack(sale, sale.amountCents, reason);
-      outcome = "clawback";
+  // One transaction, the sale row locked: a payout or a partial refund can't slip in between, and a failure leaves
+  // nothing half done (the daily sweep tries again).
+  const result = await db.transaction(async (tx) => {
+    const [sale] = await tx.select().from(c).where(and(eq(c.orderId, orderId), eq(c.kind, "sale"))).for("update");
+    if (!sale || sale.status === "void" || sale.voidedAt) return null;
+    const label = reason.slice(0, 200);
+    if (sale.status === "held") {
+      await tx.update(c).set({ status: "void", voidedAt: new Date(), voidReason: label }).where(eq(c.id, sale.id));
+      return { sale, outcome: "voided" as const };
     }
-  }
-  if (!outcome) return null;
+    // Paid: it stops counting, and what was paid comes off the next payout.
+    await tx.update(c).set({ voidedAt: new Date(), voidReason: label }).where(eq(c.id, sale.id));
+    await takeBack(tx, sale, sale.amountCents, label);
+    return { sale, outcome: "clawback" as const };
+  });
+  if (!result) return null;
+  const { sale, outcome } = result;
 
   await recheckChallengeBonuses(sale.agentId).catch((err) => console.error("[sales] challenge re-check failed", err));
   const [agent] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.id, sale.agentId)).limit(1);
-  if (agent) {
+  if (agent && sale.amountCents > 0) {
     const amount = formatMoney(sale.amountCents, sale.currency);
     await emailAgent(agent, "A sale was refunded", [
       outcome === "voided"
         ? `A customer you referred was refunded for a ${formatMoney(sale.saleCents, sale.currency)} purchase, so its ${amount} commission was cancelled. It no longer counts toward your level or challenges.`
-        : `A customer you referred was refunded for a ${formatMoney(sale.saleCents, sale.currency)} purchase after its ${amount} commission was paid, so ${amount} will come off your next payout. It no longer counts toward your level or challenges.`,
+        : `A customer you referred was refunded for a ${formatMoney(sale.saleCents, sale.currency)} purchase after its commission was paid, so what's still owed back comes off your next payout. It no longer counts toward your level or challenges.`,
       "Refunds happen. Customers who know exactly what they're buying rarely ask for one, so keep setting clear expectations.",
       dashboardLink(),
     ]);
@@ -214,92 +255,81 @@ export async function reverseAgentSale(orderId: string, reason: string): Promise
   return outcome;
 }
 
+type Tx = Parameters<Parameters<Awaited<ReturnType<typeof getDb>>["transaction"]>[0]>[0];
+
 /**
- * Brings what's taken back from a paid sale's agent up to `totalCents`: one clawback row per order, raised while it's
- * unpaid; once that row is paid out, the rest goes in the order's adjustment row.
+ * Brings what's taken back from a paid sale's agent up to `totalCents` (never down: a late or repeated refund event
+ * changes nothing). Raises the order's unpaid take-back row, or adds one. Call inside a transaction holding the sale row.
  */
-async function takeBack(sale: AgentCommission, totalCents: number, note: string): Promise<boolean> {
-  const db = await getDb();
-  const rows = await db
-    .select()
+async function takeBack(tx: Tx, sale: AgentCommission, totalCents: number, note: string): Promise<boolean> {
+  const rows = await tx
+    .select({ id: c.id, amountCents: c.amountCents, status: c.status })
     .from(c)
-    .where(and(eq(c.orderId, sale.orderId!), inArray(c.kind, ["clawback", "adjustment"])));
-  const settled = rows.filter((r) => r.status === "paid").reduce((sum, r) => sum - r.amountCents, 0);
-  for (const kind of ["clawback", "adjustment"] as const) {
-    const row = rows.find((r) => r.kind === kind);
-    if (row?.status === "paid") continue;
-    const amountCents = -Math.max(0, totalCents - settled);
-    if (row) {
-      if (row.amountCents === amountCents) return false;
-      const updated = await db
-        .update(c)
-        .set({ amountCents, note: note.slice(0, 200) })
-        .where(and(eq(c.id, row.id), eq(c.status, "held")))
-        .returning({ id: c.id });
-      return updated.length > 0;
-    }
-    if (amountCents < 0) {
-      const inserted = await db
-        .insert(c)
-        .values({
-          agentId: sale.agentId,
-          kind,
-          orderId: sale.orderId,
-          contactId: sale.contactId,
-          saleCents: sale.saleCents,
-          rateBps: sale.rateBps,
-          level: sale.level,
-          amountCents,
-          currency: sale.currency,
-          status: "held",
-          availableAt: new Date(),
-          isTest: sale.isTest,
-          note: note.slice(0, 200),
-        })
-        .onConflictDoNothing({ target: [c.orderId, c.kind] })
-        .returning({ id: c.id });
-      return inserted.length > 0;
-    }
-    return false;
+    .where(and(eq(c.orderId, sale.orderId!), eq(c.kind, "clawback"), ne(c.status, "void")));
+  const taken = rows.reduce((sum, r) => sum - r.amountCents, 0);
+  const more = Math.min(totalCents, sale.amountCents) - taken;
+  if (more <= 0) return false;
+  const open = rows.find((r) => r.status === "held");
+  if (open) {
+    await tx.update(c).set({ amountCents: open.amountCents - more, note: note.slice(0, 200) }).where(eq(c.id, open.id));
+  } else {
+    await tx.insert(c).values({
+      agentId: sale.agentId,
+      kind: "clawback",
+      orderId: sale.orderId,
+      contactId: sale.contactId,
+      saleCents: sale.saleCents,
+      rateBps: sale.rateBps,
+      level: sale.level,
+      amountCents: -more,
+      currency: sale.currency,
+      status: "held",
+      availableAt: new Date(),
+      isTest: sale.isTest,
+      note: note.slice(0, 200),
+    });
   }
-  return false;
+  return true;
 }
 
 /**
- * A partial refund (Stripe reports the total refunded so far): the commission is recalculated on what the customer
- * still paid. Unpaid: the commission itself shrinks. Paid: the difference comes off the next payout. Returns whether
- * anything changed.
+ * A partial refund (Stripe reports the running total refunded): the commission is recalculated on what the customer
+ * kept. Unpaid: the commission itself shrinks. Paid: the difference comes off the next payout. Only ever downwards, so
+ * events arriving late or twice change nothing. Returns whether anything changed.
  */
 export async function adjustAgentSaleForPartialRefund(orderId: string, refundedCents: number): Promise<boolean> {
   const db = await getDb();
-  const [sale] = await db.select().from(c).where(and(eq(c.orderId, orderId), eq(c.kind, "sale"))).limit(1);
-  if (!sale || sale.status === "void" || sale.voidedAt) return false;
   const [order] = await db.select({ amountCents: schema.orders.amountCents }).from(schema.orders).where(eq(schema.orders.id, orderId)).limit(1);
   if (!order) return false;
   const kept = Math.max(0, order.amountCents - refundedCents);
-  const due = commissionFor(kept, sale.rateBps);
-  const note = `Partly refunded (${formatMoney(Math.min(refundedCents, order.amountCents), sale.currency)})`;
-  let changed = false;
-  if (sale.status === "held") {
-    const [row] = await db
-      .update(c)
-      .set({ saleCents: kept, amountCents: due, note: sale.note === DISPUTE_NOTE ? DISPUTE_NOTE : note })
-      .where(and(eq(c.id, sale.id), eq(c.status, "held"), ne(c.amountCents, due)))
-      .returning({ id: c.id });
-    changed = Boolean(row);
-  } else if (sale.amountCents > due) {
-    changed = await takeBack(sale, sale.amountCents - due, note);
-  }
-  if (changed) {
-    const [agent] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.id, sale.agentId)).limit(1);
-    if (agent) {
-      await emailAgent(agent, "A sale was partly refunded", [
-        `A customer you referred was partly refunded, so the commission on that sale is now **${formatMoney(due, sale.currency)}** (${formatRate(sale.rateBps)} of the ${formatMoney(kept, sale.currency)} they kept).${sale.status === "paid" ? " The difference comes off your next payout." : ""}`,
-        dashboardLink(),
-      ]);
+  const note = `Partly refunded (${formatMoney(Math.min(refundedCents, order.amountCents))})`;
+  const result = await db.transaction(async (tx) => {
+    const [sale] = await tx.select().from(c).where(and(eq(c.orderId, orderId), eq(c.kind, "sale"))).for("update");
+    if (!sale || sale.status === "void" || sale.voidedAt || kept >= sale.saleCents) return null;
+    const due = commissionFor(kept, sale.rateBps);
+    if (sale.status === "held") {
+      await tx
+        .update(c)
+        .set({ saleCents: kept, amountCents: Math.min(due, sale.amountCents), note: sale.note === DISPUTE_NOTE ? DISPUTE_NOTE : note })
+        .where(eq(c.id, sale.id));
+    } else {
+      await tx.update(c).set({ saleCents: kept }).where(eq(c.id, sale.id));
+      await takeBack(tx, sale, sale.amountCents - due, note);
     }
+    return { sale, due };
+  });
+  if (!result) return false;
+  const { sale, due } = result;
+  // Less sales volume: a revenue challenge it helped win may no longer be won.
+  await recheckChallengeBonuses(sale.agentId).catch((err) => console.error("[sales] challenge re-check failed", err));
+  const [agent] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.id, sale.agentId)).limit(1);
+  if (agent) {
+    await emailAgent(agent, "A sale was partly refunded", [
+      `A customer you referred was partly refunded, so the commission on that sale is now **${formatMoney(due, sale.currency)}** (${formatRate(sale.rateBps)} of the ${formatMoney(kept, sale.currency)} they kept).${sale.status === "paid" ? " The difference comes off your next payout." : ""}`,
+      dashboardLink(),
+    ]);
   }
-  return changed;
+  return true;
 }
 
 /**
@@ -336,23 +366,27 @@ export async function reconcileAgentSales(days = 45): Promise<{ credited: number
   const since = new Date(Date.now() - days * DAY);
   const o = schema.orders;
   const r = schema.agentReferrals;
-  // Paid course orders with no commission whose customer had an agent before paying, or whose checkout carried a code.
+  // Paid course orders with no commission row whose customer had an agent before paying, or whose checkout carried the
+  // code of an agent on the team. Oldest first, like they were paid, so claims settle in the same order as live.
+  const a = schema.salesAgents;
   const missing = await db
     .select({ order: o })
     .from(o)
     .leftJoin(r, eq(r.contactId, o.contactId))
+    .leftJoin(a, and(eq(a.code, o.agentCode), inArray(a.status, ["approved", "paused"])))
     .leftJoin(c, and(eq(c.orderId, o.id), eq(c.kind, "sale")))
     .where(
       and(
         eq(o.status, "paid"),
         eq(o.itemType, "course"),
         gte(o.paidAt, since),
+        sql`${o.amountCents} > 0`,
         isNotNull(o.contactId),
         isNull(c.id),
-        or(isNotNull(o.agentCode), lte(r.createdAt, o.paidAt)),
+        or(isNotNull(a.id), lte(r.createdAt, o.paidAt)),
       ),
     )
-    .orderBy(desc(o.paidAt))
+    .orderBy(asc(o.paidAt))
     .limit(200);
   // Lazily: payments.ts imports this module.
   const { isDuplicatePurchase } = await import("@/lib/payments");
@@ -584,6 +618,9 @@ export async function awardDueChallenges(now = new Date()): Promise<number> {
           .where(and(inArray(schema.salesAgents.id, winners), inArray(schema.salesAgents.status, ["approved", "paused"])))
       : [];
     for (const agent of agents) {
+      // Cancelled by an admin meanwhile: stop (cancelChallenge cancels the bonuses already written).
+      const [current] = await db.select({ cancelledAt: schema.agentChallenges.cancelledAt }).from(schema.agentChallenges).where(eq(schema.agentChallenges.id, challenge.id));
+      if (current?.cancelledAt) break;
       const availableAt = new Date(challenge.endsAt.getTime() + holdDays * DAY);
       const [bonus] = await db
         .insert(c)
@@ -613,9 +650,30 @@ export async function awardDueChallenges(now = new Date()): Promise<number> {
     await db
       .update(schema.agentChallenges)
       .set({ awardedAt: now })
-      .where(and(eq(schema.agentChallenges.id, challenge.id), isNull(schema.agentChallenges.awardedAt)));
+      .where(and(eq(schema.agentChallenges.id, challenge.id), isNull(schema.agentChallenges.awardedAt), isNull(schema.agentChallenges.cancelledAt)));
   }
   return awarded;
+}
+
+/**
+ * Cancels a challenge that hasn't been awarded yet. Bonuses already written for it (an award run in progress) are
+ * cancelled too. Returns whether it was cancelled.
+ */
+export async function cancelChallenge(id: string): Promise<boolean> {
+  const db = await getDb();
+  return db.transaction(async (tx) => {
+    const [cancelled] = await tx
+      .update(schema.agentChallenges)
+      .set({ cancelledAt: new Date() })
+      .where(and(eq(schema.agentChallenges.id, id), isNull(schema.agentChallenges.awardedAt), isNull(schema.agentChallenges.cancelledAt)))
+      .returning({ id: schema.agentChallenges.id });
+    if (!cancelled) return false;
+    await tx
+      .update(c)
+      .set({ status: "void", voidedAt: new Date(), voidReason: "Challenge cancelled" })
+      .where(and(eq(c.challengeId, id), eq(c.status, "held")));
+    return true;
+  });
 }
 
 /** Cancels unpaid challenge bonuses an agent no longer qualifies for (after a refund). */

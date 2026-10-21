@@ -168,7 +168,12 @@ export async function agentDashboard(agent: SalesAgent, now = new Date()): Promi
     db.select().from(c).where(eq(c.agentId, agent.id)).orderBy(desc(c.createdAt)).limit(25),
     db.select().from(schema.agentPayouts).where(eq(schema.agentPayouts.agentId, agent.id)).orderBy(desc(schema.agentPayouts.paidAt)).limit(12),
     db.select({ at: c.createdAt, saleCents: c.saleCents }).from(c).where(and(eq(c.agentId, agent.id), countingSale())),
-    db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(schema.agentReferrals).where(eq(schema.agentReferrals.agentId, agent.id)),
+    // People who bought through them (not merely signed up: that would tell an agent whether an address they typed
+    // into a form was already a contact).
+    db
+      .select({ n: sql<number>`count(distinct ${c.contactId})`.mapWith(Number) })
+      .from(c)
+      .where(and(eq(c.agentId, agent.id), countingSale())),
     monthsWon(tz, now),
     leaderboard(bounds.thisMonth, bounds.nextMonth),
     teamFeed(),

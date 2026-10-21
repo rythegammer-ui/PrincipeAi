@@ -22,6 +22,13 @@
       "when": 1792539562938,
       "tag": "0002_order_agent_code",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792542204234,
+      "tag": "0003_commission_order_index",
+      "breakpoints": true
     }
   ]
 }

@@ -60,7 +60,29 @@ export async function submitAgentApplication(input: AgentApplication): Promise<"
       .set({ ...values, status: "applied" })
       .where(and(eq(schema.salesAgents.email, email), inArray(schema.salesAgents.status, ["rejected", "removed"])))
       .returning();
-    if (!updated) return "unchanged";
+    if (!updated) {
+      // Still in the queue: nothing is overwritten (anyone can type any address), but the admins see what was sent,
+      // so a real applicant's correction isn't lost.
+      const [pending] = await db
+        .select()
+        .from(schema.salesAgents)
+        .where(and(eq(schema.salesAgents.email, email), eq(schema.salesAgents.status, "applied")))
+        .limit(1);
+      if (pending) {
+        await notifyAdminTeam(
+          `Application sent again: ${pending.name}`,
+          [
+            `Someone sent the sales-team application again for **${escapeMarkdown(email)}**, which already has an application waiting. Nothing was changed. If these are corrections, update them with the applicant.`,
+            `- Name: ${escapeMarkdown(input.name)}`,
+            `- Phone: ${escapeMarkdown(input.phone)}`,
+            `- Location: ${escapeMarkdown(`${input.city}, ${input.state}`)}`,
+            `**How they'd find customers:**\n\n${escapeMarkdown(input.channels)}`,
+            `**[Open the application →](${absoluteUrl(`/admin/sales/${pending.id}`)})**`,
+          ].join("\n\n"),
+        );
+      }
+      return "unchanged";
+    }
     agent = updated;
     outcome = "updated";
   }
@@ -140,7 +162,7 @@ export async function approveAgent(id: string, by: string): Promise<SalesAgent |
     firstApproval
       ? [
           "Welcome aboard! Your application is approved and your agent account is live.",
-          `**Your referral code: ${code}**\n\nYour link: ${links.short}\n\nAnyone who comes to the site through your link (or any page with \`?ref=${code}\`) and buys a course within ${program.attributionDays} days is your customer.`,
+          `**Your referral code: ${code}**\n\nYour link: ${links.short}\n\nYour link (or any page with \`?ref=${code}\`) is remembered in a visitor's browser for 90 days. Anyone who signs up for the first time or buys a course through it becomes your customer, and their purchases in the next ${program.attributionDays} days earn you commission.`,
           `**How you earn:** ${formatRate(first.rateBps)} of every course sale to start${rest.length ? `, rising to ${rest.map((l) => `${formatRate(l.rateBps)} at ${l.name} (${l.minSales}+ sales a month)`).join(" and ")}` : ""}. Reach a level and you keep it through the end of next month.`,
           `**Sign in to your dashboard** at ${agentLoginUrl()} with this email address. You'll find your links, scripts, the leaderboard and your earnings there. Add how you'd like to be paid (PayPal, Venmo, Zelle…) in your profile.`,
           "Before you start, please read the do's and don'ts in your dashboard's toolkit: always say you earn a commission, never promise results or income, and only message people who'd welcome it.",

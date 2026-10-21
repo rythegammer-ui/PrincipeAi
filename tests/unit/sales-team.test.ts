@@ -27,6 +27,7 @@ import {
   agentBalance,
   awardDueChallenges,
   adjustAgentSaleForPartialRefund,
+  cancelChallenge,
   holdAgentSaleForDispute,
   monthlySales,
   PayoutChangedError,
@@ -91,6 +92,8 @@ describe("program rules (pure)", () => {
     expect(normalizeAgentCode("producthunt")).toBeNull();
     expect(sameMailbox("Jane+promo@Gmail.com", "jane@gmail.com")).toBe(true);
     expect(sameMailbox("jane@gmail.com", "jane@example.com")).toBe(false);
+    expect(sameMailbox("j.a.ne@googlemail.com", "jane@gmail.com")).toBe(true);
+    expect(sameMailbox("j.ane@example.com", "jane@example.com")).toBe(false);
     expect(normalizeAgentCode("jane-27")).toBeNull();
     expect(suggestAgentCode("Émile Zola", () => 0.5)).toBe("MILE55");
     expect(suggestAgentCode("A", () => 0)).toBe("AGENT10");
@@ -443,16 +446,30 @@ describe("sales team", () => {
     expect(await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, own.id))).toHaveLength(0);
   });
 
-  it("pays nothing for sales made while an agent was paused, even after they're resumed", async () => {
+  it("pays nothing for sales made while an agent was paused, even after they're resumed, but backfills sales made while active", async () => {
     const jane = await newAgent();
+    // Her customer (claimed while she's active) buys while she's paused, through her link.
+    mocks.jar.set(AGENT_COOKIE, jane.code!);
+    const { contact } = await captureLead({ email: unique("while-paused"), source: "lead_magnet", activity: { type: "optin", title: "Opt-in" } });
+    mocks.jar.clear();
     await setAgentStatus(jane.id, "paused", "owner@example.com");
-    const paused = await sale(jane);
-    expect(paused.commission).toBeUndefined();
+    const [order] = await db
+      .insert(schema.orders)
+      .values({ contactId: contact.id, email: contact.email, itemType: "course", courseId: course.id, description: course.title, amountCents: course.priceCents, agentCode: jane.code })
+      .returning();
+    await fulfillOrder(order.id, { isTest: true });
+    const [marker] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, order.id));
+    expect(marker).toMatchObject({ status: "void", amountCents: 0, voidReason: "Sold while your account was paused" });
     await approveAgent(jane.id, "owner@example.com");
     expect((await reconcileAgentSales()).credited).toBe(0);
-    expect(await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, paused.order.id))).toHaveLength(0);
-    // Sales after the resume count again.
-    expect((await sale(jane)).commission).toBeDefined();
+    expect((await agentBalance(jane.id)).earnedCents).toBe(0);
+
+    // A sale made while active whose commission wasn't recorded, then a pause and a resume: the sweep still credits it.
+    const active = await sale(jane);
+    await db.delete(schema.agentCommissions).where(eq(schema.agentCommissions.id, active.commission.id));
+    await setAgentStatus(jane.id, "paused", "owner@example.com");
+    await approveAgent(jane.id, "owner@example.com");
+    expect((await reconcileAgentSales()).credited).toBe(1);
   });
 
   it("stops counting a paid sale that's refunded, and handles partial refunds", async () => {
@@ -474,11 +491,68 @@ describe("sales team", () => {
     await refundOrder(b.order.id, { source: "stripe", reason: "Refunded in Stripe" });
     expect((await agentBalance(jane.id)).owedCents).toBe(-a.commission.amountCents - b.commission.amountCents);
 
+    // Late or repeated events change nothing.
+    expect(await adjustAgentSaleForPartialRefund(b.order.id, 500)).toBe(false);
+
     // Partial refund while unpaid: the commission itself shrinks.
     const c3 = await sale(jane);
     expect(await adjustAgentSaleForPartialRefund(c3.order.id, 1000)).toBe(true);
     const [shrunk] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.id, c3.commission.id));
     expect(shrunk).toMatchObject({ saleCents: course.priceCents - 1000, amountCents: commissionFor(course.priceCents - 1000, c3.commission.rateBps) });
+  });
+
+  it("takes back the whole commission after several partial refunds were each paid out", async () => {
+    const jane = await newAgent();
+    const { order, commission } = await sale(jane);
+    const payAll = async () => {
+      await db.update(schema.agentCommissions).set({ availableAt: new Date(Date.now() - DAY) }).where(eq(schema.agentCommissions.agentId, jane.id));
+      return recordPayout({ agentId: jane.id, by: "owner@example.com" });
+    };
+    await payAll();
+    await adjustAgentSaleForPartialRefund(order.id, 1000);
+    await adjustAgentSaleForPartialRefund(order.id, 2000);
+    await refundOrder(order.id, { source: "stripe", reason: "Refunded in Stripe" });
+    const { owedCents } = await agentBalance(jane.id);
+    expect(owedCents).toBe(-commission.amountCents);
+    // Several take-back rows for the order, never more than what was paid.
+    const rows = await db.select().from(schema.agentCommissions).where(and(eq(schema.agentCommissions.orderId, order.id), eq(schema.agentCommissions.kind, "clawback")));
+    expect(rows.reduce((s, r) => s - r.amountCents, 0)).toBe(commission.amountCents);
+  });
+
+  it("releases a disputed commission if the dispute never closes, and cancelling a challenge cancels its bonuses", async () => {
+    const jane = await newAgent();
+    const { order, commission } = await sale(jane);
+    await holdAgentSaleForDispute(order.id);
+    await db.update(schema.agentCommissions).set({ availableAt: new Date(Date.now() - 121 * DAY) }).where(eq(schema.agentCommissions.id, commission.id));
+    expect((await agentBalance(jane.id)).owedCents).toBe(commission.amountCents);
+
+    const [challenge] = await db
+      .insert(schema.agentChallenges)
+      .values({ title: "Cancelled one", metric: "sales", target: 1, bonusCents: 2500, startsAt: new Date(Date.now() - 2 * DAY), endsAt: new Date(Date.now() + DAY) })
+      .returning();
+    const [bonus] = await db.insert(schema.agentCommissions).values({ agentId: jane.id, kind: "bonus", challengeId: challenge.id, amountCents: 2500, status: "held" }).returning();
+    expect(await cancelChallenge(challenge.id)).toBe(true);
+    const [after] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.id, bonus.id));
+    expect(after.status).toBe("void");
+    expect(await awardDueChallenges(new Date(Date.now() + 2 * DAY))).toBe(0);
+  });
+
+  it("counts as customers only people who bought, and resubmitting a pending application changes nothing", async () => {
+    const jane = await newAgent();
+    mocks.jar.set(AGENT_COOKIE, jane.code!);
+    await captureLead({ email: unique("signup-only"), source: "lead_magnet", activity: { type: "optin", title: "Opt-in" } });
+    mocks.jar.clear();
+    expect((await agentDashboard(jane)).customers).toBe(0);
+    await sale(jane);
+    expect((await agentDashboard(jane)).customers).toBe(1);
+
+    const email = unique("resubmit");
+    await submitAgentApplication(application(email));
+    expect(await submitAgentApplication({ ...application(email), phone: "555-0199" })).toBe("unchanged");
+    const [row] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.email, email));
+    expect(row.phone).toBe("555-0100");
+    const alerts = await db.select().from(schema.emailLog).where(eq(schema.emailLog.kind, "notification"));
+    expect(alerts.some((m) => m.subject.includes("Application sent again"))).toBe(true);
   });
 
   it("records a payout only for the amount the admin saw", async () => {
@@ -631,7 +705,7 @@ describe("referral links", () => {
     const { GET } = await import("@/app/r/[code]/route");
     const db = await getDb();
     const email = unique("short");
-    const [agent] = await db.insert(schema.salesAgents).values({ email, name: "Short Link", code: `SL${randomUUID().slice(0, 6).toUpperCase().replace(/-/g, "")}`, status: "approved" }).returning();
+    const [agent] = await db.insert(schema.salesAgents).values({ email, name: "Short Link", code: `SL${Date.now().toString().slice(-6)}`, status: "approved" }).returning();
     const call = (code: string, to = "") => GET(new Request(`http://localhost:3000/r/${code}${to}`), { params: Promise.resolve({ code }) });
 
     const ok = await call(agent.code!.toLowerCase(), "?to=/courses/ai-for-business");

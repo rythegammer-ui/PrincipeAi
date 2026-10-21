@@ -36,8 +36,9 @@ export async function applyToSalesTeamAction(_prev: SalesApplyState, formData: F
 
   const limit = await rateLimitByIp("sales-apply", 5, 60 * 60);
   // Per address too, so nobody can keep re-sending applications (and the emails they trigger) for someone else's email.
-  const emailLimit = await rateLimit(`sales-apply:${parsed.data.email}`, 3, 24 * 60 * 60);
-  if (!limit.ok || !emailLimit.ok) return { error: "Too many applications from your connection. Please wait a little while and try again.", values };
+  if (!limit.ok) return { error: "Too many applications from your connection. Please wait a little while and try again.", values };
+  const emailLimit = await rateLimit(`sales-apply:${parsed.data.email}`, 5, 24 * 60 * 60);
+  if (!emailLimit.ok) return { error: "We've already received several applications for this email address today. If you need to change yours, just email us.", values };
 
   try {
     await submitAgentApplication(parsed.data);

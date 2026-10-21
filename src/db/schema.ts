@@ -687,7 +687,10 @@ export const agentPayouts = pgTable(
   (t) => [index("agent_payouts_agent_idx").on(t.agentId, t.paidAt)],
 );
 
-/** sale: commission on a course sale · bonus: challenge prize or manual bonus · clawback: a paid sale refunded · adjustment. */
+/**
+ * sale: commission on a course sale · bonus: challenge prize or manual bonus · clawback: what's taken back after a paid
+ * sale is refunded (in full or in part) · adjustment: a manual correction.
+ */
 export type CommissionKind = "sale" | "bonus" | "clawback" | "adjustment";
 /** held: not paid yet (payable once available_at passes) · paid: in a payout · void: cancelled (refund, failed challenge). */
 export type CommissionStatus = "held" | "paid" | "void";
@@ -725,8 +728,8 @@ export const agentCommissions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    // One commission and at most one clawback per order; one bonus per agent per challenge.
-    uniqueIndex("agent_commissions_order_kind_idx").on(t.orderId, t.kind),
+    // One commission per order (take-back rows for refunds can be several); one bonus per agent per challenge.
+    uniqueIndex("agent_commissions_order_sale_idx").on(t.orderId).where(sql`${t.kind} = 'sale'`),
     uniqueIndex("agent_commissions_challenge_agent_idx").on(t.challengeId, t.agentId),
     index("agent_commissions_agent_idx").on(t.agentId, t.createdAt),
     index("agent_commissions_payout_idx").on(t.payoutId),

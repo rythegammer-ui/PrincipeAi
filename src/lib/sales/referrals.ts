@@ -164,7 +164,13 @@ export async function assignContactToAgent(contactId: string, agentId: string | 
     .from(schema.agentReferrals)
     .where(eq(schema.agentReferrals.contactId, contactId))
     .limit(1);
-  if (existing?.agentId === agentId && (existing.source === "manual" || !opts.permanent)) return;
+  if (existing?.agentId === agentId) {
+    // Same agent: only `permanent` changes anything, and it keeps the claim's date (purchases since then stay theirs).
+    if (opts.permanent && existing.source === "link") {
+      await db.update(schema.agentReferrals).set({ source: "manual" }).where(and(eq(schema.agentReferrals.contactId, contactId), eq(schema.agentReferrals.agentId, agentId)));
+    }
+    return;
+  }
   await db
     .insert(schema.agentReferrals)
     .values({ contactId, agentId, source: "manual", createdAt: new Date() })

@@ -6,7 +6,7 @@ import type { AgentStatus, SalesAgent } from "@/db/schema";
 import { notifyAdminTeam } from "@/lib/admin-team";
 import { getStudent } from "@/lib/auth";
 import { agentLoginUrl, dashboardLink, emailAgent, programName } from "@/lib/sales/emails";
-import { AGENT_CODE_RE, formatRate, normalizeAgentCode, suggestAgentCode } from "@/lib/sales/game";
+import { AGENT_CODE_RE, closeInactivePeriod, formatRate, normalizeAgentCode, openInactivePeriod, suggestAgentCode } from "@/lib/sales/game";
 import { EXPERIENCE_OPTIONS, HOURS_OPTIONS, optionLabel, PAYOUT_METHODS, US_STATE_CODES } from "@/lib/sales/options";
 import { getSalesProgram } from "@/lib/sales/program";
 import { absoluteUrl, escapeMarkdown, isValidEmail, normalizeEmail } from "@/lib/utils";
@@ -147,9 +147,18 @@ export async function approveAgent(id: string, by: string): Promise<SalesAgent |
   if (!agent || (agent.status !== "applied" && agent.status !== "paused")) return null;
   const code = agent.code ?? (await uniqueCode(agent));
   const firstApproval = !agent.approvedAt;
+  const now = new Date();
   const [approved] = await db
     .update(schema.salesAgents)
-    .set({ status: "approved", code, reviewedBy: by, reviewedAt: new Date(), approvedAt: agent.approvedAt ?? new Date() })
+    .set({
+      status: "approved",
+      code,
+      reviewedBy: by,
+      reviewedAt: now,
+      approvedAt: agent.approvedAt ?? now,
+      // A resume (or a removed agent let back in) ends the inactive period: sales from now on count again.
+      inactivePeriods: closeInactivePeriod(agent.inactivePeriods, now),
+    })
     .where(and(eq(schema.salesAgents.id, id), inArray(schema.salesAgents.status, ["applied", "paused"])))
     .returning();
   if (!approved) return null;
@@ -194,10 +203,15 @@ export async function rejectAgent(id: string, by: string, opts: { notify: boolea
  */
 export async function setAgentStatus(id: string, status: Extract<AgentStatus, "paused" | "removed">, by: string): Promise<SalesAgent | null> {
   const db = await getDb();
+  const [current] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.id, id)).limit(1);
+  if (!current || !(status === "paused" ? ["approved"] : ["approved", "paused"]).includes(current.status)) return null;
+  const now = new Date();
+  // Removing a paused agent keeps the pause's start: they've been inactive since then.
+  const periods = openInactivePeriod(current.inactivePeriods, status, now).map((p) => (p.to === null ? { ...p, status } : p));
   const [agent] = await db
     .update(schema.salesAgents)
-    .set({ status, reviewedBy: by, reviewedAt: new Date() })
-    .where(and(eq(schema.salesAgents.id, id), inArray(schema.salesAgents.status, status === "paused" ? ["approved"] : ["approved", "paused"])))
+    .set({ status, reviewedBy: by, reviewedAt: now, inactivePeriods: periods })
+    .where(and(eq(schema.salesAgents.id, id), eq(schema.salesAgents.status, current.status)))
     .returning();
   if (!agent) return null;
   await emailAgent(

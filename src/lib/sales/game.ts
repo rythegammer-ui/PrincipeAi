@@ -145,6 +145,26 @@ export function sameMailbox(a: string, b: string): boolean {
   return canon(a) === canon(b);
 }
 
+export type InactivePeriod = { from: string; to: string | null; status: "paused" | "removed" };
+
+/** Whether an agent was on the team and active at `at`: approved by then, and not inside a pause or removal. */
+export function wasActiveAt(agent: { approvedAt: Date | null; inactivePeriods: readonly InactivePeriod[] }, at: Date): boolean {
+  if (!agent.approvedAt || agent.approvedAt.getTime() > at.getTime()) return false;
+  const t = at.getTime();
+  return !agent.inactivePeriods.some((p) => new Date(p.from).getTime() <= t && (p.to === null || t < new Date(p.to).getTime()));
+}
+
+/** Adds the start of a pause or removal (none if one is already open). */
+export function openInactivePeriod(periods: readonly InactivePeriod[], status: InactivePeriod["status"], at: Date): InactivePeriod[] {
+  if (periods.some((p) => p.to === null)) return [...periods];
+  return [...periods, { from: at.toISOString(), to: null, status }];
+}
+
+/** Ends the open pause or removal (on approval). */
+export function closeInactivePeriod(periods: readonly InactivePeriod[], at: Date): InactivePeriod[] {
+  return periods.map((p) => (p.to === null ? { ...p, to: at.toISOString() } : p));
+}
+
 /* ------------------------------------------------------------------ */
 /* Months, weeks, streaks                                              */
 /* ------------------------------------------------------------------ */

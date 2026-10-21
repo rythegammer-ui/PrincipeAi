@@ -1,11 +1,12 @@
 import "server-only";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { getDb, schema } from "@/db";
 import type { AgentChallenge, AgentCommission, AgentPayout, Order, SalesAgent } from "@/db/schema";
 import { logActivity } from "@/lib/crm";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { emailAgent, dashboardLink } from "@/lib/sales/emails";
-import { commissionFor, formatRate, monthBounds, sameMailbox, standing } from "@/lib/sales/game";
+import { commissionFor, formatRate, monthBounds, sameMailbox, standing, wasActiveAt } from "@/lib/sales/game";
 import { getSalesProgram } from "@/lib/sales/program";
 import { agentByCode, claimActive, claimContactFor } from "@/lib/sales/referrals";
 import { stripeTestMode } from "@/lib/stripe";
@@ -45,12 +46,14 @@ export function countingSale() {
 
 /** Marks an unpaid commission as waiting on a chargeback (see holdAgentSaleForDispute). */
 export const DISPUTE_NOTE = "On hold: the payment is disputed";
+/** See DISPUTE_HOLD_CAP_DAYS: how long past its date a disputed commission can wait. */
+export const DISPUTE_HOLD_CAP = 120;
 
 /**
  * A disputed sale waits at most this long past its own payable date: Stripe resolves disputes within about 75 days,
  * and if the close event never arrives the commission isn't stuck for ever (a dispute lost later still claws it back).
  */
-const DISPUTE_HOLD_CAP_DAYS = 120;
+const DISPUTE_HOLD_CAP_DAYS = DISPUTE_HOLD_CAP;
 
 /** Held rows an admin can pay now: past their hold, not waiting on a dispute, real money. */
 function payableNow(at: Date | SQL) {
@@ -91,34 +94,33 @@ type Credit = { agent: SalesAgent; paused: boolean };
  * 2. the agent whose link the checkout came through (orders.agent_code), who then becomes the customer's agent, unless
  *    another agent's claim still holds.
  * A claim made after paying only counts for later purchases, so whether the webhook or the success page records the
- * purchase first never changes the outcome. Never the agent buying for themself. `paused`: the agent it belongs to was
- * paused when it sold, so it earns nothing (recorded as such, so it isn't credited later when they're resumed).
+ * purchase first never changes the outcome. Never the agent buying for themself. What counts is whether the agent was
+ * active when it SOLD (wasActiveAt), not when it's recorded: `paused` means they were paused or removed then, so it
+ * earns nothing (and is recorded as such, so the daily sweep never credits it later).
  */
 async function creditedAgent(order: Order, contactId: string, soldAt: Date): Promise<Credit | null> {
   const db = await getDb();
   const { attributionDays } = await getSalesProgram();
   const [ref] = await db.select().from(schema.agentReferrals).where(eq(schema.agentReferrals.contactId, contactId)).limit(1);
-  let pausedHolder: SalesAgent | null = null;
+  let inactiveHolder: SalesAgent | null = null;
   if (ref && ref.createdAt.getTime() <= soldAt.getTime()) {
     const [holder] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.id, ref.agentId)).limit(1);
     const holds = ref.source === "manual" || claimActive(ref.createdAt, attributionDays, soldAt.getTime());
-    if (holder && holds && !sameMailbox(order.email, holder.email)) {
-      if (holder.status === "approved") return { agent: holder, paused: false };
-      if (holder.status === "paused") {
-        // An admin's assignment stays theirs while paused; a link claim doesn't hold against another agent's link.
-        if (ref.source === "manual") return { agent: holder, paused: true };
-        pausedHolder = holder;
-      }
+    if (holder && holds && !sameMailbox(order.email, holder.email) && (holder.status === "approved" || holder.status === "paused")) {
+      if (wasActiveAt(holder, soldAt)) return { agent: holder, paused: false };
+      // An admin's assignment stays theirs while they're inactive; a link claim doesn't hold against another agent's link.
+      if (ref.source === "manual") return { agent: holder, paused: true };
+      inactiveHolder = holder;
     }
   }
   if (order.agentCode) {
     const agent = await agentByCode(order.agentCode);
     if (agent && !sameMailbox(order.email, agent.email)) {
-      if (agent.status === "paused") return { agent, paused: true };
+      if (!wasActiveAt(agent, soldAt)) return { agent, paused: true };
       if (await claimContactFor(contactId, agent, soldAt)) return { agent, paused: false };
     }
   }
-  return pausedHolder ? { agent: pausedHolder, paused: true } : null;
+  return inactiveHolder ? { agent: inactiveHolder, paused: true } : null;
 }
 
 /**
@@ -262,17 +264,25 @@ type Tx = Parameters<Parameters<Awaited<ReturnType<typeof getDb>>["transaction"]
  * changes nothing). Raises the order's unpaid take-back row, or adds one. Call inside a transaction holding the sale row.
  */
 async function takeBack(tx: Tx, sale: AgentCommission, totalCents: number, note: string): Promise<boolean> {
+  // Locked, so a payout recording them meanwhile is waited for (and seen as paid). Order-linked adjustments are take-backs
+  // written by an earlier version.
   const rows = await tx
     .select({ id: c.id, amountCents: c.amountCents, status: c.status })
     .from(c)
-    .where(and(eq(c.orderId, sale.orderId!), eq(c.kind, "clawback"), ne(c.status, "void")));
+    .where(and(eq(c.orderId, sale.orderId!), inArray(c.kind, ["clawback", "adjustment"]), ne(c.status, "void")))
+    .for("update");
   const taken = rows.reduce((sum, r) => sum - r.amountCents, 0);
   const more = Math.min(totalCents, sale.amountCents) - taken;
   if (more <= 0) return false;
   const open = rows.find((r) => r.status === "held");
-  if (open) {
-    await tx.update(c).set({ amountCents: open.amountCents - more, note: note.slice(0, 200) }).where(eq(c.id, open.id));
-  } else {
+  const raised = open
+    ? await tx
+        .update(c)
+        .set({ amountCents: open.amountCents - more, note: note.slice(0, 200) })
+        .where(and(eq(c.id, open.id), eq(c.status, "held")))
+        .returning({ id: c.id })
+    : [];
+  if (!raised.length) {
     await tx.insert(c).values({
       agentId: sale.agentId,
       kind: "clawback",
@@ -366,14 +376,20 @@ export async function reconcileAgentSales(days = 45): Promise<{ credited: number
   const since = new Date(Date.now() - days * DAY);
   const o = schema.orders;
   const r = schema.agentReferrals;
-  // Paid course orders with no commission row whose customer had an agent before paying, or whose checkout carried the
-  // code of an agent on the team. Oldest first, like they were paid, so claims settle in the same order as live.
-  const a = schema.salesAgents;
+  // Paid course orders with no commission row whose checkout carried the code of an agent on the team, or whose customer
+  // had an agent (on the team) by a claim that still held when they paid. Oldest first, like they were paid, so claims
+  // settle in the same order as live. Orders that can never be credited mostly fall outside this, so they can't crowd
+  // out the ones that can.
+  const { attributionDays } = await getSalesProgram();
+  const a = alias(schema.salesAgents, "code_agent");
+  const holder = alias(schema.salesAgents, "claim_agent");
+  const team = ["approved", "paused"] as const;
   const missing = await db
     .select({ order: o })
     .from(o)
     .leftJoin(r, eq(r.contactId, o.contactId))
-    .leftJoin(a, and(eq(a.code, o.agentCode), inArray(a.status, ["approved", "paused"])))
+    .leftJoin(holder, and(eq(holder.id, r.agentId), inArray(holder.status, [...team])))
+    .leftJoin(a, and(eq(a.code, o.agentCode), inArray(a.status, [...team])))
     .leftJoin(c, and(eq(c.orderId, o.id), eq(c.kind, "sale")))
     .where(
       and(
@@ -383,7 +399,14 @@ export async function reconcileAgentSales(days = 45): Promise<{ credited: number
         sql`${o.amountCents} > 0`,
         isNotNull(o.contactId),
         isNull(c.id),
-        or(isNotNull(a.id), lte(r.createdAt, o.paidAt)),
+        or(
+          isNotNull(a.id),
+          and(
+            isNotNull(holder.id),
+            lte(r.createdAt, o.paidAt),
+            or(eq(r.source, "manual"), sql`${r.createdAt} > ${o.paidAt} - make_interval(days => ${attributionDays})`),
+          ),
+        ),
       ),
     )
     .orderBy(asc(o.paidAt))
@@ -431,9 +454,11 @@ export type AgentBalance = {
   earnedCents: number;
   /** When the next held commission becomes payable. */
   nextAvailableAt: Date | null;
+  /** Part of pendingCents waiting on a disputed payment. */
+  disputedCents: number;
 };
 
-const EMPTY_BALANCE: AgentBalance = { owedCents: 0, pendingCents: 0, paidCents: 0, earnedCents: 0, nextAvailableAt: null };
+const EMPTY_BALANCE: AgentBalance = { owedCents: 0, pendingCents: 0, paidCents: 0, earnedCents: 0, nextAvailableAt: null, disputedCents: 0 };
 
 /** Balances for every agent with ledger rows (or just the given ones). */
 export async function agentBalances(agentIds?: string[]): Promise<Map<string, AgentBalance>> {
@@ -449,6 +474,7 @@ export async function agentBalances(agentIds?: string[]): Promise<Map<string, Ag
       paid: sql<number>`coalesce(sum(${c.amountCents}) filter (where ${c.status} = 'paid'), 0)`.mapWith(Number),
       earned: sql<number>`coalesce(sum(${c.amountCents}) filter (where ${c.status} <> 'void'), 0)`.mapWith(Number),
       next: sql<string | null>`min(${c.availableAt}) filter (where ${c.status} = 'held' and ${c.availableAt} > ${now} and ${c.note} is distinct from ${DISPUTE_NOTE})`,
+      disputed: sql<number>`coalesce(sum(${c.amountCents}) filter (where ${c.status} = 'held' and ${c.note} = ${DISPUTE_NOTE} and not (${payable})), 0)`.mapWith(Number),
     })
     .from(c)
     .where(and(agentIds ? inArray(c.agentId, agentIds) : undefined, realMoney()))
@@ -456,7 +482,14 @@ export async function agentBalances(agentIds?: string[]): Promise<Map<string, Ag
   return new Map(
     rows.map((r) => [
       r.agentId,
-      { owedCents: r.owed, pendingCents: r.pending, paidCents: r.paid, earnedCents: r.earned, nextAvailableAt: r.next ? new Date(r.next) : null },
+      {
+        owedCents: r.owed,
+        pendingCents: r.pending,
+        paidCents: r.paid,
+        earnedCents: r.earned,
+        nextAvailableAt: r.next ? new Date(r.next) : null,
+        disputedCents: r.disputed,
+      },
     ]),
   );
 }
@@ -638,6 +671,12 @@ export async function awardDueChallenges(now = new Date()): Promise<number> {
         .onConflictDoNothing({ target: [c.challengeId, c.agentId] })
         .returning({ id: c.id });
       if (!bonus) continue;
+      // Cancelled while this was being written: cancel it too (cancelChallenge only sees bonuses already there).
+      const [after] = await db.select({ cancelledAt: schema.agentChallenges.cancelledAt }).from(schema.agentChallenges).where(eq(schema.agentChallenges.id, challenge.id));
+      if (after?.cancelledAt) {
+        await db.update(c).set({ status: "void", voidedAt: new Date(), voidReason: "Challenge cancelled" }).where(and(eq(c.id, bonus.id), eq(c.status, "held")));
+        break;
+      }
       awarded++;
       await emailAgent(agent, `You won “${challenge.title}”`, [
         `You hit the target in **${escapeMarkdown(challenge.title)}** (${describeTarget(challenge)}). 🏆`,

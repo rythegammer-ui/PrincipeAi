@@ -126,7 +126,7 @@ export function ConfirmAction({
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState<SalesFormState, FormData>(action, {});
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLFormElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const id = useId();
   // Where keyboard focus goes: the confirm panel itself when the step opens (not its destructive button, so a double
   // Enter can't confirm), back to the trigger when it's dismissed.
@@ -158,46 +158,48 @@ export function ConfirmAction({
     );
   }
   return (
-    <form
-      ref={panelRef}
-      action={formAction}
-      tabIndex={-1}
-      role="group"
-      aria-labelledby={`${id}-title`}
-      aria-describedby={description ? `${id}-desc` : undefined}
-      className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3 text-left shadow-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
-    >
-      <span id={`${id}-title`} className="sr-only">
-        {confirmLabel}
-        {subject ? ` ${subject}` : ""}?
-      </span>
-      {Object.entries(hidden).map(([name, value]) => (
-        <input key={name} type="hidden" name={name} value={value} />
-      ))}
-      {description && (
-        <p id={`${id}-desc`} className="text-xs text-zinc-600">
-          {description}
-        </p>
-      )}
-      {children}
-      <div className="flex flex-wrap gap-1.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="min-h-11 sm:min-h-8"
-          onClick={() => {
-            focusNext.current = "trigger";
-            setOpen(false);
-          }}
-        >
-          Keep
-        </Button>
-        <SubmitButton variant={confirmVariant} size="sm" className="min-h-11 sm:min-h-8" pendingText="Working…">
+    <form action={formAction}>
+      {/* The group (not the <form>, which can't take that role) is what gets focus and names the step. */}
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        role="group"
+        aria-labelledby={`${id}-title`}
+        aria-describedby={description ? `${id}-desc` : undefined}
+        className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3 text-left shadow-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+      >
+        <span id={`${id}-title`} className="sr-only">
           {confirmLabel}
-          {about}
-        </SubmitButton>
+          {subject ? ` ${subject}` : ""}?
+        </span>
+        {Object.entries(hidden).map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
+        {description && (
+          <p id={`${id}-desc`} className="text-xs text-zinc-600">
+            {description}
+          </p>
+        )}
+        {children}
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-h-11 sm:min-h-8"
+            onClick={() => {
+              focusNext.current = "trigger";
+              setOpen(false);
+            }}
+          >
+            Keep
+          </Button>
+          <SubmitButton variant={confirmVariant} size="sm" className="min-h-11 sm:min-h-8" pendingText="Working…">
+            {confirmLabel}
+            {about}
+          </SubmitButton>
+        </div>
+        <Feedback state={state} />
       </div>
-      <Feedback state={state} />
     </form>
   );
 }

@@ -294,7 +294,7 @@ export default async function ContactPage({ params }: Params) {
                     ? `Assigned ${formatDate(salesAgent.since, {}, tz)}.`
                     : claimEnds && claimEnds.getTime() > now.getTime()
                       ? `Came through their link ${formatDate(salesAgent.since, {}, tz)}.`
-                      : `Came through their link ${formatDate(salesAgent.since, {}, tz)}. Lapsed${claimEnds ? ` on ${formatDate(claimEnds, {}, tz)}` : ""}: a purchase through another agent's link now goes to that agent, and one through this agent's link renews it.`}{" "}
+                      : `Came through their link ${formatDate(salesAgent.since, {}, tz)}. Lapsed${claimEnds ? ` on ${formatDate(claimEnds, {}, tz)}` : ""}: a purchase through another agent's link now goes to that agent${salesAgent.agent.status === "approved" ? ", and one through this agent's link renews it" : ""}.`}{" "}
                   {salesAgent.agent.status === "approved"
                     ? salesAgent.source === "manual"
                       ? "Their purchases earn this agent commission until an admin changes it."
@@ -345,15 +345,18 @@ export default async function ContactPage({ params }: Params) {
                 </Field>
               </ActionForm>
             )}
-            {salesAgent && salesAgent.source === "link" && !agentRemoved && (
+            {/* Stays mounted once the claim is an assignment, so its confirmation is still shown and announced. */}
+            {salesAgent && !agentRemoved && (
               <ActionForm
                 action={assignContactAgentAction}
                 hidden={{ contactId: ct.id, agentId: salesAgent.agent.id, permanent: "1" }}
-                submit="Keep with this agent permanently"
+                submit={salesAgent.source === "link" ? "Assign to this agent until changed" : "Assigned until an admin changes it"}
+                disabled={salesAgent.source !== "link"}
                 pendingText="Saving…"
                 variant="ghost"
                 size="sm"
                 className="mt-2"
+                resetOnSuccess={false}
               />
             )}
           </Section>

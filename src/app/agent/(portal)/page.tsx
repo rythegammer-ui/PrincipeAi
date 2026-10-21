@@ -32,7 +32,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getDb, schema } from "@/db";
 import type { AgentCommission } from "@/db/schema";
 import { agentLinks, currentAgent } from "@/lib/sales/agents";
-import { describeTarget, DISPUTE_NOTE, livePayments } from "@/lib/sales/commissions";
+import { describeTarget, DISPUTE_HOLD_CAP, DISPUTE_NOTE, livePayments } from "@/lib/sales/commissions";
 import { formatRate, type BadgeIcon } from "@/lib/sales/game";
 import { agentDashboard, type ChallengeView } from "@/lib/sales/stats";
 import { cn, firstName, formatDate, formatMoney, pluralize, timeAgo } from "@/lib/utils";
@@ -70,7 +70,7 @@ export default async function AgentDashboardPage() {
   const { program, standing, balance, tz, now } = d;
   // On a site taking real payments, test purchases are recorded but never paid.
   const live = livePayments();
-  const disputed = d.ledger.some((r) => r.status === "held" && r.note === DISPUTE_NOTE);
+  const disputed = balance.disputedCents > 0;
 
   // Course titles for the earnings table (never the customer).
   const orderIds = d.ledger.map((r) => r.orderId).filter((id): id is string => Boolean(id));
@@ -559,7 +559,7 @@ function LedgerStatus({ row, now, tz, live }: { row: AgentCommission; now: Date;
     }
     return <Badge tone="green">Paid</Badge>;
   }
-  if (row.note === DISPUTE_NOTE) {
+  if (row.note === DISPUTE_NOTE && row.availableAt.getTime() > now.getTime() - DISPUTE_HOLD_CAP * 86_400_000) {
     return (
       <Badge tone="amber" className="whitespace-nowrap">
         <Hourglass aria-hidden /> On hold: payment disputed

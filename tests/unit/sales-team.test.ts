@@ -472,6 +472,47 @@ describe("sales team", () => {
     expect((await reconcileAgentSales()).credited).toBe(1);
   });
 
+  it("judges a sale by whether the agent was active when it sold, not when it's recorded", async () => {
+    const jane = await newAgent();
+    // Sold while active; recording failed; she's paused before the sweep runs: still credited (paused agents are paid).
+    const before = await sale(jane);
+    await db.delete(schema.agentCommissions).where(eq(schema.agentCommissions.id, before.commission.id));
+    await setAgentStatus(jane.id, "paused", "owner@example.com");
+    await reconcileAgentSales();
+    const [credited] = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, before.order.id));
+    expect(credited).toMatchObject({ status: "held" });
+
+    // Removed, a customer buys through her old link, she re-applies and is let back in: that sale never earns.
+    await setAgentStatus(jane.id, "removed", "owner@example.com");
+    const { contact } = await captureLead({ email: unique("while-removed"), source: "lead_magnet", activity: { type: "optin", title: "Opt-in" } });
+    const [order] = await db
+      .insert(schema.orders)
+      .values({ contactId: contact.id, email: contact.email, itemType: "course", courseId: course.id, description: course.title, amountCents: course.priceCents, agentCode: jane.code })
+      .returning();
+    await fulfillOrder(order.id, { isTest: true });
+    await submitAgentApplication(application(jane.email));
+    await approveAgent(jane.id, "owner@example.com");
+    await reconcileAgentSales();
+    const rows = await db.select().from(schema.agentCommissions).where(eq(schema.agentCommissions.orderId, order.id));
+    expect(rows.every((r) => r.amountCents === 0)).toBe(true);
+    const [back] = await db.select().from(schema.salesAgents).where(eq(schema.salesAgents.id, jane.id));
+    expect(back.inactivePeriods.every((p) => p.to !== null)).toBe(true);
+  });
+
+  it("keeps the claim's date when an admin makes a link claim permanent", async () => {
+    const jane = await newAgent();
+    mocks.jar.set(AGENT_COOKIE, jane.code!);
+    const { contact } = await captureLead({ email: unique("perm"), source: "lead_magnet", activity: { type: "optin", title: "Opt-in" } });
+    mocks.jar.clear();
+    const [ref] = await db.select().from(schema.agentReferrals).where(eq(schema.agentReferrals.contactId, contact.id));
+    await assignContactToAgent(contact.id, jane.id);
+    expect((await db.select().from(schema.agentReferrals).where(eq(schema.agentReferrals.contactId, contact.id)))[0].source).toBe("link");
+    await assignContactToAgent(contact.id, jane.id, { permanent: true });
+    const [after] = await db.select().from(schema.agentReferrals).where(eq(schema.agentReferrals.contactId, contact.id));
+    expect(after).toMatchObject({ source: "manual", agentId: jane.id });
+    expect(after.createdAt.getTime()).toBe(ref.createdAt.getTime());
+  });
+
   it("stops counting a paid sale that's refunded, and handles partial refunds", async () => {
     const jane = await newAgent();
     const a = await sale(jane);
@@ -691,9 +732,17 @@ describe("admin team sign-in", () => {
 
 describe("referral links", () => {
   it("remembers ?ref=CODE on any page, and keeps /agent behind a sign-in", async () => {
-    const res = await proxy(new NextRequest("http://localhost:3000/courses/ai-for-business?ref=jane27"));
-    expect(res.cookies.get(AGENT_COOKIE)?.value).toBe("JANE27");
-    expect((await proxy(new NextRequest("http://localhost:3000/?ref=<script>"))).cookies.get(AGENT_COOKIE)).toBeUndefined();
+    // Checked by /r/CODE (which sets the cookie only for a real agent), then straight back without the ?ref.
+    const res = await proxy(new NextRequest("http://localhost:3000/courses/ai-for-business?ref=jane27&utm_source=ig"));
+    const check = new URL(res.headers.get("location")!);
+    expect(check.pathname).toBe("/r/jane27");
+    expect(check.searchParams.get("to")).toBe("/courses/ai-for-business?utm_source=ig");
+    expect(res.cookies.get(AGENT_COOKIE)).toBeUndefined();
+    // First-visit attribution is still recorded on the way.
+    expect(res.cookies.get("pa_vid")).toBeDefined();
+    expect((await proxy(new NextRequest("http://localhost:3000/?ref=<script>"))).headers.get("location")).toBeNull();
+    // Already this agent's visitor: no detour.
+    expect((await proxy(new NextRequest("http://localhost:3000/?ref=jane27", { headers: { cookie: `${AGENT_COOKIE}=JANE27` } }))).headers.get("location")).toBeNull();
 
     const portal = await proxy(new NextRequest("http://localhost:3000/agent"));
     expect(new URL(portal.headers.get("location")!).pathname).toBe("/agent/login");

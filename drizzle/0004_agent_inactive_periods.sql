@@ -1,0 +1,1 @@
+ALTER TABLE "sales_agents" ADD COLUMN "inactive_periods" jsonb DEFAULT '[]'::jsonb NOT NULL;

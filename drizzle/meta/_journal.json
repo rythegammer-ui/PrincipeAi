@@ -29,6 +29,13 @@
       "when": 1792542204234,
       "tag": "0003_commission_order_index",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792543703594,
+      "tag": "0004_agent_inactive_periods",
+      "breakpoints": true
     }
   ]
 }

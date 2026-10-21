@@ -612,6 +612,14 @@ export const salesAgents = pgTable(
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     lastSaleAt: timestamp("last_sale_at", { withTimezone: true }),
+    /**
+     * When they weren't active since first approved: paused or removed, from → to (null while it lasts). A sale counts
+     * only if it was made while they were active, whenever it's recorded (lib/sales/commissions.ts activeAt).
+     */
+    inactivePeriods: jsonb("inactive_periods")
+      .$type<{ from: string; to: string | null; status: "paused" | "removed" }[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     ...timestamps,
   },
   (t) => [

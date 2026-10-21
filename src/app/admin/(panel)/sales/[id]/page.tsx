@@ -15,7 +15,7 @@ import { getDb, schema } from "@/db";
 import type { AgentCommission, CommissionKind } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { agentLinks, agentLocation } from "@/lib/sales/agents";
-import { agentBalance, agentLedger, DISPUTE_NOTE, livePayments, monthlySales } from "@/lib/sales/commissions";
+import { agentBalance, agentLedger, DISPUTE_HOLD_CAP, DISPUTE_NOTE, livePayments, monthlySales } from "@/lib/sales/commissions";
 import { formatRate, standing } from "@/lib/sales/game";
 import { EXPERIENCE_OPTIONS, HOURS_OPTIONS, optionLabel, PAYOUT_METHODS, stateName } from "@/lib/sales/options";
 import { getSalesProgram } from "@/lib/sales/program";
@@ -77,7 +77,9 @@ function rowStatus(row: AgentCommission, now: Date, tz: string, live: boolean): 
   if (row.status === "paid") return { label: "Paid", tone: "green" };
   if (row.status === "void") return { label: "Cancelled", tone: "neutral", detail: row.voidReason ?? undefined };
   if (row.amountCents < 0) return { label: "Taken back from next payout", tone: "red" };
-  if (row.note === DISPUTE_NOTE) return { label: "On hold: payment disputed", tone: "red", detail: "Payable only if the dispute is won" };
+  if (row.note === DISPUTE_NOTE && row.availableAt.getTime() > now.getTime() - DISPUTE_HOLD_CAP * 86_400_000) {
+    return { label: "On hold: payment disputed", tone: "red", detail: `Payable if the dispute is won, or automatically ${DISPUTE_HOLD_CAP} days after its usual date` };
+  }
   if (row.availableAt > now) return { label: `Pending until ${formatDate(row.availableAt, {}, tz)}`, tone: "amber" };
   return { label: "Owed", tone: "brand" };
 }
@@ -123,7 +125,7 @@ export default async function SalesAgentPage({ params }: Params) {
   const app = agent.application;
   const method = agent.payoutMethod ? optionLabel(PAYOUT_METHODS, agent.payoutMethod) : null;
   const live = livePayments();
-  const disputed = ledger.some((r) => r.status === "held" && r.note === DISPUTE_NOTE);
+  const disputed = balance.disputedCents > 0;
 
   return (
     <div>

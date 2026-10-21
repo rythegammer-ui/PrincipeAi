@@ -10,8 +10,9 @@ import { verifySessionToken, type SessionRole } from "@/lib/session-token";
  *    navigation re-renders only the page segment, not the layout that also checks. The pages check again (admin
  *    team members' removal is checked there, against the database); server action POSTs pass straight through to
  *    the actions' own checks.
- * 3. Sales agents' referral links: `?ref=CODE` on any page is remembered in a cookie (the latest link wins), and the
- *    visitor becomes that agent's customer when they sign up or buy (lib/sales/referrals.ts).
+ * 3. Sales agents' referral links: `?ref=CODE` on any page goes through /r/CODE, which remembers a real agent's code in a
+ *    cookie (the latest real link wins); the visitor becomes that agent's customer when they first sign up or buy
+ *    (lib/sales/referrals.ts).
  */
 
 const YEAR = 60 * 60 * 24 * 365;
@@ -62,12 +63,6 @@ export async function proxy(request: NextRequest) {
 
   const toSet: { name: string; value: string; maxAge: number }[] = [];
 
-  // A sales agent's referral link. Checked against the agents only when the visitor signs up or buys.
-  const ref = searchParams.get("ref")?.trim();
-  if (ref && AGENT_CODE.test(ref) && request.cookies.get("pa_agent")?.value !== ref.toUpperCase()) {
-    toSet.push({ name: "pa_agent", value: ref.toUpperCase(), maxAge: ATTRIBUTION_TTL });
-  }
-
   if (!request.cookies.get("pa_vid")) {
     toSet.push({ name: "pa_vid", value: crypto.randomUUID(), maxAge: 2 * YEAR });
     // First visit: remember where they came from.
@@ -92,21 +87,43 @@ export async function proxy(request: NextRequest) {
     if (Object.keys(utm).length) toSet.push({ name: "pa_utm", value: JSON.stringify(utm), maxAge: ATTRIBUTION_TTL });
   }
 
+  const persist = (response: NextResponse) => {
+    for (const c of toSet) {
+      response.cookies.set(c.name, c.value, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: c.maxAge,
+      });
+    }
+    return response;
+  };
+
+  // A sales agent's referral link (?ref=CODE): /r/CODE checks the code against the agents, remembers it only if it's a
+  // real one (another site's ?ref= tag never replaces an agent's), and comes straight back here without the ?ref.
+  // /buy/<course>?ref= checks it itself.
+  const ref = searchParams.get("ref")?.trim();
+  if (
+    request.method === "GET" &&
+    ref &&
+    AGENT_CODE.test(ref) &&
+    request.cookies.get("pa_agent")?.value !== ref.toUpperCase() &&
+    !pathname.startsWith("/r/") &&
+    !pathname.startsWith("/buy/")
+  ) {
+    const back = request.nextUrl.clone();
+    back.searchParams.delete("ref");
+    const check = new URL(`/r/${encodeURIComponent(ref)}`, request.url);
+    check.searchParams.set("to", back.pathname + back.search);
+    return persist(NextResponse.redirect(check, 307));
+  }
+
   if (!toSet.length) return NextResponse.next();
 
   // Expose the new cookies to this same request's server components, then persist them.
   for (const c of toSet) request.cookies.set(c.name, c.value);
-  const response = NextResponse.next({ request: { headers: request.headers } });
-  for (const c of toSet) {
-    response.cookies.set(c.name, c.value, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: c.maxAge,
-    });
-  }
-  return response;
+  return persist(NextResponse.next({ request: { headers: request.headers } }));
 }
 
 export const config = {

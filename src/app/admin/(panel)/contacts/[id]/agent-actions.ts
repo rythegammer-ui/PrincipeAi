@@ -11,8 +11,8 @@ export type AssignAgentState = { ok?: boolean; error?: string; message?: string 
 
 /**
  * Assigns a contact to a sales agent until an admin changes it (their purchases earn that agent commission), or removes
- * the assignment. Saving the agent they already have changes nothing; `permanent=1` (the "Keep with this agent
- * permanently" button) turns that agent's link claim, which would run out, into an assignment.
+ * the assignment. Saving the agent they already have changes nothing; `permanent=1` (the "Assign to this agent until
+ * changed" button) turns that agent's link claim, which would run out, into an assignment.
  */
 export async function assignContactAgentAction(_prev: AssignAgentState, fd: FormData): Promise<AssignAgentState> {
   await assertAdmin();
@@ -28,8 +28,15 @@ export async function assignContactAgentAction(_prev: AssignAgentState, fd: Form
     .from(schema.agentReferrals)
     .where(eq(schema.agentReferrals.contactId, contactId.data))
     .limit(1);
+  // The "assign until changed" button only ever converts the link claim it was shown for: if the customer has moved to
+  // another agent since the page loaded, it must not hand them back.
+  if (permanent && (!selected || current?.agentId !== selected || current.source !== "link")) {
+    return current?.agentId === selected && current?.source === "manual"
+      ? { ok: true, message: "Already assigned to this agent until an admin changes it." }
+      : { error: "This customer's agent has changed since the page loaded. Reload the page and check." };
+  }
   // Before the agent check: the current agent may have been removed since, and saving unchanged must not drop them.
-  if ((current?.agentId ?? null) === selected && !(permanent && selected && current?.source === "link")) {
+  if ((current?.agentId ?? null) === selected && !permanent) {
     return { ok: true, message: "No change." };
   }
   if (selected) {

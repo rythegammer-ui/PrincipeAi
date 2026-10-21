@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Builds the launch Reel / Short / TikTok video from the launch Story frames (ST-01 to ST-06):
-# a 23-second 1080x1920 slideshow with half-second fades and a silent audio track (some apps
-# reject a video with no audio stream). Add music inside the app if you like.
+# Builds the launch Reel / Short video from the video versions of the launch frames (ST-01 to ST-06,
+# video-frames/, made by render.mjs): a 23-second 1080x1920 slideshow with half-second fades and a
+# silent audio track (some apps reject a video with no audio stream). Add music inside the app if you
+# like. Also writes JPEG copies of those frames for TikTok photo posts (TikTok takes JPEG or WebP).
 # Run from anywhere after render.mjs: bash deliverables/social-launch/stories/source/make-reel.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p video
 # Seconds on screen per frame; the text-heavy frames stay up longer.
 d=(3.0 3.5 4.5 5.0 4.5 5.0)
-frames=(launch/01-its-live.png launch/02-learn-implement-grow.png launch/03-how-it-works.png
-  launch/04-courses.png launch/05-free-starter-kit.png launch/06-ai-readiness-assessment.png)
+frames=(video-frames/01-its-live.png video-frames/02-learn-implement-grow.png video-frames/03-how-it-works.png
+  video-frames/04-courses.png video-frames/05-free-starter-kit.png video-frames/06-ai-readiness-assessment.png)
 fade=0.5
 inputs=() filters="" offset=0 total=0 last="v0"
 for i in "${!frames[@]}"; do
@@ -27,4 +28,8 @@ ffmpeg -y -loglevel error "${inputs[@]}" -f lavfi -t "$length" -i anullsrc=r=441
   -filter_complex "${filters%;}" -map "[$last]" -map "${#frames[@]}:a" \
   -c:v libx264 -preset slow -crf 18 -profile:v high -pix_fmt yuv420p -r 30 \
   -c:a aac -b:a 128k -shortest -movflags +faststart video/launch-reel-1080x1920.mp4
-echo "Wrote video/launch-reel-1080x1920.mp4 (${length}s)"
+mkdir -p jpg/video-frames
+for f in "${frames[@]}"; do
+  ffmpeg -y -loglevel error -i "$f" -q:v 2 "jpg/${f%.png}.jpg"
+done
+echo "Wrote video/launch-reel-1080x1920.mp4 (${length}s) and jpg/video-frames/"

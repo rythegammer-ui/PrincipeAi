@@ -14,16 +14,23 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 const page = await browser.newPage({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 });
 const written = [];
 
-for (const agent of [false, true]) {
+// Each pass: a body class, which frames, and where the launch frames go. "agent" adds the #ad strip;
+// "video" keeps text clear of the Reels/TikTok/Shorts caption and buttons.
+const passes = [
+  { mode: null, select: ".frame" },
+  { mode: "agent", select: ".frame[data-agent]", dir: "launch-for-agents/" },
+  { mode: "video", select: ".frame[data-agent]", dir: "video-frames/" },
+];
+for (const { mode, select, dir } of passes) {
   await page.goto(page_url);
-  await page.evaluate(async (on) => {
-    document.body.classList.toggle("agent", on);
+  await page.evaluate(async (cls) => {
+    if (cls) document.body.classList.add(cls);
     await document.fonts.ready;
-  }, agent);
-  const frames = await page.locator(agent ? ".frame[data-agent]" : ".frame").all();
+  }, mode);
+  const frames = await page.locator(select).all();
   for (const frame of frames) {
     let out = await frame.getAttribute("data-out");
-    if (agent) out = out.replace(/^launch\//, "launch-for-agents/");
+    if (dir) out = out.replace(/^launch\//, dir);
     const path = join(outDir, out);
     mkdirSync(dirname(path), { recursive: true });
     await frame.screenshot({ path });
@@ -31,8 +38,9 @@ for (const agent of [false, true]) {
   }
 }
 
-// Overview: every Story frame side by side, a quick way to review or share the set (feed images have other sizes).
-const stories = written.filter((f) => !f.startsWith("feed/"));
+// Overview: every Story frame side by side, a quick way to review or share the set (feed images have other
+// sizes; the video frames are the launch set again).
+const stories = written.filter((f) => !f.startsWith("feed/") && !f.startsWith("video-frames/"));
 const rows = [...new Set(stories.map((f) => dirname(f)))].map((dir) => stories.filter((f) => dirname(f) === dir));
 const thumbs = rows
   .map((row) => `<div class="row"><h2>${dirname(row[0])}</h2><div>${row.map((f) => `<img src="${pathToFileURL(join(outDir, f)).href}">`).join("")}</div></div>`)

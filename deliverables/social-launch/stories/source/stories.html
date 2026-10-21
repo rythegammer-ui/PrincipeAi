@@ -7,6 +7,7 @@
   Instagram and Snapchat story frames, 1080x1920. Each <section class="frame"> becomes one PNG (data-out).
   Frames marked data-agent are rendered a second time with body.agent: a #ad disclosure at the top and
   "my link" in place of the site address, for sales agents to post with their own referral link.
+  The launch frames are also rendered with body.video (video-frames/) for the Reel, Short and TikTok carousel.
   Render: node deliverables/social-launch/stories/source/render.mjs
   Safe area: no text in the top 250 px or the bottom 300 px (Instagram and Snapchat put their UI there).
 -->
@@ -117,6 +118,10 @@
   body.agent .bg-tint .disclosure { background: var(--ink); }
   body.agent .site-only { display: none; }
   body.agent .agent-only { display: inline; }
+  /* Video version (Reels, TikTok, Shorts): those apps put the caption and buttons over the bottom ~400 px and a
+     button rail down the right edge, so the text area shrinks and the footer and sticker space go. */
+  body.video .safe { inset: 250px 130px 420px 90px; }
+  body.video .footer, body.video .sticker-room { display: none; }
   body.agent .compact-agent { display: none; }
   body.agent .footer > span:last-child { display: none; }
   body.agent .stack { gap: 20px; }

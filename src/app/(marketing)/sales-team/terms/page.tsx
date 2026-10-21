@@ -66,7 +66,7 @@ We may change the rates, levels, bonuses or any other part of the Program for **
 - Someone already in touch with us becomes your customer only by buying through your link: signing up again through it isn't enough.
 - **The first agent to bring a customer keeps them** for ${program.attributionDays} days from when they first sign up or buy through your link. Their course purchases in that time earn you commission. After that, another agent's link can bring them in again. A customer we assign to you stays yours until we change it.
 - Your link is remembered in a visitor's browser for 90 days. If they clear their cookies, use another device, or buy without using your link, we may not be able to credit you. Tell us if you think a sale was missed and we'll look into it; our records decide.
-- Purchases you make yourself or for yourself (from any of your email addresses) don't earn commission, and neither do purchases made with someone else's details to get around these rules.
+- Purchases you make yourself or for yourself don't earn commission: we check your own email address automatically, and we review every payout, so purchases from another address of yours, or made with someone else's details to get around these rules, don't earn either.
 - Sales made while your participation is paused don't earn commission, including after it's turned back on.
 
 ## 6. Refunds and chargebacks
@@ -96,7 +96,7 @@ You represent our brand, so please promote it honestly and lawfully. You must:
 - **Always disclose that you earn a commission** whenever you recommend our courses, clearly and close to the recommendation (for example, "I earn a commission if you buy through my link", or #ad on social media), as required by the FTC's Endorsement Guides. On social media, put the disclosure at the start of the post, before any link and where it can't be cut off by a "more" link.
 - **Never make income or results claims.** Don't promise that a course will save anyone a particular amount of time or money, or produce any particular result, and don't make claims about what anyone earns in this Program.
 - Describe our courses accurately, using the information on our site. Don't invent features, discounts, guarantees or deadlines.
-- **No spam.** Follow the CAN-SPAM Act: only email people in a way the law allows, identify yourself, and include in every promotional email a clear way to opt out and our mailing address (the email script in your toolkit has both). Honour every request to stop straight away, and within 10 business days at the latest.
+- **No spam.** Follow the CAN-SPAM Act: only email people in a way the law allows, identify yourself, and include in every promotional email a clear way to opt out and our mailing address (shown in your toolkit's email script). Honour every request to stop straight away, and within 10 business days at the latest, and forward any "stop" or unsubscribe reply to us so we can honour it too.
 - **No unsolicited texts or calls.** Follow the Telephone Consumer Protection Act (TCPA) and the Do Not Call rules: don't send marketing texts or make robocalls or autodialed calls without the person's prior consent.
 - **No fake reviews** or testimonials, and no posing as a customer.
 - **Don't bid on our brand** (such as "${site.name}" or "${site.company}") or close misspellings in paid search or social ads, and don't create websites, social accounts or usernames that could be mistaken for ours.

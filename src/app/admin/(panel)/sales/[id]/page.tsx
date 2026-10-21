@@ -63,12 +63,20 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** Recorded for a sale made while the agent was paused (lib/sales/commissions.ts recordAgentSale). */
+const PAUSED_SALE_REASON = "Sold while your account was paused";
+
 function rowStatus(row: AgentCommission, now: Date, tz: string, live: boolean): { label: string; tone: BadgeTone; detail?: string } {
-  // A test payment on a site taking real payments: recorded, never owed or paid (see livePayments).
-  if (row.isTest && live && row.status !== "void") return { label: "Test · never paid", tone: "neutral" };
-  if (row.status === "paid" && row.voidedAt) return { label: "Paid, then refunded", tone: "red", detail: "Taken back from the next payout" };
+  if (row.status === "void" && row.voidReason === PAUSED_SALE_REASON) return { label: "Sold while paused · no commission", tone: "neutral" };
+  // A test payment on a site taking real payments: recorded, never owed or paid (see livePayments). One already paid
+  // out (while the site ran on test keys) stays as paid.
+  if (row.isTest && live && row.status === "held") return { label: "Test · never paid", tone: "neutral" };
+  if (row.status === "paid" && row.isTest && live) return { label: "Paid (test)", tone: "neutral" };
+  if (row.status === "paid" && row.voidedAt) return { label: "Paid, then refunded", tone: "red", detail: "Refunded after payout: see the take-back rows" };
+  if (row.status === "paid" && row.amountCents < 0) return { label: "Taken back", tone: "neutral" };
   if (row.status === "paid") return { label: "Paid", tone: "green" };
   if (row.status === "void") return { label: "Cancelled", tone: "neutral", detail: row.voidReason ?? undefined };
+  if (row.amountCents < 0) return { label: "Taken back from next payout", tone: "red" };
   if (row.note === DISPUTE_NOTE) return { label: "On hold: payment disputed", tone: "red", detail: "Payable only if the dispute is won" };
   if (row.availableAt > now) return { label: `Pending until ${formatDate(row.availableAt, {}, tz)}`, tone: "amber" };
   return { label: "Owed", tone: "brand" };
@@ -115,6 +123,7 @@ export default async function SalesAgentPage({ params }: Params) {
   const app = agent.application;
   const method = agent.payoutMethod ? optionLabel(PAYOUT_METHODS, agent.payoutMethod) : null;
   const live = livePayments();
+  const disputed = ledger.some((r) => r.status === "held" && r.note === DISPUTE_NOTE);
 
   return (
     <div>
@@ -224,7 +233,13 @@ export default async function SalesAgentPage({ params }: Params) {
           label="On hold"
           value={formatMoney(balance.pendingCents)}
           icon={Hourglass}
-          hint={balance.nextAvailableAt ? `Next becomes payable ${formatDate(balance.nextAvailableAt, {}, tz)}` : "Nothing on hold"}
+          hint={
+            balance.pendingCents === 0
+              ? "Nothing on hold"
+              : [disputed ? "Includes disputed sales" : null, balance.nextAvailableAt ? `Next becomes payable ${formatDate(balance.nextAvailableAt, {}, tz)}` : null]
+                  .filter(Boolean)
+                  .join(" · ") || "Waiting on the refund window"
+          }
         />
         <StatCard label="Paid to date" value={formatMoney(balance.paidCents)} icon={Banknote} hint={`${formatMoney(balance.earnedCents)} earned in total`} />
       </div>
@@ -395,8 +410,8 @@ export default async function SalesAgentPage({ params }: Params) {
                 {customers.length === 50 ? "+" : ""})
               </CardTitle>
               <CardDescription>
-                People who came through this agent&apos;s link. Their purchases within {program.attributionDays} days earn this agent commission. Reassign a customer
-                from their contact page.
+                People who signed up or bought through this agent&apos;s link (their purchases earn this agent commission for {program.attributionDays} days from
+                then), and customers an admin assigned (until an admin changes it). Reassign a customer from their contact page.
               </CardDescription>
             </CardHeader>
             {customers.length === 0 ? (
@@ -412,7 +427,12 @@ export default async function SalesAgentPage({ params }: Params) {
                       {cu.name && <span className="ml-2 text-xs font-normal text-zinc-500">{cu.email}</span>}
                     </Link>
                     <span className="text-xs text-zinc-500">
-                      {cu.source === "manual" ? "Assigned" : "Via link"} {formatDate(cu.since, {}, tz)}
+                      {cu.source === "manual"
+                        ? `Assigned ${formatDate(cu.since, {}, tz)} · until changed`
+                        : (() => {
+                            const ends = new Date(cu.since.getTime() + program.attributionDays * 86_400_000);
+                            return `Via link ${formatDate(cu.since, {}, tz)} · ${ends > now ? `until ${formatDate(ends, {}, tz)}` : `lapsed ${formatDate(ends, {}, tz)}`}`;
+                          })()}
                     </span>
                   </li>
                 ))}

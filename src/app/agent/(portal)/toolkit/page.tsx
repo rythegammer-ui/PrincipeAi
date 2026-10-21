@@ -19,6 +19,7 @@ const DOS = [
   "Describe the courses accurately, using what's on the course pages.",
   "Reach out to people you know, or people who've asked to hear from you.",
   "Stop messaging anyone who says no or asks you to stop, straight away.",
+  "Forward any “stop” or unsubscribe reply to us so we can honour it too.",
   "Send questions about refunds, access or support to us.",
 ];
 
@@ -212,7 +213,10 @@ export default async function AgentToolkitPage() {
                 Your link is remembered in the visitor&apos;s browser for 90 days. If someone switches device or clears their browser, ask them to use your
                 link again before they buy. The &ldquo;Straight to checkout&rdquo; links work on any device.
               </li>
-              <li>Purchases you make yourself, from any of your email addresses, don&apos;t earn commission. Nor do sales while your account is paused.</li>
+              <li>
+                Purchases you make yourself, with your own email address, don&apos;t earn commission, and every payout is reviewed. Nor do sales while your account is
+                paused.
+              </li>
               <li>
                 Commission is held for <strong>{program.holdDays} days</strong> in case of a refund (until it&apos;s resolved if the payment is disputed),
                 then paid: {program.payoutSchedule.replace(/\.$/, "")}. A partial refund reduces the commission to match.

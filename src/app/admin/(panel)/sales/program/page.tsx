@@ -89,7 +89,7 @@ export default async function SalesProgramPage() {
                 <Field
                   label="Customer window (days)"
                   htmlFor="attributionDays"
-                  hint="Someone who came through an agent's link stays that agent's customer this long: their purchases in that time earn the agent commission."
+                  hint="A visitor's browser remembers an agent's link for 90 days. Once they sign up for the first time or buy through it, they're that agent's customer for this many days: their purchases in that time earn the agent commission."
                 >
                   <Input
                     id="attributionDays"

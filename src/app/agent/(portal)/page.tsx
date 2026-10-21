@@ -70,6 +70,7 @@ export default async function AgentDashboardPage() {
   const { program, standing, balance, tz, now } = d;
   // On a site taking real payments, test purchases are recorded but never paid.
   const live = livePayments();
+  const disputed = d.ledger.some((r) => r.status === "held" && r.note === DISPUTE_NOTE);
 
   // Course titles for the earnings table (never the customer).
   const orderIds = d.ledger.map((r) => r.orderId).filter((id): id is string => Boolean(id));
@@ -214,7 +215,14 @@ export default async function AgentDashboardPage() {
             label="Pending"
             value={formatMoney(balance.pendingCents)}
             icon={Hourglass}
-            hint={balance.nextAvailableAt ? `Next unlocks ${formatDate(balance.nextAvailableAt, {}, tz)}` : `${program.holdDays}-day refund window`}
+            hint={
+              [
+                disputed ? "Includes a disputed payment" : null,
+                balance.nextAvailableAt ? `Next unlocks ${formatDate(balance.nextAvailableAt, {}, tz)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || `${program.holdDays}-day refund window`
+            }
           />
         </li>
         <li>
@@ -233,7 +241,7 @@ export default async function AgentDashboardPage() {
           />
         </li>
         <li>
-          <StatCard label="Customers" value={d.customers} icon={Users} hint="People who came through your link" />
+          <StatCard label="Customers" value={d.customers} icon={Users} hint="People who bought through you" />
         </li>
       </ul>
 
@@ -406,7 +414,7 @@ export default async function AgentDashboardPage() {
                       className={cn(
                         "text-right font-semibold tabular-nums",
                         row.amountCents < 0 ? "text-red-700" : "text-zinc-900",
-                        (row.status === "void" || (row.isTest && live)) && "text-zinc-400 line-through",
+                        (row.status === "void" || (row.isTest && live && row.status === "held")) && "text-zinc-400 line-through",
                       )}
                     >
                       {formatMoney(row.amountCents, row.currency)}
@@ -493,11 +501,29 @@ function ledgerLabel(row: AgentCommission, orderTitles: Map<string, string>): st
   return cleanNote(row.note) || "Adjustment";
 }
 
+/** Recorded for a sale made while the agent was paused (lib/sales/commissions.ts recordAgentSale). */
+const PAUSED_SALE_REASON = "Sold while your account was paused";
+
 function LedgerStatus({ row, now, tz, live }: { row: AgentCommission; now: Date; tz: string; live: boolean }) {
-  if (row.isTest && live) {
+  if (row.status === "void" && row.voidReason === PAUSED_SALE_REASON) {
+    return (
+      <Badge tone="neutral" className="whitespace-nowrap">
+        Sold while paused · no commission
+      </Badge>
+    );
+  }
+  // A test payment on a site taking real payments is never paid; one paid out while the site ran on test keys stays paid.
+  if (row.isTest && live && row.status === "held") {
     return (
       <Badge tone="neutral" className="whitespace-nowrap">
         Test · never paid
+      </Badge>
+    );
+  }
+  if (row.isTest && live && row.status === "paid") {
+    return (
+      <Badge tone="neutral" className="whitespace-nowrap">
+        Paid (test)
       </Badge>
     );
   }

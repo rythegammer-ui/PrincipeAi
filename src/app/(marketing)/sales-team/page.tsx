@@ -88,7 +88,7 @@ function faqs(program: ProgramSettings): FaqItem[] {
     },
     {
       q: "How do I know a sale is mine?",
-      a: `Someone new to us who first signs up through your link (or any page with your code) becomes your customer, and so does anyone who buys through your link. They stay yours for ${program.attributionDays} days from then, and their course purchases in that time earn you commission. The first agent to bring a customer keeps them. Your link is remembered in their browser for 90 days. Purchases you make yourself don't count.`,
+      a: `Someone new to us who first signs up through your link (or any page with your code) becomes your customer, and so does anyone who buys through your link. They stay yours for ${program.attributionDays} days from then, and their course purchases in that time earn you commission. The first agent to bring a customer keeps them. Your link is remembered in their browser for 90 days. Purchases you make yourself don't count, and every payout is reviewed.`,
     },
     {
       q: "Do I earn for recruiting other agents?",

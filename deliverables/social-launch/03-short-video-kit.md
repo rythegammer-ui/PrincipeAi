@@ -625,13 +625,11 @@ If you can send a text, you can use AI well. No tech background needed.
 
 *0:04 · Who I am*
 
-**[ON SCREEN TEXT: "[YOUR NAME] · Principe AI"]**
+**[ON SCREEN TEXT: "Ryan · Principe AI"]**
 
-Hi, I'm [YOUR NAME], and this is Principe AI.
+Hi, I'm Ryan, and this is Principe AI.
 
-[YOUR STORY: one sentence about why you started Principe AI.]
-
-[YOUR CREDENTIAL IF ANY: one short, true line. Delete it if you don't have one.]
+I use AI in just about everything I do. I've built several businesses, from Principe Consults and Parts Pro to Principe Repair and Performance, a local business serving my community. Principe AI is where I share how I actually use it.
 
 *0:15 · Why it matters*
 

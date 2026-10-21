@@ -18,8 +18,8 @@ Last updated: Wed Oct 21, 2026 (L-20).
 | 8 | YouTube channel | Done; **ID/advanced-features verification pending** |
 | 9 | LinkedIn personal profile | Done |
 | 10 | LinkedIn Company Page | **Blocked:** see "LinkedIn Company Page" below |
-| 11 | Threads, X, Bluesky, Pinterest website link | In progress (Bluesky and X via Claude in Chrome; Threads in the app) |
-| 12 | Reddit (personal account About and link; brand account reserved only) | Not started |
+| 11 | Threads, X, Bluesky, Pinterest website link | Threads and Bluesky done. X running in Claude in Chrome. Pinterest website link not confirmed |
+| 12 | Reddit (personal account About and link; brand account reserved only) | Prompt given; waiting for the rules table |
 
 ## Waiting on something
 
@@ -54,4 +54,5 @@ The Page's first post (TP-02) is due **L+1, Wed Nov 11**, so this has about thre
 - **Reddit in Postiz** is the brand account. The kit's rule is to comment from a personal account and never post from the brand account, so don't schedule Reddit posts there.
 - **`src/config/site.ts` → `social`** still needs the full profile URLs, then a redeploy, so the footer and `/links` show them ([01-profile-setup.md](01-profile-setup.md), 7.2).
 - **Bluesky domain handle:** switching to `@principeai.com` needs a DNS record (7.5). Reconnect Bluesky in Postiz after the switch.
+- **Bluesky:** alt text is required in the web app; also turn it on in the phone app (Settings → Accessibility). Remove "followers" from the muted words on Bluesky and X: there it hides posts from your feed, not comments on yours.
 - **Owner decisions still open:** face on camera or not, name/story/credential lines, Black Friday promo (decide by Fri Nov 20), Facebook Group (Mon Dec 14).

@@ -141,6 +141,7 @@ Still open: the email postal address, the independence line in the footer and `/
 | [06-youtube-reddit-outreach.md](06-youtube-reddit-outreach.md) | LC-01 to LC-16, LC-20 to LC-34, LC-40 to LC-54 and LC-60 (numbers in between are unused): YouTube channel and long-form, Reddit, outreach templates |
 | [07-content-bank.md](07-content-bank.md) | CB-01 to CB-83 ideas, the funnel map, website gaps, offer facts |
 | [08-tools-measurement-compliance.md](08-tools-measurement-compliance.md) | Tools, UTM rules, Monday scorecard, compliance, paid boosting |
+| [stories/](stories/README.md) | ST-01 to ST-06 launch and ST-11 to ST-16 sales-team recruiting Story art (1080×1920 PNGs for Instagram and Snapchat), a `#ad` version of the launch set for sales agents, and the links to put on them |
 
 Short of time? Cut in the calendar's order ([calendar](02-launch-calendar.md), 2.3). Within what you keep, each kit's "Start with these 10" says what to make first. The [research/](research/) folder holds the sourced background research; you don't need it to post.
 

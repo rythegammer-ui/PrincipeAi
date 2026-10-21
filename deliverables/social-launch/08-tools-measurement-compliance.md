@@ -138,7 +138,7 @@ Use exactly these values, in lowercase. Never use variants such as `ig`, `insta`
 
 | Field | Value | Use it for |
 |---|---|---|
-| `utm_source` | `instagram` · `tiktok` · `youtube` · `linkedin` · `x` · `threads` · `facebook` · `pinterest` · `reddit` · `bluesky` | The platform the link sits on. A cross-post gets the source of the platform it appears on, so a Facebook copy of an Instagram Reel uses `facebook` |
+| `utm_source` | `instagram` · `tiktok` · `youtube` · `linkedin` · `x` · `threads` · `facebook` · `pinterest` · `reddit` · `bluesky` · `snapchat` | The platform the link sits on. A cross-post gets the source of the platform it appears on, so a Facebook copy of an Instagram Reel uses `facebook` |
 | `utm_source` | `podcast` · `newsletter` · `community` · `local` · `partner` | Off-platform: a podcast's show notes; someone else's email newsletter; an online community that isn't one of the platforms above (Slack, Discord, a forum); local and in-person (talks, libraries, flyers); referral partners |
 | `utm_medium` | `bio` | Profile and bio links, YouTube channel links, Page buttons, and Highlight frames that link |
 | `utm_medium` | `social` | Organic posts, captions, first comments, Story link stickers, Pins and video descriptions |
@@ -149,6 +149,7 @@ Use exactly these values, in lowercase. Never use variants such as `ig`, `insta`
 | `utm_campaign` | `evergreen` | Whatever the date: bios, every Pin, Highlights, DM replies, playlist descriptions and outreach (`referral`) links. Otherwise everything outside the other windows: library posts after L+13, holiday posts (Dec 21-Jan 1) |
 | `utm_campaign` | `bf-2026` | Thanksgiving to Cyber Monday promotion posts (Thu Nov 26 to Mon Nov 30), **only if you set up a real Stripe promotion code** (4.6). Other posts that week stay `evergreen` |
 | `utm_campaign` | `ny-2027` | Posts published Jan 2-31, 2027 |
+| `utm_campaign` | `sales-team` | Whatever the date: posts recruiting sales agents for `/sales-team` ([story art](stories/README.md)) |
 | `utm_content` | The post ID in lowercase: `ld-01`, `sv-07`, `tp-12`, `vc-05`, `lc-03` (`cb-..` if you post a content-bank idea directly) | Posts, first comments, Story stickers (the Story's own ID) and Highlight frames (the Highlight's VC ID) |
 | `utm_content` | `bio` | The main bio link on every platform |
 | `utm_content` | `bio-kit` · `bio-assessment` · `bio-free-lesson` · `bio-courses` · `bio-call` | Extra profile links on platforms that allow several |

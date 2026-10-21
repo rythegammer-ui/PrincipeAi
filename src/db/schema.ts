@@ -419,7 +419,7 @@ export const lessons = pgTable(
   ],
 );
 
-/** Students (people who can log in to /learn). Admin access is env-based, not stored here. */
+/** Students (people who can log in to /learn), and sales agents (/agent). The owner's admin login is env-based; other admins are in admin_members. */
 export const users = pgTable(
   "users",
   {
@@ -498,6 +498,11 @@ export const orders = pgTable(
     stripePaymentIntentId: text("stripe_payment_intent_id"),
     /** true when completed through the built-in test checkout (no Stripe keys configured). */
     isTest: boolean("is_test").notNull().default(false),
+    /**
+     * Referral code of the sales agent whose link this checkout came through (the buyer's pa_agent cookie, or a payment
+     * link's client_reference_id), checked against the agents when the sale is credited. See lib/sales/commissions.ts.
+     */
+    agentCode: text("agent_code"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -550,6 +555,195 @@ export const chatConversations = pgTable(
   (t) => [index("chat_visitor_idx").on(t.visitorId), index("chat_updated_idx").on(t.updatedAt)],
 );
 
+/* ------------------------------------------------------------------ */
+/* Admin team + sales agents                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Admins besides the owner (ADMIN_EMAIL / ADMIN_PASSWORD), who sign in to /admin with an emailed link. Removing one
+ * keeps the row (removed_at) and bumps session_version, which ends every session they had.
+ */
+export const adminMembers = pgTable(
+  "admin_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Always stored lowercased + trimmed. */
+    email: text("email").notNull(),
+    name: text("name"),
+    /** Email of the admin who added them. */
+    addedBy: text("added_by"),
+    /** Sessions carry the version they were signed with; a different one here signs them out. */
+    sessionVersion: integer("session_version").notNull().default(1),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("admin_members_email_idx").on(t.email)],
+);
+
+/** applied → approved (or rejected); approved agents can be paused (links stop earning) or removed. */
+export type AgentStatus = "applied" | "approved" | "rejected" | "paused" | "removed";
+
+/** Remote sales agents: people who apply on /sales-team, and once approved earn commission on the courses they sell. */
+export const salesAgents = pgTable(
+  "sales_agents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Always stored lowercased + trimmed. The agent signs in to /agent with an emailed link to this address. */
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    phone: text("phone"),
+    city: text("city"),
+    /** Two-letter US state code. */
+    state: text("state"),
+    /** Referral code used in their links (?ref=CODE, /r/CODE). Uppercase letters and digits; set on approval. */
+    code: text("code"),
+    status: text("status").$type<AgentStatus>().notNull().default("applied"),
+    /** Application answers (experience, channels, hours, why, agreedAt). */
+    application: jsonb("application").$type<Record<string, string>>().notNull().default(sql`'{}'::jsonb`),
+    /** How the agent wants to be paid, e.g. "venmo" + "@jane-d". The owner pays outside the app. */
+    payoutMethod: text("payout_method"),
+    payoutHandle: text("payout_handle"),
+    /** Shown on the team leaderboard as first name + last initial (agents can opt out). */
+    showOnLeaderboard: boolean("show_on_leaderboard").notNull().default(true),
+    /** Private admin notes. */
+    notes: text("notes"),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    lastSaleAt: timestamp("last_sale_at", { withTimezone: true }),
+    /**
+     * When they weren't active since first approved: paused or removed, from → to (null while it lasts). A sale counts
+     * only if it was made while they were active, whenever it's recorded (lib/sales/commissions.ts activeAt).
+     */
+    inactivePeriods: jsonb("inactive_periods")
+      .$type<{ from: string; to: string | null; status: "paused" | "removed" }[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("sales_agents_email_idx").on(t.email),
+    uniqueIndex("sales_agents_code_idx").on(t.code),
+    index("sales_agents_status_idx").on(t.status),
+  ],
+);
+
+/**
+ * The agent a customer belongs to: the first agent whose link brought them (the claim lasts the program's
+ * attribution window), or one an admin assigned.
+ */
+export const agentReferrals = pgTable(
+  "agent_referrals",
+  {
+    contactId: uuid("contact_id")
+      .primaryKey()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => salesAgents.id, { onDelete: "cascade" }),
+    /** "link" (their referral link) | "manual" (assigned in admin). */
+    source: text("source").notNull().default("link"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("agent_referrals_agent_idx").on(t.agentId)],
+);
+
+export type ChallengeMetric = "sales" | "revenue";
+
+/** Time-boxed sales contests with a cash bonus for every agent who reaches the target. */
+export const agentChallenges = pgTable(
+  "agent_challenges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    metric: text("metric").$type<ChallengeMetric>().notNull().default("sales"),
+    /** Sales count, or sales volume in cents (metric "revenue"). */
+    target: integer("target").notNull(),
+    bonusCents: integer("bonus_cents").notNull().default(0),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    /** Cancelled challenges are hidden and award nothing. */
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    /** Set once the bonuses were awarded (the daily job, after the challenge ends). */
+    awardedAt: timestamp("awarded_at", { withTimezone: true }),
+    createdBy: text("created_by"),
+    ...timestamps,
+  },
+  (t) => [index("agent_challenges_ends_idx").on(t.endsAt)],
+);
+
+/** Money sent to an agent (outside the app: PayPal, Venmo, Zelle, bank). */
+export const agentPayouts = pgTable(
+  "agent_payouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => salesAgents.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("usd"),
+    method: text("method"),
+    /** Transaction id or note from the payment app. */
+    reference: text("reference"),
+    note: text("note"),
+    /** Email of the admin who recorded it. */
+    createdBy: text("created_by"),
+    paidAt: timestamp("paid_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("agent_payouts_agent_idx").on(t.agentId, t.paidAt)],
+);
+
+/**
+ * sale: commission on a course sale · bonus: challenge prize or manual bonus · clawback: what's taken back after a paid
+ * sale is refunded (in full or in part) · adjustment: a manual correction.
+ */
+export type CommissionKind = "sale" | "bonus" | "clawback" | "adjustment";
+/** held: not paid yet (payable once available_at passes) · paid: in a payout · void: cancelled (refund, failed challenge). */
+export type CommissionStatus = "held" | "paid" | "void";
+
+/** Agent earnings ledger. What an agent is owed = held rows past their available_at (negative rows reduce it). */
+export const agentCommissions = pgTable(
+  "agent_commissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => salesAgents.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<CommissionKind>().notNull(),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    challengeId: uuid("challenge_id").references(() => agentChallenges.id, { onDelete: "set null" }),
+    /** What the customer paid, in cents (sales and clawbacks). */
+    saleCents: integer("sale_cents").notNull().default(0),
+    /** Commission rate in basis points (2000 = 20%). */
+    rateBps: integer("rate_bps").notNull().default(0),
+    /** The agent's level when the sale was made. */
+    level: text("level"),
+    /** Signed: earnings are positive, clawbacks negative. */
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("usd"),
+    status: text("status").$type<CommissionStatus>().notNull().default("held"),
+    /** Payable from this time (a sale waits out the hold period, so refunds come first). */
+    availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+    payoutId: uuid("payout_id").references(() => agentPayouts.id, { onDelete: "set null" }),
+    /** From a test payment (built-in test checkout or Stripe test mode): no real money. */
+    isTest: boolean("is_test").notNull().default(false),
+    note: text("note"),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    voidReason: text("void_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // One commission per order (take-back rows for refunds can be several); one bonus per agent per challenge.
+    uniqueIndex("agent_commissions_order_sale_idx").on(t.orderId).where(sql`${t.kind} = 'sale'`),
+    uniqueIndex("agent_commissions_challenge_agent_idx").on(t.challengeId, t.agentId),
+    index("agent_commissions_agent_idx").on(t.agentId, t.createdAt),
+    index("agent_commissions_payout_idx").on(t.payoutId),
+  ],
+);
+
 /** Key/value settings editable from /admin/settings. See src/lib/settings.ts for keys + defaults. */
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
@@ -578,3 +772,8 @@ export type QuizSubmission = typeof quizSubmissions.$inferSelect;
 export type ChatConversation = typeof chatConversations.$inferSelect;
 export type EmailSequence = typeof emailSequences.$inferSelect;
 export type SequenceStep = typeof sequenceSteps.$inferSelect;
+export type AdminMember = typeof adminMembers.$inferSelect;
+export type SalesAgent = typeof salesAgents.$inferSelect;
+export type AgentCommission = typeof agentCommissions.$inferSelect;
+export type AgentPayout = typeof agentPayouts.$inferSelect;
+export type AgentChallenge = typeof agentChallenges.$inferSelect;

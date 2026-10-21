@@ -1,0 +1,2 @@
+DROP INDEX "agent_commissions_order_kind_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "agent_commissions_order_sale_idx" ON "agent_commissions" USING btree ("order_id") WHERE "agent_commissions"."kind" = 'sale';

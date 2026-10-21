@@ -21,7 +21,7 @@ export function uniqueEmail(prefix = "e2e"): string {
 /** Signs in through the admin login form and waits for the dashboard (or the `next` page). */
 export async function loginAsAdmin(page: Page, next?: string): Promise<void> {
   await page.goto(next ? `/admin/login?next=${encodeURIComponent(next)}` : "/admin/login");
-  await page.getByLabel("Email").fill(E2E_ADMIN.email);
+  await page.getByLabel("Email", { exact: true }).fill(E2E_ADMIN.email);
   await page.getByLabel("Password").fill(E2E_ADMIN.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).not.toHaveURL(/\/admin\/login/);
@@ -73,12 +73,15 @@ export async function openContact(adminPage: Page, email: string): Promise<void>
   await expect(adminPage.getByRole("link", { name: email })).toBeVisible();
 }
 
-/** Opens a one-time sign-in link on this server and confirms it (the link is a POST so mail scanners can't use it). */
-export async function openSignInLink(page: Page, link: string): Promise<void> {
+/**
+ * Opens a one-time sign-in link on this server and confirms it (the link is a POST so mail scanners can't use it).
+ * The button says where it leads: a student's courses, a sales agent's dashboard, or the admin dashboard.
+ */
+export async function openSignInLink(page: Page, link: string, button = "Continue to my courses"): Promise<void> {
   expect(pathOf(link)).toMatch(/^\/auth\/verify\?token=/);
   await page.goto(pathOf(link));
   await expect(page.getByRole("heading", { level: 1, name: /almost in/i })).toBeVisible();
-  await page.getByRole("button", { name: "Continue to my courses" }).click();
+  await page.getByRole("button", { name: button }).click();
 }
 
 /** Signs a student in through /login: without an email provider (demo mode) the page shows the link itself. */

@@ -10,7 +10,17 @@ import { adminCredentials, authSecret } from "@/lib/runtime-mode";
  */
 
 export type SessionRole = "admin" | "student";
-export type SessionPayload = { sub: string; role: SessionRole; email: string };
+export type SessionPayload = {
+  sub: string;
+  role: SessionRole;
+  email: string;
+  /**
+   * Admin team members only (admin_members, signed in by email link): the member's session version when the cookie
+   * was signed. The owner's session (ADMIN_EMAIL / ADMIN_PASSWORD) has none. The proxy can't read the database, so
+   * auth.ts checks it against the member's row (removing a member bumps it) on every admin page and action.
+   */
+  teamVersion?: number;
+};
 
 /**
  * Binds admin sessions to the current admin login: changing ADMIN_EMAIL / ADMIN_PASSWORD, or bumping
@@ -26,7 +36,8 @@ export function adminCredentialVersion(creds: { email: string; password: string 
 
 /**
  * The session in a signed cookie, or null when it is missing, expired, badly signed, for another role, or (admin)
- * no longer matches the current admin login: a different ADMIN_EMAIL, or a missing or stale `cv` claim.
+ * no longer matches the current admin login: a missing or stale `cv` claim, or (the owner) a different ADMIN_EMAIL.
+ * Team members' cookies carry the same `cv`, so changing ADMIN_PASSWORD or ADMIN_SESSION_VERSION signs them out too.
  */
 export async function verifySessionToken(token: string | undefined, role: SessionRole): Promise<SessionPayload | null> {
   if (!token) return null;
@@ -35,7 +46,12 @@ export async function verifySessionToken(token: string | undefined, role: Sessio
     if (payload.role !== role || typeof payload.sub !== "string" || typeof payload.email !== "string") return null;
     if (role === "admin") {
       const creds = adminCredentials();
-      if (!creds || payload.email !== creds.email || payload.cv !== adminCredentialVersion(creds)) return null;
+      if (!creds || payload.cv !== adminCredentialVersion(creds)) return null;
+      if (payload.tm !== undefined) {
+        if (typeof payload.tm !== "number" || !Number.isInteger(payload.tm) || payload.tm < 1) return null;
+        return { sub: payload.sub, role, email: payload.email, teamVersion: payload.tm };
+      }
+      if (payload.email !== creds.email) return null;
     }
     return { sub: payload.sub, role, email: payload.email };
   } catch {

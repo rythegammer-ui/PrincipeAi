@@ -5,6 +5,9 @@
  *
  * Then, on a production build with STRIPE_SECRET_KEY set, it syncs the courses' Stripe Payment Links
  * (src/lib/payment-links.ts). That step never fails the build: Admin → Courses can run it again.
+ *
+ * ADMIN_TEAM_EMAILS (comma-separated) adds admin team members at deploy time, so the first ones don't need the owner
+ * to sign in first. Someone removed in Admin → Team stays removed (their row is kept, so they aren't added again).
  */
 import "dotenv/config";
 import path from "node:path";
@@ -16,8 +19,30 @@ import { site } from "../src/config/site";
 import * as schema from "../src/db/schema";
 import { seedIfEmpty } from "../src/db/seed";
 import { describeSync, stripeModeForKey, syncPaymentLinks } from "../src/lib/payment-links";
+import { isValidEmail, normalizeEmail } from "../src/lib/utils";
 
 type DB = PostgresJsDatabase<typeof schema>;
+
+/** Adds the ADMIN_TEAM_EMAILS addresses to admin_members (never the owner's ADMIN_EMAIL, never someone removed). */
+async function addTeamFromEnv(db: DB) {
+  const owner = normalizeEmail(process.env.ADMIN_EMAIL || "admin@principe.ai");
+  const emails = [
+    ...new Set(
+      (process.env.ADMIN_TEAM_EMAILS ?? "")
+        .split(/[,;\s]+/)
+        .map((e) => normalizeEmail(e))
+        .filter((e) => isValidEmail(e) && e !== owner),
+    ),
+  ];
+  for (const email of emails) {
+    const added = await db
+      .insert(schema.adminMembers)
+      .values({ email, addedBy: "ADMIN_TEAM_EMAILS" })
+      .onConflictDoNothing({ target: schema.adminMembers.email })
+      .returning({ email: schema.adminMembers.email });
+    if (added.length) console.log(`[migrate] Added ${email} to the admin team (ADMIN_TEAM_EMAILS).`);
+  }
+}
 
 /** Creates or updates every paid course's Stripe Payment Link (production builds only). Never throws. */
 async function syncStripe(db: DB) {
@@ -69,6 +94,7 @@ async function main() {
   await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
   const res = await seedIfEmpty(db, { demoData: process.env.SEED_DEMO_DATA === "1" });
   console.log(res.seeded ? "[migrate] Seeded default catalog." : "[migrate] Database already seeded.");
+  await addTeamFromEnv(db);
   await syncStripe(db);
   await client.end();
 }

@@ -6,14 +6,23 @@ import { Logo } from "@/components/ui/misc";
 import { getAdminSession } from "@/lib/auth";
 import { adminCredentials, isDemoMode, MIN_ADMIN_PASSWORD_LENGTH, MIN_AUTH_SECRET_LENGTH } from "@/lib/runtime-mode";
 import { safeRedirectPath } from "@/lib/utils";
-import { AdminLoginForm } from "./login-form";
+import { AdminLoginForm, TeamLinkForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Admin sign in", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-export default async function AdminLoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  const { next } = await searchParams;
+export default async function AdminLoginPage({ searchParams }: { searchParams: Promise<{ next?: string; method?: string }> }) {
+  const { next, method } = await searchParams;
   const target = safeRedirectPath(next, "/admin");
+  // Team members (Admin → Admin Team) get an emailed link; the owner signs in with the password from Vercel.
+  const byLink = method === "link";
+  const withMethod = (m: "link" | null) => {
+    const q = new URLSearchParams();
+    if (target !== "/admin") q.set("next", target);
+    if (m) q.set("method", m);
+    const query = q.toString();
+    return query ? `/admin/login?${query}` : "/admin/login";
+  };
   if (await getAdminSession()) redirect(target.startsWith("/admin") ? target : "/admin");
   const creds = adminCredentials();
 
@@ -40,7 +49,25 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
                   Email <code>{creds.email}</code> · password <code>demo1234</code>. Set <code>ADMIN_PASSWORD</code> and <code>AUTH_SECRET</code> to change this.
                 </Alert>
               )}
-              <AdminLoginForm next={target} defaultEmail={creds.isDefault ? creds.email : undefined} />
+              {byLink ? (
+                <>
+                  <p className="-mt-2 mb-4 text-sm text-zinc-600">Admin team members sign in with a one-time link sent to their email.</p>
+                  <TeamLinkForm next={target} />
+                  <Link href={withMethod(null)} className="mt-6 flex min-h-11 items-center justify-center text-sm font-medium text-brand-700 hover:underline">
+                    Sign in with a password instead
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <AdminLoginForm next={target} defaultEmail={creds.isDefault ? creds.email : undefined} />
+                  <Link
+                    href={withMethod("link")}
+                    className="mt-6 flex min-h-11 items-center justify-center border-t border-zinc-100 pt-5 text-sm font-medium text-brand-700 hover:underline"
+                  >
+                    Team member? Sign in with an email link
+                  </Link>
+                </>
+              )}
             </>
           )}
         </div>

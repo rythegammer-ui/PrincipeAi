@@ -331,6 +331,26 @@ describe("Stripe payment-link checkouts", () => {
       expect(location.searchParams.get("prefilled_email")).toBe("reader+1@example.com");
       // A malformed email is dropped, not passed on.
       expect(new URL((await buy(course.slug, "?email=not-an-email")).headers.get("location")!).searchParams.has("prefilled_email")).toBe(false);
+      expect(location.searchParams.has("client_reference_id")).toBe(false);
+    });
+
+    it("tags checkouts from a sales agent's link (?ref=, or their cookie) for the agent", async () => {
+      await storeLink();
+      const db = await getDb();
+      await db.insert(schema.salesAgents).values({ email: "jane27-agent@example.com", name: "Jane Agent", code: "JANE27", status: "approved" }).onConflictDoNothing();
+      const ref = new URL((await buy(course.slug, "?ref=jane27")).headers.get("location")!);
+      expect(ref.searchParams.get("client_reference_id")).toBe("agent_JANE27");
+      const withCookie = await BUY(new Request(`https://principe.example/buy/${course.slug}`, { headers: { cookie: "pa_vid=abc; pa_agent=SAM42" } }), {
+        params: Promise.resolve({ slug: course.slug }),
+      });
+      expect(new URL(withCookie.headers.get("location")!).searchParams.get("client_reference_id")).toBe("agent_SAM42");
+      // Another site's tag that isn't an agent's code doesn't replace the agent in the cookie.
+      const junk = await BUY(new Request(`https://principe.example/buy/${course.slug}?ref=launch2025`, { headers: { cookie: "pa_agent=SAM42" } }), {
+        params: Promise.resolve({ slug: course.slug }),
+      });
+      expect(new URL(junk.headers.get("location")!).searchParams.get("client_reference_id")).toBe("agent_SAM42");
+      // Not a code: ignored.
+      expect(new URL((await buy(course.slug, "?ref=no%20way")).headers.get("location")!).searchParams.has("client_reference_id")).toBe(false);
     });
 
     it("falls back to the sales page when the link is stale, off or Stripe isn't connected", async () => {

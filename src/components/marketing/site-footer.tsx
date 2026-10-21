@@ -18,6 +18,7 @@ const columns = [
     links: [
       { href: "/consulting", label: "AI Implementation" },
       { href: "/book", label: "Book a call" },
+      { href: "/sales-team", label: "Join our sales team" },
       { href: "/contact", label: "Contact" },
     ],
   },

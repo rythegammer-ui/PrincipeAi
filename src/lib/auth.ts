@@ -16,7 +16,7 @@ const ADMIN_TTL_SEC = 60 * 60 * 24 * 7; // 7 days
 const STUDENT_TTL_SEC = 60 * 60 * 24 * 30; // 30 days
 const LOGIN_TOKEN_TTL_MIN = 30;
 
-async function sign(payload: SessionPayload, ttlSec: number, extra: Record<string, string> = {}): Promise<string> {
+async function sign(payload: SessionPayload, ttlSec: number, extra: Record<string, string | number> = {}): Promise<string> {
   return new SignJWT({ ...extra, role: payload.role, email: payload.email })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(payload.sub)
@@ -66,16 +66,60 @@ export async function startAdminSession(email: string) {
 }
 
 /**
+ * Signs in an admin team member (admin_members), after they used an emailed sign-in link. Their cookie is bound to
+ * the owner's credentials like the owner's own (`cv`), and to their session version (`tm`), which removal bumps.
+ */
+export async function startTeamAdminSession(member: Pick<schema.AdminMember, "id" | "email" | "sessionVersion">) {
+  const creds = adminCredentials();
+  if (!creds) throw new Error("Admin login isn't configured.");
+  const token = await sign({ sub: member.id, role: "admin", email: member.email }, ADMIN_TTL_SEC, {
+    cv: adminCredentialVersion(creds),
+    tm: member.sessionVersion,
+  });
+  (await cookies()).set(ADMIN_COOKIE, token, cookieOptions(ADMIN_TTL_SEC));
+}
+
+/** The admin team member with this email who can sign in (not removed), or null. */
+export async function activeAdminMember(email: string): Promise<schema.AdminMember | null> {
+  const db = await getDb();
+  const [member] = await db
+    .select()
+    .from(schema.adminMembers)
+    .where(and(eq(schema.adminMembers.email, normalizeEmail(email)), isNull(schema.adminMembers.removedAt)))
+    .limit(1);
+  return member ?? null;
+}
+
+/**
  * Signs this browser out. Sessions are stateless JWTs, so a copy of the cookie taken earlier stays valid
- * until it expires; to end every admin session change ADMIN_PASSWORD or ADMIN_SESSION_VERSION.
+ * until it expires; to end every admin session change ADMIN_PASSWORD or ADMIN_SESSION_VERSION (removing a
+ * team member in Admin → Team ends theirs).
  */
 export async function endAdminSession() {
   (await cookies()).delete(ADMIN_COOKIE);
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The signed-in admin: the owner, or a team member who is still on the team (checked against the database). */
 export async function getAdminSession(): Promise<SessionPayload | null> {
   const token = (await cookies()).get(ADMIN_COOKIE)?.value;
-  return verifySession(token, "admin");
+  const session = await verifySession(token, "admin");
+  if (!session || session.teamVersion === undefined) return session;
+  if (!UUID.test(session.sub)) return null;
+  const db = await getDb();
+  const [member] = await db
+    .select({ email: schema.adminMembers.email })
+    .from(schema.adminMembers)
+    .where(
+      and(
+        eq(schema.adminMembers.id, session.sub),
+        isNull(schema.adminMembers.removedAt),
+        eq(schema.adminMembers.sessionVersion, session.teamVersion),
+      ),
+    )
+    .limit(1);
+  return member && member.email === session.email ? session : null;
 }
 
 /**
@@ -118,8 +162,20 @@ export async function createLoginToken(email: string, redirectTo = "/learn"): Pr
   return raw;
 }
 
-/** Validates + consumes a login token. Returns the student user and where to redirect, or null. */
-export async function consumeLoginToken(raw: string): Promise<{ user: schema.User; redirectTo: string } | null> {
+/** True for a sign-in link into the admin dashboard (an admin team member's), as opposed to /learn or /agent. */
+export function isAdminRedirect(path: string): boolean {
+  return path === "/admin" || path.startsWith("/admin/") || path.startsWith("/admin?");
+}
+
+export type LoginResult =
+  | { kind: "student"; user: schema.User; redirectTo: string }
+  | { kind: "admin"; member: schema.AdminMember; redirectTo: string };
+
+/**
+ * Validates + consumes a login token. A link into /admin signs in an admin team member (null when that address is no
+ * longer on the team); any other link a student or sales agent (their portal checks what they may see).
+ */
+export async function consumeLoginToken(raw: string): Promise<LoginResult | null> {
   if (!raw || raw.length > 200) return null;
   const db = await getDb();
   const tokenHash = hashSecret(raw).toString("hex");
@@ -135,9 +191,15 @@ export async function consumeLoginToken(raw: string): Promise<{ user: schema.Use
     )
     .returning();
   if (!token) return null;
+  if (isAdminRedirect(token.redirectTo)) {
+    const member = await activeAdminMember(token.email);
+    if (!member) return null;
+    await db.update(schema.adminMembers).set({ lastLoginAt: new Date() }).where(eq(schema.adminMembers.id, member.id));
+    return { kind: "admin", member, redirectTo: token.redirectTo };
+  }
   const user = await upsertStudent(token.email);
   await db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, user.id));
-  return { user, redirectTo: token.redirectTo };
+  return { kind: "student", user, redirectTo: token.redirectTo };
 }
 
 /**

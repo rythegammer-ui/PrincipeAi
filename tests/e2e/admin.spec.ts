@@ -25,7 +25,7 @@ test.describe("admin dashboard", () => {
     await expect(page).toHaveURL(/\/admin\/login\?next=%2Fadmin/);
 
     // A wrong password is refused.
-    await page.getByLabel("Email").fill(E2E_ADMIN.email);
+    await page.getByLabel("Email", { exact: true }).fill(E2E_ADMIN.email);
     await page.getByLabel("Password").fill("not-the-password");
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page.getByRole("alert").filter({ hasText: "Incorrect email or password." })).toBeVisible();

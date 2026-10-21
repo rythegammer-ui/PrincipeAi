@@ -15,6 +15,12 @@ built with Next.js and designed to deploy on Vercel.
   email drafting, and conversation insights, all powered by Claude.
 - **Automations and analytics**: email sequences triggered by funnel events, funnel conversion analytics, an email log,
   and a daily cron job.
+- **Remote sales team**: people across the US apply at `/sales-team`; once an admin approves them they get a referral
+  link and an agent portal (`/agent`) with commission levels (20% → 25% → 30% by default, by sales per month),
+  a leaderboard, badges, weekly streaks and cash-bonus challenges. Commissions wait out a refund hold, refunds cancel
+  or claw them back, and Admin → Sales Team shows what each agent is owed (you pay them yourself and click
+  **Record payout**).
+- **Admin team**: add people in Admin → Admin Team; they get full dashboard access and sign in with an emailed link.
 
 > Architecture, conventions and file map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -56,6 +62,7 @@ Reset the local database with `npm run db:reset-local`.
    | `AUTH_SECRET` | yes | Signs login sessions (at least 16 characters): `openssl rand -base64 32`. Changing it signs **everyone** out, admin and students |
    | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | yes | Your admin dashboard login. The password must be at least 12 characters (use a long, unique one); admin login stays disabled until it and `AUTH_SECRET` are set. Changing the password signs out every admin session |
    | `ADMIN_SESSION_VERSION` | optional | Change it to any new value (e.g. `2`) and redeploy to sign out every admin session without changing the password, e.g. after a lost laptop |
+   | `ADMIN_TEAM_EMAILS` | optional | Comma-separated emails added to the admin team on the next deploy (full access, sign-in by emailed link). Usually you add people in **Admin → Admin Team** instead; someone removed there isn't added back by this |
    | `NEXT_PUBLIC_SITE_URL` | yes | e.g. `https://principe.ai` (used in emails, Stripe redirects, invites) |
    | `CRON_SECRET` | yes (scheduled jobs) | Any random string (`openssl rand -base64 32`). Vercel Cron sends it to `/api/cron`; **without it every cron run is refused in production**, so follow-up automation emails, booking reminders and hold/checkout cleanup never run |
    | `ANTHROPIC_API_KEY` | for AI | From [console.anthropic.com](https://console.anthropic.com) |
@@ -144,6 +151,32 @@ at the last run before the call (up to 24 hours ahead). You can also trigger it 
 - **Email automations**: Admin → Email Automations
 - **AI assistant name, greeting and extra instructions**: Admin → Settings
 - **Testimonials**: add real ones to `site.testimonials` in `src/config/site.ts` (sections stay hidden while empty)
+- **Sales team**: Admin → Sales Team → Program (commission levels and rates, refund hold, how long a customer stays
+  with the agent who referred them, minimum payout, applications open or closed) and challenges. The agent terms are
+  at `/sales-team/terms` (`src/app/(marketing)/sales-team/terms/page.tsx`): have them reviewed before you recruit.
+
+## Sales team
+
+1. Share `/sales-team`. Applications arrive by email (to you and every admin team member) and wait in **Admin → Sales
+   Team**. Approving one gives the agent a referral code (e.g. `JANE27`) and emails them their link and how to sign in
+   at `/agent/login` (an emailed link, like students).
+2. An agent's links: `/r/CODE`, or `?ref=CODE` on any page (e.g. `/courses/ai-for-business?ref=CODE`), or a direct
+   checkout `/buy/<course>?ref=CODE`. The link is remembered in the visitor's browser for 90 days. A visitor who signs
+   up for the first time through it, or buys through it, becomes the agent's customer; someone already in your CRM
+   only by buying through it (a form can't move an existing contact). The first agent keeps the customer for the
+   attribution window (90 days by default). Self-purchases and sales made while an agent is paused don't earn. You can
+   also assign a contact to an agent on the contact's page; that stays until you change it.
+3. Each paid course sale by an agent's customer earns the agent's current rate. Levels go by sales in the calendar
+   month (business time zone) and carry over through the next month. The commission is payable after the hold period
+   (30 days by default); a refund or lost dispute before then cancels it, after a payout it's deducted from the next one.
+   An open dispute holds the commission until it's resolved, and a partial refund reduces it. Test payments never count
+   once the site uses a live Stripe key.
+4. Set your mailing address in **Admin → Settings → Business** if you haven't: the agents' email scripts include it,
+   as CAN-SPAM requires for promotional email.
+5. Pay agents outside the app (PayPal, Venmo, Zelle, Cash App, bank), then **Record payout** on the agent's page; it
+   covers everything owed and emails them. Ask for a W-9 before the first payout; you may need to file 1099s.
+6. Challenges (Admin → Sales Team → Program): a target (sales or sales volume) between two dates and a cash bonus for
+   everyone who reaches it. The daily job awards bonuses after a challenge ends; they're payable after the hold period.
 
 ## Scripts
 

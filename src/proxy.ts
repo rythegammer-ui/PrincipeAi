@@ -5,14 +5,20 @@ import { verifySessionToken, type SessionRole } from "@/lib/session-token";
  * Runs before every page request:
  * 1. Assigns an anonymous visitor id + captures first-touch attribution (UTM, referrer, landing page)
  *    into cookies, so funnel analytics and CRM attribution work without client JS.
- * 2. Auth gate for /admin and /learn page requests, full loads and client-side (RSC) navigations alike. It runs
- *    the same session check as the pages (lib/session-token.ts), including admin revocation: a client-side
- *    navigation re-renders only the page segment, not the layout that also checks. The pages check again;
- *    server action POSTs pass straight through to the actions' own checks.
+ * 2. Auth gate for /admin, /learn and /agent page requests, full loads and client-side (RSC) navigations alike. It
+ *    runs the same session check as the pages (lib/session-token.ts), including admin revocation: a client-side
+ *    navigation re-renders only the page segment, not the layout that also checks. The pages check again (admin
+ *    team members' removal is checked there, against the database); server action POSTs pass straight through to
+ *    the actions' own checks.
+ * 3. Sales agents' referral links: `?ref=CODE` on any page goes through /r/CODE, which remembers a real agent's code in a
+ *    cookie (the latest real link wins); the visitor becomes that agent's customer when they first sign up or buy
+ *    (lib/sales/referrals.ts).
  */
 
 const YEAR = 60 * 60 * 24 * 365;
 const ATTRIBUTION_TTL = 60 * 60 * 24 * 90;
+/** Same format as lib/sales/game.ts AGENT_CODE_RE (at least one digit, so other sites' ?ref=newsletter values are ignored). */
+const AGENT_CODE = /^(?=.*\d)[A-Za-z0-9]{4,16}$/;
 
 async function hasValidSession(token: string | undefined, role: SessionRole): Promise<boolean> {
   return (await verifySessionToken(token, role)) !== null;
@@ -26,7 +32,8 @@ export async function proxy(request: NextRequest) {
   // Every server function re-checks auth itself (assertAdmin / getStudent → redirect), which
   // the client turns into a proper navigation to the login page.
   const isServerAction = request.method === "POST" && request.headers.has("next-action");
-  if (isServerAction && (pathname.startsWith("/admin") || pathname.startsWith("/learn"))) return NextResponse.next();
+  const agentArea = (pathname === "/agent" || pathname.startsWith("/agent/")) && pathname !== "/agent/login";
+  if (isServerAction && (pathname.startsWith("/admin") || pathname.startsWith("/learn") || agentArea)) return NextResponse.next();
 
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     if (!(await hasValidSession(request.cookies.get("pa_admin")?.value, "admin"))) {
@@ -44,8 +51,15 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // Sales agents sign in with the student magic link (the portal then checks they're an agent).
+  if (agentArea && !(await hasValidSession(request.cookies.get("pa_student")?.value, "student"))) {
+    return NextResponse.redirect(new URL("/agent/login", request.url));
+  }
+
   // Never attribute internal pages.
-  if (pathname.startsWith("/admin") || pathname.startsWith("/learn")) return NextResponse.next();
+  if (pathname.startsWith("/admin") || pathname.startsWith("/learn") || pathname === "/agent" || pathname.startsWith("/agent/")) {
+    return NextResponse.next();
+  }
 
   const toSet: { name: string; value: string; maxAge: number }[] = [];
 
@@ -73,21 +87,43 @@ export async function proxy(request: NextRequest) {
     if (Object.keys(utm).length) toSet.push({ name: "pa_utm", value: JSON.stringify(utm), maxAge: ATTRIBUTION_TTL });
   }
 
+  const persist = (response: NextResponse) => {
+    for (const c of toSet) {
+      response.cookies.set(c.name, c.value, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: c.maxAge,
+      });
+    }
+    return response;
+  };
+
+  // A sales agent's referral link (?ref=CODE): /r/CODE checks the code against the agents, remembers it only if it's a
+  // real one (another site's ?ref= tag never replaces an agent's), and comes straight back here without the ?ref.
+  // /buy/<course>?ref= checks it itself.
+  const ref = searchParams.get("ref")?.trim();
+  if (
+    request.method === "GET" &&
+    ref &&
+    AGENT_CODE.test(ref) &&
+    request.cookies.get("pa_agent")?.value !== ref.toUpperCase() &&
+    !pathname.startsWith("/r/") &&
+    !pathname.startsWith("/buy/")
+  ) {
+    const back = request.nextUrl.clone();
+    back.searchParams.delete("ref");
+    const check = new URL(`/r/${encodeURIComponent(ref)}`, request.url);
+    check.searchParams.set("to", back.pathname + back.search);
+    return persist(NextResponse.redirect(check, 307));
+  }
+
   if (!toSet.length) return NextResponse.next();
 
   // Expose the new cookies to this same request's server components, then persist them.
   for (const c of toSet) request.cookies.set(c.name, c.value);
-  const response = NextResponse.next({ request: { headers: request.headers } });
-  for (const c of toSet) {
-    response.cookies.set(c.name, c.value, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: c.maxAge,
-    });
-  }
-  return response;
+  return persist(NextResponse.next({ request: { headers: request.headers } }));
 }
 
 export const config = {

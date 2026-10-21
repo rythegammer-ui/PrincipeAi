@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createLoginToken, consumeLoginToken, endStudentSession, startStudentSession } from "@/lib/auth";
+import { createLoginToken, consumeLoginToken, endStudentSession, isAdminRedirect, startStudentSession, startTeamAdminSession } from "@/lib/auth";
 import { logActivity, recomputeScore } from "@/lib/crm";
 import { sendEmail } from "@/lib/email";
 import { isDemoMode } from "@/lib/runtime-mode";
@@ -35,13 +35,22 @@ export async function requestMagicLinkAction(_prev: MagicLinkState, formData: Fo
 
 export type VerifyState = { error?: string };
 
-/** Consumes the magic-link token (POST, so email link scanners can't burn it) and starts a session. */
+/**
+ * Consumes the magic-link token (POST, so email link scanners can't burn it) and starts a session: an admin team
+ * member's for a link into /admin, otherwise a student's (sales agents use the student session for /agent).
+ */
 export async function verifyMagicLinkAction(_prev: VerifyState, formData: FormData): Promise<VerifyState> {
   const token = String(formData.get("token") ?? "");
   const result = await consumeLoginToken(token);
   if (!result) return { error: "This sign-in link is invalid or has expired. Request a new one below." };
+  if (result.kind === "admin") {
+    await startTeamAdminSession(result.member);
+    const to = safeRedirectPath(result.redirectTo, "/admin");
+    redirect(isAdminRedirect(to) ? to : "/admin");
+  }
   await startStudentSession(result.user);
-  if (result.user.contactId) {
+  // A sales agent signing in to /agent isn't a student logging in: no timeline entry or lead-score bump.
+  if (result.user.contactId && !result.redirectTo.startsWith("/agent")) {
     await logActivity(result.user.contactId, "login", "Signed in to the student portal").catch(() => {});
     // Logins count toward the lead score: keep the stored score in step with the timeline.
     await recomputeScore(result.user.contactId).catch(() => {});

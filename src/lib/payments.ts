@@ -14,6 +14,9 @@ import { emailBusinessName, escapeMarkdown, notifyOwner, sendEmail } from "@/lib
 import { testCheckoutAllowed } from "@/lib/integrations";
 import { PaymentLinkSyncBusyError, stripeInstallId, syncPaymentLinks, type PaymentLinkSyncResult } from "@/lib/payment-links";
 import { rateLimit } from "@/lib/rate-limit";
+import { recordAgentSale, reverseAgentSale } from "@/lib/sales/commissions";
+import { normalizeAgentCode } from "@/lib/sales/game";
+import { CLIENT_REFERENCE_PREFIX, referralCodeFromCookie } from "@/lib/sales/referrals";
 import { formatMeetingTime, getBusinessTimezone } from "@/lib/scheduling";
 import { getStripe, paymentIntentId, stripeDashboardUrl, stripeTestMode, type Stripe } from "@/lib/stripe";
 import { absoluteUrl, firstName, formatDate, formatDateTime, formatMoney, isValidEmail, normalizeEmail } from "@/lib/utils";
@@ -150,6 +153,8 @@ export async function createCheckout(input: CheckoutInput): Promise<{ url: strin
       amountCents: item.amountCents,
       currency: site.currency,
       status: "pending",
+      // Started by a visitor who came through a sales agent's link: credited to them once paid (lib/sales/commissions.ts).
+      agentCode: input.itemType === "course" ? await referralCodeFromCookie() : null,
     })
     .returning();
 
@@ -559,6 +564,8 @@ async function recordPurchase(order: Order): Promise<void> {
   if (order.contactId !== contact.id) {
     await db.update(schema.orders).set({ contactId: contact.id }).where(eq(schema.orders.id, order.id));
   }
+  // A customer a sales agent referred: their commission (and a "you made a sale" email). Never blocks the receipt.
+  await recordAgentSale(order, contact.id).catch((err) => console.error("[payments] agent commission failed", order.id, err));
   // They bought — stop the top-of-funnel nurture sequences.
   await stopAutomations(contact.id, "lead_magnet");
   await stopAutomations(contact.id, "quiz_completed");
@@ -843,6 +850,10 @@ async function createPaymentLinkOrder(session: Stripe.Checkout.Session): Promise
   const name = session.customer_details?.name?.trim() || null;
   const amountCents = session.amount_total ?? course?.priceCents ?? 0;
   const { contact } = await upsertContact({ email, name, source: "checkout" });
+  // Started from a sales agent's link (/buy/<course>?ref=CODE, or with their cookie): credited to them once paid.
+  // Anyone can add a client_reference_id to a payment link, but that's no more than buying through the agent's link.
+  const ref = session.client_reference_id;
+  const agentCode = ref?.startsWith(CLIENT_REFERENCE_PREFIX) ? normalizeAgentCode(ref.slice(CLIENT_REFERENCE_PREFIX.length)) : null;
   const [row] = await db
     .insert(schema.orders)
     .values({
@@ -860,6 +871,7 @@ async function createPaymentLinkOrder(session: Stripe.Checkout.Session): Promise
       // Stored now so a refund or dispute finds the order even before it's fulfilled.
       stripePaymentIntentId: paymentIntentId(session.payment_intent),
       isTest: session.livemode === false,
+      agentCode,
     })
     .onConflictDoNothing({ target: schema.orders.stripeSessionId })
     .returning({ id: schema.orders.id });
@@ -874,6 +886,8 @@ async function createPaymentLinkOrder(session: Stripe.Checkout.Session): Promise
       email,
       name,
       source: "checkout",
+      // The webhook has no visitor cookies and the success page does: the order's own code decides, the same either way.
+      claimReferral: false,
       activity: { type: "form", title: `Started checkout: ${course.title} (payment link)`, meta: { courseId: course.id, amountCents, paymentLink: session.payment_link } },
       event: { name: "checkout_started", path: `/courses/${course.slug}`, props: { itemType: "course", courseId: course.id, slug: course.slug, amountCents, via: "payment_link" } },
       stage: "engaged",
@@ -1000,6 +1014,10 @@ export async function refundOrder(
     const removed = await db.delete(schema.enrollments).where(eq(schema.enrollments.orderId, order.id)).returning();
     revoked = removed.length > 0;
   }
+  // The sales agent's commission on it is cancelled (or clawed back from their next payout if already paid). The agent
+  // sees a plain label, never the admin's note or Stripe's dispute reason.
+  const agentReason = opts.source === "stripe" && opts.reason?.startsWith("Dispute lost") ? "Payment disputed" : "Refunded";
+  await reverseAgentSale(order.id, agentReason).catch((err) => console.error("[payments] agent commission reversal failed", order.id, err));
   if (order.contactId) {
     // Test payments never added to lifetime value (see recordPurchase).
     if (!order.isTest) await addLifetimeValue(order.contactId, -order.amountCents);

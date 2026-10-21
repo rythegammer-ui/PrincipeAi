@@ -119,6 +119,8 @@ export default async function ContactPage({ params }: Params) {
   const now = new Date();
   // A link claim holds for the program's window from when it was made; an admin's assignment doesn't lapse.
   const claimEnds = salesAgent && salesAgent.source !== "manual" ? new Date(salesAgent.since.getTime() + salesProgram.attributionDays * 86_400_000) : null;
+  // Removed (or no longer on the team): not in the assignable list, but still this contact's agent until changed.
+  const agentRemoved = Boolean(salesAgent && !agentOptions.some((a) => a.id === salesAgent.agent.id));
   const name = displayName(ct);
   const website = safeWebsiteUrl(ct.website);
   const score = scoreBreakdown(ct, data.scoreActivities);
@@ -286,13 +288,22 @@ export default async function ContactPage({ params }: Params) {
                   {salesAgent.agent.name}
                 </Link>
                 {salesAgent.agent.code && <span className="ml-1.5 font-mono text-xs text-zinc-500">{salesAgent.agent.code}</span>}
+                {agentRemoved && <span className="ml-1.5 text-xs font-medium text-zinc-500">(removed)</span>}
                 <span className="block text-xs text-zinc-500">
                   {salesAgent.source === "manual"
-                    ? `Assigned ${formatDate(salesAgent.since, {}, tz)}. Their purchases earn this agent commission until an admin changes it.`
+                    ? `Assigned ${formatDate(salesAgent.since, {}, tz)}.`
                     : claimEnds && claimEnds.getTime() > now.getTime()
-                      ? `Came through their link ${formatDate(salesAgent.since, {}, tz)}. Their purchases earn this agent commission until ${formatDate(claimEnds, {}, tz)}.`
-                      : `Came through their link ${formatDate(salesAgent.since, {}, tz)}. Lapsed${claimEnds ? ` on ${formatDate(claimEnds, {}, tz)}` : ""}: a purchase through another agent's link now goes to that agent, and one through this agent's link renews it.`}
-                  {salesAgent.agent.status === "paused" && " This agent is paused, so purchases don't earn them anything for now."}
+                      ? `Came through their link ${formatDate(salesAgent.since, {}, tz)}.`
+                      : `Came through their link ${formatDate(salesAgent.since, {}, tz)}. Lapsed${claimEnds ? ` on ${formatDate(claimEnds, {}, tz)}` : ""}: a purchase through another agent's link now goes to that agent, and one through this agent's link renews it.`}{" "}
+                  {salesAgent.agent.status === "approved"
+                    ? salesAgent.source === "manual"
+                      ? "Their purchases earn this agent commission until an admin changes it."
+                      : claimEnds && claimEnds.getTime() > now.getTime()
+                        ? `Their purchases earn this agent commission until ${formatDate(claimEnds, {}, tz)}.`
+                        : ""
+                    : salesAgent.agent.status === "paused"
+                      ? "Paused: their purchases earn nothing until the agent is active again. An assignment keeps the customer theirs; a link claim doesn't stop another agent's link."
+                      : "This agent was removed: purchases earn nothing, and another agent's link can take this customer."}
                 </span>
               </p>
             ) : (
@@ -316,6 +327,13 @@ export default async function ContactPage({ params }: Params) {
                   {/* Remounts with the saved agent after a change (a select doesn't follow a new defaultValue). */}
                   <Select key={salesAgent?.agent.id ?? "none"} id="contact-agent" name="agentId" defaultValue={salesAgent?.agent.id ?? ""}>
                     <option value="">No agent</option>
+                    {/* An agent no longer on the team stays selectable as the current one, so saving unchanged keeps them. */}
+                    {salesAgent && agentRemoved && (
+                      <option value={salesAgent.agent.id}>
+                        {salesAgent.agent.name}
+                        {salesAgent.agent.code ? ` (${salesAgent.agent.code})` : ""} (removed)
+                      </option>
+                    )}
                     {agentOptions.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.name}
@@ -326,6 +344,17 @@ export default async function ContactPage({ params }: Params) {
                   </Select>
                 </Field>
               </ActionForm>
+            )}
+            {salesAgent && salesAgent.source === "link" && !agentRemoved && (
+              <ActionForm
+                action={assignContactAgentAction}
+                hidden={{ contactId: ct.id, agentId: salesAgent.agent.id, permanent: "1" }}
+                submit="Keep with this agent permanently"
+                pendingText="Saving…"
+                variant="ghost"
+                size="sm"
+                className="mt-2"
+              />
             )}
           </Section>
 

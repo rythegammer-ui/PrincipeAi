@@ -62,7 +62,6 @@ Reset the local database with `npm run db:reset-local`.
    | `AUTH_SECRET` | yes | Signs login sessions (at least 16 characters): `openssl rand -base64 32`. Changing it signs **everyone** out, admin and students |
    | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | yes | Your admin dashboard login. The password must be at least 12 characters (use a long, unique one); admin login stays disabled until it and `AUTH_SECRET` are set. Changing the password signs out every admin session |
    | `ADMIN_SESSION_VERSION` | optional | Change it to any new value (e.g. `2`) and redeploy to sign out every admin session without changing the password, e.g. after a lost laptop |
-   | `BUSINESS_POSTAL_ADDRESS` | recommended (sales team) | Your business mailing address (a P.O. box is fine). The sales agents' email scripts include it, as CAN-SPAM requires for promotional email |
    | `ADMIN_TEAM_EMAILS` | optional | Comma-separated emails added to the admin team on the next deploy (full access, sign-in by emailed link). Usually you add people in **Admin → Admin Team** instead; someone removed there isn't added back by this |
    | `NEXT_PUBLIC_SITE_URL` | yes | e.g. `https://principe.ai` (used in emails, Stripe redirects, invites) |
    | `CRON_SECRET` | yes (scheduled jobs) | Any random string (`openssl rand -base64 32`). Vercel Cron sends it to `/api/cron`; **without it every cron run is refused in production**, so follow-up automation emails, booking reminders and hold/checkout cleanup never run |
@@ -172,9 +171,11 @@ at the last run before the call (up to 24 hours ahead). You can also trigger it 
    (30 days by default); a refund or lost dispute before then cancels it, after a payout it's deducted from the next one.
    An open dispute holds the commission until it's resolved, and a partial refund reduces it. Test payments never count
    once the site uses a live Stripe key.
-4. Pay agents outside the app (PayPal, Venmo, Zelle, Cash App, bank), then **Record payout** on the agent's page; it
+4. Set your mailing address in **Admin → Settings → Business** if you haven't: the agents' email scripts include it,
+   as CAN-SPAM requires for promotional email.
+5. Pay agents outside the app (PayPal, Venmo, Zelle, Cash App, bank), then **Record payout** on the agent's page; it
    covers everything owed and emails them. Ask for a W-9 before the first payout; you may need to file 1099s.
-5. Challenges (Admin → Sales Team → Program): a target (sales or sales volume) between two dates and a cash bonus for
+6. Challenges (Admin → Sales Team → Program): a target (sales or sales volume) between two dates and a cash bonus for
    everyone who reaches it. The daily job awards bonuses after a challenge ends; they're payable after the hold period.
 
 ## Scripts

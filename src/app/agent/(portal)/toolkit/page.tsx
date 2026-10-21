@@ -5,6 +5,7 @@ import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { site } from "@/config/site";
 import { listPublishedCourses } from "@/lib/courses";
+import { emailMailingAddress } from "@/lib/email";
 import { agentLinks, currentAgent } from "@/lib/sales/agents";
 import { getSalesProgram } from "@/lib/sales/program";
 import { absoluteUrl, firstName, formatMoney } from "@/lib/utils";
@@ -41,10 +42,12 @@ const TIPS = [
   { title: "Make useful content", body: "Short videos or posts showing one practical AI tip. Point people to the free assessment or a course when they want more." },
 ];
 
-/** The postal address CAN-SPAM requires in promotional email (Settings: BUSINESS_POSTAL_ADDRESS). */
-const mailingAddress = () => site.postalAddress.trim() || "[mailing address: ask the team]";
-
-function scripts(name: string, link: string) {
+/**
+ * Scripts with the agent's name and link. `address`: the business's postal address (Admin → Settings → Business), which
+ * CAN-SPAM requires in promotional email, one line here.
+ */
+function scripts(name: string, link: string, address: string) {
+  const mailingAddress = () => address.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).join(", ") || "[mailing address: ask the team]";
   return [
     {
       title: "Text or DM to someone you know",
@@ -69,7 +72,7 @@ function scripts(name: string, link: string) {
 export default async function AgentToolkitPage() {
   const agent = await currentAgent();
   if (!agent) return <NotAnAgent />;
-  const [program, courses] = await Promise.all([getSalesProgram(), listPublishedCourses()]);
+  const [program, courses, mailingAddress] = await Promise.all([getSalesProgram(), listPublishedCourses(), emailMailingAddress()]);
   const code = agent.code;
   const links = code ? agentLinks(code) : null;
   const paid = courses.filter((c) => c.priceCents > 0);
@@ -127,7 +130,7 @@ export default async function AgentToolkitPage() {
         </CardHeader>
         <CardContent>
           <ul className="grid gap-4 md:grid-cols-2">
-            {scripts(firstName(agent.name, agent.email), links?.short ?? absoluteUrl("/")).map((s) => (
+            {scripts(firstName(agent.name, agent.email), links?.short ?? absoluteUrl("/"), mailingAddress).map((s) => (
               <li key={s.title} className="flex flex-col rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-200">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-zinc-900">{s.title}</p>

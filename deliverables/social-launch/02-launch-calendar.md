@@ -341,6 +341,8 @@ Every row is one post. "Kit" tells you which file holds the copy, link and desig
 
 #### L+0 · Tue Nov 10 · Launch day
 
+> **Launch posts already out (Wed Oct 21, via Postiz).** The owner chose to announce early. TP-01 (LinkedIn), TP-03 (X), TP-05 (Threads), TP-06 (Bluesky) and VC-59 (Facebook) are live, and so is a launch slideshow on Instagram, TikTok and YouTube (ST-01 to ST-06, [stories](stories/README.md), section 8). **Don't post those again on Nov 10.** Use Nov 10 for what's still unposted: LD-01 to LD-03, VC-16, LC-04, LC-08, LC-16, and VC-50/VC-53 once a Pinterest board exists. The [tracker](PROGRESS.md) lists the post IDs.
+
 | Time (ET) | Platform | Post | Kit | Campaign | Notes |
 |---|---|---|---|---|---|
 | 8:30 am | Threads | TP-05 | Text | launch | launch post with a text attachment |

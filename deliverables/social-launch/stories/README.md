@@ -115,4 +115,20 @@ The frames are HTML: edit the words in [source/stories.html](source/stories.html
 node deliverables/social-launch/stories/source/render.mjs
 ```
 
-That rewrites every PNG and `overview.png`. It uses the repo's Playwright. If Playwright's own Chromium isn't installed, set `CHROMIUM_PATH` to a Chromium or Chrome binary. Fonts come from `scripts/course-kit/fonts/`. To preview the agent versions in a browser, add `#agent` to the file's address. Keep all text inside the safe area, which leaves the top 250 px and the bottom 300 px clear.
+That rewrites every PNG (Stories, `video-frames/`, `feed/`) and `overview.png`. Then rebuild the video and the TikTok JPEGs with `bash deliverables/social-launch/stories/source/make-reel.sh` (needs `ffmpeg`). It uses the repo's Playwright. If Playwright's own Chromium isn't installed, set `CHROMIUM_PATH` to a Chromium or Chrome binary. Fonts come from `scripts/course-kit/fonts/`. To preview the agent versions in a browser, add `#agent` to the file's address. Keep all text inside the safe area, which leaves the top 250 px and the bottom 300 px clear.
+
+---
+
+## 8. Feed images and the launch video
+
+The launch announcement also needed formats other than Stories:
+
+| File | What it is | Used for |
+|---|---|---|
+| [video/launch-reel-1080x1920.mp4](video/launch-reel-1080x1920.mp4) | ST-01 to ST-06 as a 23-second slideshow with fades and a silent audio track | Instagram Reel and YouTube Short (Oct 21) |
+| [video-frames/](video-frames/) and [jpg/video-frames/](jpg/video-frames/) | The launch frames laid out for Reels, TikTok and Shorts: no text in the bottom 420 px or the right 130 px, where those apps put the caption and buttons. JPEG copies for TikTok, which doesn't take PNG photos | The video above; the TikTok photo carousel (Oct 21) |
+| [feed/launch-banner-1080x1350.png](feed/launch-banner-1080x1350.png) | TP-01's launch banner: "Learn AI. Implement AI. Grow with AI." | LinkedIn, X and Bluesky launch posts (Oct 21) |
+| [feed/pinterest-vc-50-1000x1500.png](feed/pinterest-vc-50-1000x1500.png) | VC-50's Pin: the 7-day plan as a checklist | Pinterest, once the account has a board |
+
+What went out on each channel, and why some kit lines changed, is in the [tracker](../PROGRESS.md) under "Launch posts".
+

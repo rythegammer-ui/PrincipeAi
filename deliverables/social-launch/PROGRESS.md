@@ -21,6 +21,7 @@ Last updated: Wed Oct 21, 2026 (L-20).
 | 11 | Threads, X, Bluesky, Pinterest website link | Threads, Bluesky and X done (X: Professional, Business, Education). Left: X header image re-upload, X Link Spotlight (check the mobile app), Pinterest website link |
 | 12 | Reddit (personal account About and link; brand account reserved only) | Prompt given; waiting for the rules table |
 | 13 | Profile links on the website (footer, `/links`, search-engine data) | Done for YouTube, Instagram, X, Threads, Facebook, Pinterest, Bluesky and TikTok. **LinkedIn Company Page** added once it exists |
+| 14 | Launch announcement (posted early, Wed Oct 21, via Postiz) | Live on 8 channels; see "Launch posts" below. **Pinterest** waits for a board; Reddit skipped on purpose |
 
 ## Waiting on something
 
@@ -49,7 +50,26 @@ The Page's first post (TP-02) is due **L+1, Wed Nov 11**, so this has about thre
 - **Vercel:** the connector can't reach the team `principeconsults-9234s-projects`, so Claude can't check environment variables, deployments or logs. To fix: claude.ai → Settings → Connectors → Vercel → reconnect, and pick that team on Vercel's approval screen.
 - **AI key:** owner reported it's set. Check: the `/assessment` FAQ "How is my plan created?" should mention Claude. Admin → Settings should show AI as connected.
 
+### Launch posts (Wed Oct 21, via Postiz)
+
+The owner chose to announce the launch now instead of on Nov 10, so these kit posts are used. Don't repost them on launch day ([calendar](02-launch-calendar.md), L+0).
+
+| Channel | Post | What went out | Postiz post id |
+|---|---|---|---|
+| X | TP-03 | The kit text, with "Link below." changed to "Link in our profile." and the launch banner attached (Postiz strips links on X; see the notes) | `cmvi6fvg808r1pg0y4xubhmrw` |
+| Threads | TP-05 | The kit text without the name line; the Day 2 prompt went in a reply instead of a text attachment | `cmvi6g3xc08r7pg0y4bpzcnzv` |
+| Bluesky | TP-06 | The kit text plus the launch banner (Postiz doesn't make link cards) | `cmvi6g69508r9pg0ybxk35doq` |
+| LinkedIn profile | TP-01 | The kit text without the `[YOUR STORY]` line, plus the launch banner | `cmvi6gize08rgpg0y309pocxt` |
+| Facebook Page | VC-59 | The kit text without the name/story line, as a link post to `/free-guide`. **Pin it to the Page** | `cmvi6gl6c08rjpg0y6vt5j1zu` |
+| Instagram | Launch Reel | The 23-second ST-01 to ST-06 slideshow with LD-01's caption, minus prices and the comment keyword | `cmvi6gnzp08rkpg0ym99sqah5` |
+| TikTok | Launch carousel | ST-01 to ST-06 as photos, with music from TikTok's library and the "Your brand" disclosure on | `cmvi6gsas08rppg0y1umi2y9b` |
+| YouTube | Launch Short | The same video, with LD-01's description and the independence line | `cmvi6guhw08rvpg0y5qkt9aav` |
+| Pinterest | VC-50 | **Not posted:** the account has no boards yet. The Pin is ready (`stories/feed/pinterest-vc-50-1000x1500.png`); create the board "Free AI Resources by Principe AI" (B10), then it can go out | – |
+
 ## Notes to remember
+
+- **Postiz strips links from X posts** (this Postiz has `STRIP_LINKS_FROM_X_POSTS` on): every URL **and bare domain** (`principeai.com`) is removed from X posts and replies. Kit X posts that put the link in the first reply (TP-03, TP-04's post 8 and others) need the link reply posted by hand in X, or a "Link in our profile" line instead.
+- **Postiz Bluesky posts get no link card**, only a clickable link. Attach an image, or post from the Bluesky app when the card matters.
 
 - **Handles as connected in Postiz:** Instagram and Threads `principe.ai`; YouTube, TikTok, X, Facebook and Reddit "PrincipeAi"; Pinterest `principeconsults`; Bluesky `principeai.bsky.social`; LinkedIn personal "Ryan Principe". Postiz also has a personal Instagram ("ryan principe"): never schedule to it.
 - **Reddit in Postiz** is the brand account. The kit's rule is to comment from a personal account and never post from the brand account, so don't schedule Reddit posts there.

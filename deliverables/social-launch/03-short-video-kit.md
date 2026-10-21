@@ -655,19 +655,19 @@ Start with my free AI Starter Kit: fifty copy-paste prompts and a seven-day plan
 
 **CTA:** "Start with my free AI Starter Kit. Link's in my profile." · TikTok ending: "DM me KIT and I'll send it over."
 
-**TikTok caption** · 300 characters · first line 53 characters
+**TikTok caption** · 293 characters · first line 53 characters
 ```text
 If you can send a text, you can learn to use AI well.
-I'm [YOUR NAME], and this is Principe AI: practical, plain-English AI for your life and your business. No hype. Something you can use the same day, every video.
+I'm Ryan, and this is Principe AI: practical, plain-English AI for your life and your business. No hype. Something you can use the same day, every video.
 DM me KIT for my free AI Starter Kit.
 #learnai #aiforbeginners #aitips #aiforbusiness
 ```
 
-**Instagram Reels caption** · 463 characters · 5 hashtags
+**Instagram Reels caption** · 456 characters · 5 hashtags
 ```text
 If you can send a text, you can learn to use AI well.
 
-Hi, I'm [YOUR NAME]. Principe AI is practical, plain-English AI education for everyday people and business owners.
+Hi, I'm Ryan. Principe AI is practical, plain-English AI education for everyday people and business owners.
 
 What you'll get here:
 - Practical over hype. If something's a gimmick, I'll say so.
@@ -684,9 +684,9 @@ Comment #prompts and I'll DM you my free AI Starter Kit (50 copy-paste prompts +
 Learn to use AI in plain English: meet Principe AI
 ```
 
-**YouTube Shorts description** · 301 characters
+**YouTube Shorts description** · 294 characters
 ```text
-Hi, I'm [YOUR NAME]. Practical, plain-English AI for your life and your business, using AI assistants like Claude, ChatGPT and Gemini. My free AI Starter Kit is linked on the channel page.
+Hi, I'm Ryan. Practical, plain-English AI for your life and your business, using AI assistants like Claude, ChatGPT and Gemini. My free AI Starter Kit is linked on the channel page.
 Principe AI is independent and not affiliated with Anthropic, OpenAI or Google.
 #learnai #aiforbeginners #aitips
 ```

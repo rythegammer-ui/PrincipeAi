@@ -4,7 +4,7 @@ import { site } from "@/config/site";
 import { linkMatchesCourse, readPaymentLinks } from "@/lib/payment-links";
 import { checkoutMode } from "@/lib/payments";
 import { normalizeAgentCode } from "@/lib/sales/game";
-import { AGENT_COOKIE, CLIENT_REFERENCE_PREFIX } from "@/lib/sales/referrals";
+import { AGENT_COOKIE, agentByCode, CLIENT_REFERENCE_PREFIX } from "@/lib/sales/referrals";
 import { stripeTestMode } from "@/lib/stripe";
 import { isValidEmail, normalizeEmail } from "@/lib/utils";
 
@@ -43,8 +43,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const email = query.get("email")?.trim();
   if (email && email.length <= 254 && isValidEmail(email)) target.searchParams.set("prefilled_email", normalizeEmail(email));
   // A sales agent's link (?ref=CODE), or a visitor who came through one: the sale is theirs (see createPaymentLinkOrder).
+  // A ?ref= that isn't an agent on the team (another site's tag) never replaces the agent remembered in the cookie.
   const cookie = request.headers.get("cookie")?.match(new RegExp(`(?:^|;\\s*)${AGENT_COOKIE}=([^;]*)`))?.[1];
-  const code = normalizeAgentCode(query.get("ref")) ?? normalizeAgentCode(cookie);
+  const refAgent = normalizeAgentCode(query.get("ref")) ? await agentByCode(query.get("ref")) : null;
+  const code = refAgent?.code ?? normalizeAgentCode(cookie);
   if (code) target.searchParams.set("client_reference_id", `${CLIENT_REFERENCE_PREFIX}${code}`);
   return redirect(target);
 }

@@ -21,7 +21,7 @@ export const site = {
     instagram: "https://www.instagram.com/principe.ai/",
     linkedin: "",
     x: "https://x.com/PrincipeAi",
-    tiktok: "",
+    tiktok: "https://www.tiktok.com/@principeai",
     threads: "https://www.threads.com/@principe.ai",
     facebook: "https://www.facebook.com/profile.php?id=61595512175708",
     pinterest: "https://www.pinterest.com/principeconsults/",

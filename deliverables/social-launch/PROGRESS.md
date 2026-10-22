@@ -32,7 +32,7 @@ Claude in Chrome couldn't create the Page on Oct 21. LinkedIn requires:
 1. **At least 2 connections** on the personal profile. Send or accept invites from people you know.
 2. **A personal account older than about 24 hours.** If it's newer, wait a day, then rerun the Step 10 Claude in Chrome prompt.
 3. On the retry, have these ready:
-   - **Company size and organization type.** Both are required. For a solo business: size "0–1 employees". Type "Self-employed" if Principe Consults is a sole proprietorship, "Privately held" if it's an LLC or corporation.
+   - **Company size and organization type.** Both are required. For a solo business: size "0–1 employees". Type "Sole proprietorship" (or "Self-employed" if that isn't listed) if Principe Consults is a sole proprietorship, "Privately held" if it's an LLC or corporation.
    - **Your OK** for the required box confirming you're an authorized representative and agree to LinkedIn's Pages terms.
    - **You upload** the logo (`images/profile-picture-1080.png`) and cover (`images/linkedin-page-cover-4200x700.png`).
 4. **Experience:** the only role is "Owner" at "PrincipeAi", typed as text, not linked to a Page. After the Page exists, edit that role: title "Founder" (or keep "Owner"; both are true), company "Principe AI" picked from the dropdown so the logo shows. Keep "Share profile updates with your network" off until launch day.

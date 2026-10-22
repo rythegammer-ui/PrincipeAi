@@ -2,7 +2,7 @@
 
 > **What this file is:** where we are in the step-by-step launch, what's waiting on something, and notes to come back to. Updated as steps finish. The plan itself is in [README.md](README.md) and [02-launch-calendar.md](02-launch-calendar.md).
 
-Last updated: Wed Oct 21, 2026 (L-20).
+Last updated: Thu Oct 22, 2026 (L-19).
 
 ## Steps
 
@@ -21,7 +21,7 @@ Last updated: Wed Oct 21, 2026 (L-20).
 | 11 | Threads, X, Bluesky, Pinterest website link | Threads, Bluesky and X done (X: Professional, Business, Education). Left: X header image re-upload, X Link Spotlight (check the mobile app), Pinterest website link |
 | 12 | Reddit (personal account About and link; brand account reserved only) | Prompt given; waiting for the rules table |
 | 13 | Profile links on the website (footer, `/links`, search-engine data) | Done for YouTube, Instagram, X, Threads, Facebook, Pinterest, Bluesky and TikTok. **LinkedIn Company Page** added once it exists |
-| 14 | Launch announcement (posted early, Wed Oct 21, via Postiz) | Live on 8 channels; see "Launch posts" below. **Pinterest** waits for a board; Reddit skipped on purpose |
+| 14 | Launch announcement (posted early, Wed Oct 21, via Postiz) | Live on 9 channels (Pinterest on Oct 22, once its first board existed); see "Launch posts" below. Reddit skipped on purpose |
 
 ## Waiting on something
 
@@ -64,7 +64,7 @@ The owner chose to announce the launch now instead of on Nov 10, so these kit po
 | Instagram | Launch Reel | The 23-second ST-01 to ST-06 slideshow with LD-01's caption, minus prices and the comment keyword | `cmvi6gnzp08rkpg0ym99sqah5` |
 | TikTok | Launch carousel | ST-01 to ST-06 as photos, with music from TikTok's library and the "Your brand" disclosure on | `cmvi6gsas08rppg0y1umi2y9b` |
 | YouTube | Launch Short | The same video, with LD-01's description and the independence line | `cmvi6guhw08rvpg0y5qkt9aav` |
-| Pinterest | VC-50 | **Not posted:** the account has no boards yet. The Pin is ready (`stories/feed/pinterest-vc-50-1000x1500.png`); create the board "Free AI Resources by Principe AI" (B10), then it can go out | – |
+| Pinterest | VC-50 | The 7-day plan Pin on the board "Free AI Resources by Principe AI" (B10), posted Thu Oct 22 once the board existed | `cmvjre0vb0blzpt0y3hqk9x3c` |
 
 ## Notes to remember
 

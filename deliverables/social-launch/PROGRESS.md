@@ -15,9 +15,9 @@ Last updated: Thu Oct 22, 2026 (L-19).
 | 5 | Instagram profile | Done |
 | 6 | Facebook Page | Done |
 | 7 | TikTok profile | Done; **business verification pending** |
-| 8 | YouTube channel | Done; **ID/advanced-features verification pending** |
-| 9 | LinkedIn personal profile | Done |
-| 10 | LinkedIn Company Page | **Blocked:** see "LinkedIn Company Page" below |
+| 8 | YouTube channel | Done; **ID/advanced-features verification pending**. Description, links, settings, upload defaults, comment filters and playlists LC-05 to LC-07: run [chrome-prompts/youtube-channel.md](chrome-prompts/youtube-channel.md) (L-18, Fri Oct 23) |
+| 9 | LinkedIn personal profile | Done; finished Oct 22 with [chrome-prompts/linkedin-profile.md](chrome-prompts/linkedin-profile.md) (headline, About, Featured with the launch post, Service Page, sharing on) |
+| 10 | LinkedIn Company Page | Ready to retry with [chrome-prompts/linkedin-company-page.md](chrome-prompts/linkedin-company-page.md) once the account has 2+ connections; see "LinkedIn Company Page" below |
 | 11 | Threads, X, Bluesky, Pinterest website link | Threads, Bluesky and X done (X: Professional, Business, Education). Left: X header image re-upload, X Link Spotlight (check the mobile app), Pinterest website link |
 | 12 | Reddit (personal account About and link; brand account reserved only) | Prompt given; waiting for the rules table |
 | 13 | Profile links on the website (footer, `/links`, search-engine data) | Done for YouTube, Instagram, X, Threads, Facebook, Pinterest, Bluesky and TikTok. **LinkedIn Company Page** added once it exists |

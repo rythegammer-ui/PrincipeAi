@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { OPT_IN_PLACEMENTS, type LeadFormState, type OptInPlacement } from "@/components/marketing/lead-options";
 import { captureGuideOptIn, fieldErrorsOf, grantGuideAccess, isSpam, optInSchema, readFields } from "@/lib/leads";
 import { rateLimitByIp } from "@/lib/rate-limit";
+import { followUpConsentFrom } from "@/lib/sales/referrals";
 
 const FIELDS = ["name", "email", "interest"] as const;
 export type OptInField = (typeof FIELDS)[number];
@@ -36,7 +37,7 @@ export async function optInAction(_prev: OptInState, formData: FormData): Promis
 
   let emailed: boolean;
   try {
-    ({ emailed } = await captureGuideOptIn(parsed.data, PLACEMENT_PATH[placement]));
+    ({ emailed } = await captureGuideOptIn(parsed.data, PLACEMENT_PATH[placement], { agentFollowUpConsent: followUpConsentFrom(formData) }));
   } catch (err) {
     console.error("[leads] opt-in failed", err);
     return { error: "Something went wrong on our side. Please try again in a moment.", values };

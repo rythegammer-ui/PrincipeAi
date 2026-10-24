@@ -1,6 +1,42 @@
+import type { Browser, Page } from "@playwright/test";
 import { expect, openLoggedEmail, openSignInLink, randomClientIp, signInAsStudent, test, uniqueEmail } from "./helpers";
 
 const COURSE = { slug: "ai-essentials", title: "AI Essentials" };
+
+/** Applies on /sales-team, gets approved by the admin and signs in to the agent portal in its own browser. */
+async function newSignedInAgent(browser: Browser, baseURL: string | undefined, adminPage: Page, firstName: string) {
+  const email = uniqueEmail(`agent-${firstName.toLowerCase()}`);
+  const context = await browser.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": randomClientIp() } });
+  const agent = await context.newPage();
+  await agent.goto("/sales-team");
+  await agent.getByLabel(/^Full name\*?$/).fill(`${firstName} Agent`);
+  await agent.getByLabel(/^Email\*?$/).fill(email);
+  await agent.getByLabel(/^Phone\*?$/).fill("512-555-0100");
+  await agent.getByLabel(/^City\*?$/).fill("Austin");
+  await agent.getByLabel(/^State\*?$/).selectOption("TX");
+  await agent.getByLabel("Some sales or customer-facing experience").check();
+  await agent.getByLabel(/^Time you can give it\*?$/).selectOption({ index: 2 });
+  await agent.getByLabel(/^How would you find customers\?\*?$/).fill("Local businesses in my neighborhood.");
+  await agent.getByLabel(/I've read and agree to the/).check();
+  await agent.getByLabel(/18 or older/).check();
+  await agent.getByRole("button", { name: "Send my application" }).click();
+  await expect(agent.getByRole("heading", { name: /application received/ })).toBeVisible();
+
+  await adminPage.goto("/admin/sales");
+  await adminPage.getByRole("listitem").filter({ hasText: email }).getByRole("button", { name: "Approve" }).click();
+  const row = adminPage.getByRole("row").filter({ hasText: email });
+  const pattern = new RegExp(`${firstName.toUpperCase()}\\d{2}`);
+  await expect(row).toContainText(pattern);
+  const code = (await row.textContent())!.match(pattern)![0];
+
+  await agent.goto("/agent/login");
+  await agent.getByLabel("Email address").fill(email);
+  await agent.getByRole("button", { name: "Email me a sign-in link" }).click();
+  const devLink = agent.getByRole("link", { name: "Sign in now" });
+  await openSignInLink(agent, (await devLink.getAttribute("href"))!, "Continue to my dashboard");
+  await expect(agent).toHaveURL(/\/agent$/);
+  return { agent, context, code, email };
+}
 
 test.describe("sales team", () => {
   test("apply → approved → agent signs in → a customer buys through their link → the sale is on their dashboard", async ({ page, adminPage, browser, baseURL }) => {
@@ -80,6 +116,75 @@ test.describe("sales team", () => {
 
     await agentContext.close();
     await customerContext.close();
+  });
+
+  test("an agent adds a business, writes a first message and tracks it; a visitor who agrees becomes a warm lead", async ({ adminPage, browser, baseURL }) => {
+    const { agent, context, code } = await newSignedInAgent(browser, baseURL, adminPage, "Quinn");
+    const business = `Maple Street Dental ${Date.now().toString(36)}`;
+
+    await agent.getByRole("navigation").getByRole("link", { name: "Leads" }).first().click();
+    await expect(agent.getByRole("heading", { level: 1, name: "Leads" })).toBeVisible();
+    // No Google key in this run: search is off, adding by hand still works.
+    await expect(agent.getByText("Business search isn't switched on yet")).toBeVisible();
+    await agent.getByText("Add a business you found yourself").click();
+    const addForm = agent.locator("form").filter({ has: agent.getByRole("button", { name: "Add business" }) });
+    await addForm.getByLabel(/^Business name\*?$/).fill(business);
+    await addForm.getByLabel("Kind of business").fill("Dental practice");
+    await addForm.getByLabel("Website").fill(`maple-${Date.now().toString(36)}.example.com`);
+    await addForm.getByRole("button", { name: "Add business" }).click();
+    await expect(agent).toHaveURL(/\/agent\/leads\/[0-9a-f-]{36}$/);
+    await expect(agent.getByRole("heading", { level: 1, name: business })).toBeVisible();
+
+    // Its tracked link opens the assessment.
+    const link = (await agent.locator("code").filter({ hasText: `/r/${code}` }).textContent())!.trim();
+    expect(link).toMatch(new RegExp(`/r/${code}\\?to=%2Fassessment&p=[A-Za-z0-9_-]{12}$`));
+
+    // A first email (the built-in template: no AI key), with the parts the rules need.
+    await agent.getByRole("button", { name: "Write my message" }).click();
+    const message = agent.locator("[aria-live=polite]").filter({ hasText: "Your message" });
+    await expect(message).toContainText(link);
+    await expect(message).toContainText("Full disclosure: I'm an independent sales agent");
+    await expect(message).toContainText('Reply "stop"');
+    await expect(message).toContainText("Quinn");
+    await agent.getByRole("button", { name: /I sent it: mark as contacted/ }).click();
+    await expect(agent.getByText(/Marked as contacted/)).toBeVisible();
+
+    // A visitor follows the business's link, then gets the free kit and says the agent may follow up.
+    const visitorContext = await browser.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": randomClientIp() } });
+    const visitor = await visitorContext.newPage();
+    const visitorEmail = uniqueEmail("warm");
+    await visitor.goto(new URL(link).pathname + new URL(link).search);
+    await expect(visitor).toHaveURL(/\/assessment$/);
+    await visitor.goto("/free-guide");
+    const form = visitor.locator("form").filter({ has: visitor.getByRole("button", { name: /Send me the free kit/ }) }).first();
+    await form.getByLabel("First name").fill("Dana");
+    await form.getByRole("textbox", { name: /^Email/ }).fill(visitorEmail);
+    await form.getByText("My business", { exact: true }).click();
+    const consent = form.getByLabel(/OK for Quinn, the independent sales agent/);
+    await expect(consent).not.toBeChecked();
+    await consent.check();
+    await form.getByRole("button", { name: /Send me the free kit/ }).click();
+    await expect(visitor.getByRole("heading", { level: 1, name: /Your kit is ready/ })).toBeVisible();
+
+    await agent.goto("/agent/leads");
+    const row = agent.getByRole("row").filter({ hasText: business });
+    await expect(row).toContainText("Contacted");
+    await expect(row).toContainText("Signed up");
+    await expect(agent.getByRole("row").filter({ hasText: visitorEmail })).toContainText("AI Starter Kit");
+
+    // The admin sees who's working which business.
+    await adminPage.goto("/admin/sales/prospects");
+    await expect(adminPage.getByRole("row").filter({ hasText: business })).toContainText("Quinn Agent");
+
+    // Visitors who didn't come through an agent's link never see the box.
+    const plainContext = await browser.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": randomClientIp() } });
+    const plain = await plainContext.newPage();
+    await plain.goto("/free-guide");
+    await expect(plain.getByText(/independent sales agent who shared this link/)).toHaveCount(0);
+
+    await plainContext.close();
+    await visitorContext.close();
+    await context.close();
   });
 
   test("an admin adds a team member, who signs in with a one-time link and is signed out when removed", async ({ adminPage, browser, baseURL }) => {

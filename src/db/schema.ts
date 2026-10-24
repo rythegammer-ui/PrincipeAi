@@ -645,8 +645,67 @@ export const agentReferrals = pgTable(
     /** "link" (their referral link) | "manual" (assigned in admin). */
     source: text("source").notNull().default("link"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When the contact ticked "OK for <agent> to follow up with me" on the form that made them this agent's customer.
+     * Only then does the agent see their name and email (Leads → Warm leads); unsubscribing hides them again.
+     */
+    followUpConsentAt: timestamp("follow_up_consent_at", { withTimezone: true }),
   },
   (t) => [index("agent_referrals_agent_idx").on(t.agentId)],
+);
+
+/** new → contacted → replied; or not interested / do not contact. Signed up and customer come from the linked contact. */
+export type ProspectStatus = "new" | "contacted" | "replied" | "not_interested" | "do_not_contact";
+
+/**
+ * Businesses a sales agent is reaching out to (Agent portal → Leads). One active row per business across the team: the
+ * agent who adds it keeps it while they're working it (lib/sales/prospects.ts claim rules); "do not contact" blocks it
+ * for everyone. From Google search we keep only the place ID and the name the agent saved: Google's terms don't allow
+ * storing other Places data, so the address, website and phone are fetched again when the agent opens the prospect.
+ */
+export const agentProspects = pgTable(
+  "agent_prospects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => salesAgents.id, { onDelete: "cascade" }),
+    /** Google Places place ID (from search), or null for a business the agent added by hand. */
+    placeId: text("place_id"),
+    name: text("name").notNull(),
+    /** What kind of business, as the agent searched or typed it ("dentist"). */
+    category: text("category"),
+    /** Where, as the agent searched or typed it ("Tampa, FL"). */
+    area: text("area"),
+    /** Website, phone and email the agent typed in themselves (never copied from Google). */
+    website: text("website"),
+    /** Lowercased host of `website` without "www.", for spotting the same business twice. */
+    domain: text("domain"),
+    phone: text("phone"),
+    email: text("email"),
+    notes: text("notes"),
+    status: text("status").$type<ProspectStatus>().notNull().default("new"),
+    /** Short random token for this prospect's tracked link (/r/CODE?p=TOKEN). */
+    linkToken: text("link_token").notNull(),
+    /** The contact who signed up through this prospect's link. */
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    signedUpAt: timestamp("signed_up_at", { withTimezone: true }),
+    lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
+    nextFollowUpAt: timestamp("next_follow_up_at", { withTimezone: true }),
+    /** Last time the agent worked this prospect; the claim runs out a while after it (lib/sales/prospects.ts). */
+    activeAt: timestamp("active_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set when the agent's claim ended (expired and taken over, or released by an admin); the row is then history. */
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    releaseReason: text("release_reason"),
+    ...timestamps,
+  },
+  (t) => [
+    // One active claim per business: by Google place, or by website for businesses added by hand.
+    uniqueIndex("agent_prospects_place_active_idx").on(t.placeId).where(sql`${t.releasedAt} is null and ${t.placeId} is not null`),
+    uniqueIndex("agent_prospects_domain_active_idx").on(t.domain).where(sql`${t.releasedAt} is null and ${t.domain} is not null`),
+    uniqueIndex("agent_prospects_link_token_idx").on(t.linkToken),
+    index("agent_prospects_agent_idx").on(t.agentId, t.releasedAt),
+  ],
 );
 
 export type ChallengeMetric = "sales" | "revenue";
@@ -777,3 +836,4 @@ export type SalesAgent = typeof salesAgents.$inferSelect;
 export type AgentCommission = typeof agentCommissions.$inferSelect;
 export type AgentPayout = typeof agentPayouts.$inferSelect;
 export type AgentChallenge = typeof agentChallenges.$inferSelect;
+export type AgentProspect = typeof agentProspects.$inferSelect;

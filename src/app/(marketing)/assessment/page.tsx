@@ -1,6 +1,7 @@
 import { ArrowDown, Clock, Compass, FileText, Gauge, Gift, Layers, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import { AssessmentQuiz } from "@/components/assessment/assessment-quiz";
+import { referringAgent } from "@/lib/sales/referrals";
 import { ButtonLink } from "@/components/ui/button";
 import { aiEnabled } from "@/lib/ai";
 import { TIERS } from "@/lib/assessment";
@@ -65,7 +66,8 @@ function getFaqs(aiOn: boolean) {
   ];
 }
 
-export default function AssessmentPage() {
+export default async function AssessmentPage() {
+  const referrer = await referringAgent();
   const faqs = getFaqs(aiEnabled());
   return (
     <>
@@ -133,7 +135,7 @@ export default function AssessmentPage() {
               There are no wrong answers. Pick whatever is closest — you can go back and change anything before you see your results.
             </p>
           </div>
-          <AssessmentQuiz />
+          <AssessmentQuiz referrer={referrer} />
         </div>
       </section>
 

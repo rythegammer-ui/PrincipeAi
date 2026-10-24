@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { FreeGuideLanding } from "@/components/marketing/free-guide-landing";
 import { starterKit } from "@/content/starter-kit";
+import { referringAgent } from "@/lib/sales/referrals";
 import { shareMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -10,6 +11,6 @@ export const metadata: Metadata = {
   ...shareMetadata({ title: "The free AI Starter Kit · Principe AI", description: starterKit.subtitle, url: "/free-guide" }),
 };
 
-export default function FreeGuidePage() {
-  return <FreeGuideLanding kit={starterKit} />;
+export default async function FreeGuidePage() {
+  return <FreeGuideLanding kit={starterKit} referrer={await referringAgent()} />;
 }

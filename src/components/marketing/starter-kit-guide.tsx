@@ -8,6 +8,7 @@ import { pluralize } from "@/lib/utils";
 import { CtaCard } from "./cta-band";
 import { DayCard, LockedDays, PromptLibrary, TipsGrid } from "./guide-sections";
 import { GuideViewTracker } from "./guide-view-tracker";
+import type { ReferringAgent } from "./agent-follow-up-consent";
 import { OptInForm } from "./opt-in-form";
 import { Accent, Section, SectionHeading } from "./section";
 import { kitStats } from "./starter-kit-utils";
@@ -23,6 +24,7 @@ export function StarterKitGuide({
   greetingName,
   welcome,
   welcomeEmailed = true,
+  referrer,
 }: {
   kit: StarterKit;
   unlocked: boolean;
@@ -31,6 +33,8 @@ export function StarterKitGuide({
   welcome: boolean;
   /** Whether that opt-in emailed (or queued) the kit link, which the banner then mentions. */
   welcomeEmailed?: boolean;
+  /** The sales agent whose link brought the visitor (optional follow-up consent on the opt-in form). */
+  referrer?: ReferringAgent | null;
 }) {
   const stats = kitStats(kit);
   const hasContent = stats.days > 0 || stats.prompts > 0 || stats.tips > 0;
@@ -228,7 +232,7 @@ export function StarterKitGuide({
             <div className="rounded-3xl border border-zinc-200/80 bg-white p-6 shadow-lift sm:p-8">
               <h2 className="text-lg font-semibold tracking-tight text-zinc-900">Get free, instant access</h2>
               <p className="mt-1 text-sm text-zinc-500">Already signed up? Open the link in your welcome email, or simply enter your details again.</p>
-              <OptInForm placement="guide" submitLabel="Unlock the full kit" className="mt-6" />
+              <OptInForm placement="guide" submitLabel="Unlock the full kit" className="mt-6" referrer={referrer} />
             </div>
           </div>
         </Section>

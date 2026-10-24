@@ -76,6 +76,9 @@ Reset the local database with `npm run db:reset-local`.
    | `BUSINESS_TIMEZONE` | optional | Default `America/New_York` (also editable in Admin → Settings) |
    | `CRON_INTERVAL_HOURS` | optional | How often the cron runs, in hours (default `24`). Set `1` if you switch `vercel.json` to an hourly schedule |
    | `DEMO_MODE` | optional | `1` runs a deployment without a database as a throwaway demo (see step 2). Leave unset in production |
+   | `GOOGLE_MAPS_API_KEY` | optional | Turns on the business search in the sales agents' **Leads** tab (Google Places API). Without it agents add businesses by hand. Setup under [Sales team](#sales-team) |
+   | `PLACES_SEARCHES_PER_AGENT_PER_DAY`, `PLACES_DETAILS_PER_AGENT_PER_DAY` | optional | Per-agent daily caps on Google searches (default `25`) and contact-detail lookups (default `60`) |
+   | `PLACES_SEARCHES_PER_MONTH`, `PLACES_DETAILS_PER_MONTH` | optional | Team-wide caps per 30 days (default `1000` each, about Google's free monthly allowance for each call type). Past a cap, search pauses until it resets |
 
 4. **Stripe payment links and webhook**: nothing to do by hand. On every production deploy with `STRIPE_SECRET_KEY`
    set, the build creates or updates a Stripe Product, Price and Payment Link for each paid, published course. It
@@ -177,6 +180,23 @@ at the last run before the call (up to 24 hours ahead). You can also trigger it 
    covers everything owed and emails them. Ask for a W-9 before the first payout; you may need to file 1099s.
 6. Challenges (Admin → Sales Team → Program): a target (sales or sales volume) between two dates and a cash bonus for
    everyone who reaches it. The daily job awards bonuses after a challenge ends; they're payable after the hold period.
+7. **Leads** (`/agent/leads`): agents search Google for local businesses (or add ones they found themselves), claim
+   them, write a personal first message in one click (AI-written when `ANTHROPIC_API_KEY` is set; the message always
+   ends with the agent's tracked link, the commission disclosure and, for email, an opt-out line and your mailing
+   address), copy it into their own email or phone, and track status and follow-ups. A business belongs to one agent at
+   a time; the claim runs out 30 days after the agent last works on it. **Do not contact** blocks a business for the
+   whole team until you clear it in **Admin → Sales Team → Prospects**, where you can also release any claim. Someone
+   who signs up through a business's tracked link is linked to that prospect and becomes the agent's customer.
+8. **Warm leads**: when a visitor arrives through an agent's link, the free guide, assessment and contact forms show an
+   optional box "OK for {agent} to follow up with me personally". People who tick it (and are new to your CRM) appear
+   in that agent's Leads tab with their email; anyone who unsubscribes drops off. Nobody else's details are shared.
+9. **Turning on Google business search** (optional, pay-as-you-go): in [Google Cloud Console](https://console.cloud.google.com)
+   create a project, add billing, enable **Places API (New)**, then **APIs & Services → Credentials → Create API key**.
+   Restrict the key to *Places API (New)* (API restrictions); it's only used from the server, so no website restriction
+   is needed. Set it as `GOOGLE_MAPS_API_KEY` in Vercel and redeploy. In **Billing → Budgets & alerts** set a budget
+   (e.g. $10/month) so you're emailed before any charge grows. The built-in caps (table above) keep normal use inside
+   Google's free monthly allowance. Business names and Google IDs are the only Google data saved; address, website and
+   phone are fetched fresh each time an agent opens a business, as Google's terms require.
 
 ## Scripts
 

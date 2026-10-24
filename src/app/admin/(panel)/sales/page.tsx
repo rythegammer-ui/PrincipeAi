@@ -1,5 +1,5 @@
 import { and, gte, lt, sql } from "drizzle-orm";
-import { DollarSign, ExternalLink, Inbox, Settings2, Trophy, Users } from "lucide-react";
+import { Building2, DollarSign, ExternalLink, Inbox, Settings2, Trophy, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CopyButton } from "@/components/marketing/copy-button";
@@ -70,6 +70,9 @@ export default async function SalesTeamPage({ searchParams }: { searchParams: Pr
           <>
             <Link href="/admin/sales/program" className={buttonVariants({ variant: "outline", className: "min-h-11 sm:min-h-10" })}>
               <Settings2 aria-hidden /> Program &amp; challenges
+            </Link>
+            <Link href="/admin/sales/prospects" className={buttonVariants({ variant: "outline", className: "min-h-11 sm:min-h-10" })}>
+              <Building2 aria-hidden /> Prospects
             </Link>
             <a href="/sales-team" target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost", className: "min-h-11 sm:min-h-10" })}>
               Public page <ExternalLink aria-hidden />

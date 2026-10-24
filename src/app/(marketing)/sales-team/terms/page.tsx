@@ -12,7 +12,7 @@ import { absoluteUrl, formatMoney } from "@/lib/utils";
  * LAST_UPDATED whenever you change it. Rates, the hold period, the attribution window and the payout schedule are
  * read from Admin → Sales Team → Program, so the page always shows the current numbers.
  */
-const LAST_UPDATED = "October 20, 2026";
+const LAST_UPDATED = "October 24, 2026";
 
 export const metadata: Metadata = {
   title: "Sales Agent Program Terms",
@@ -105,9 +105,19 @@ You represent our brand, so please promote it honestly and lawfully. You must:
 - Follow the rules of every platform you use (social networks, marketplaces, groups and forums).
 - Send customers to us for questions about refunds, access or support. Don't promise refunds or exceptions.
 
+**Reaching out to businesses (the Leads tab in your dashboard).** The Leads tab helps you find local businesses, write a first message and track follow-ups. When you use it:
+
+- Contact **one business at a time, as yourself.** Don't send bulk or automated messages, and don't load prospects into another mailing or dialing tool.
+- Use a business's **public business contact details** (its website, business phone or business email) or details the business gave you. Don't buy, rent or scrape contact lists, and don't guess personal email addresses.
+- Keep the **commission disclosure** in every message, and in email the opt-out line and our mailing address. The messages the Leads tab writes include them.
+- **No texts to cell phones** without the person's prior consent, and no auto-dialers, recorded calls or calls to numbers on the Do Not Call Registry.
+- If anyone says no, "stop" or asks not to be contacted, **mark the business "Do not contact" straight away.** That blocks it for the whole team. Follow up at most twice with anyone who hasn't replied.
+- A business you add is yours while you're working on it: the claim runs out 30 days after you last update it (90 days once it's marked "Not interested"), and then another agent may contact it. We may release a claim at any time.
+- Business search results come from Google Maps. Use them only to find businesses to contact through the Leads tab, and don't copy them into other lists.
+
 ## 10. Customer information
 
-Treat anything you learn about customers or prospects through the Program as confidential. Don't sell or share it, and only use it to help them with our courses. Our dashboard never shows you customers' names or emails; please don't ask us for them.
+Treat anything you learn about customers or prospects through the Program as confidential. Don't sell or share it, and only use it to help them with our courses. Your dashboard doesn't show customers' names or emails, with one exception: someone who signs up through your link and ticks the box saying it's OK for you to follow up appears under **Warm leads** with their name and email. Use those details only to follow up with them personally about ${site.name}, never add them to a mailing list or share them, and stop as soon as they ask. If they unsubscribe, they disappear from your list. Please don't ask us for anyone else's details.
 
 ## 11. Our name and materials
 

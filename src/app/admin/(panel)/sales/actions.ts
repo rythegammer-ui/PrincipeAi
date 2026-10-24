@@ -11,6 +11,7 @@ import { approveAgent, rejectAgent, setAgentCode, setAgentStatus } from "@/lib/s
 import { addAgentAdjustment, cancelChallenge, PayoutChangedError, recordPayout, voidCommission } from "@/lib/sales/commissions";
 import { MAX_RATE_BPS } from "@/lib/sales/game";
 import { getSalesProgram, saveSalesProgram } from "@/lib/sales/program";
+import { adminReleaseProspect } from "@/lib/sales/prospects";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { formatMoney } from "@/lib/utils";
 
@@ -271,4 +272,22 @@ export async function cancelChallengeAction(_prev: SalesFormState, fd: FormData)
   revalidatePath("/admin/sales", "layout");
   if (!cancelled) return { error: "Only challenges that haven't been awarded yet can be cancelled." };
   return { ok: true, message: "Challenge cancelled." };
+}
+
+/* ------------------------------------------------------------------ */
+/* Prospects (agents' business outreach)                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Ends an agent's claim on a business: frees it for other agents, or clears "do not contact" (only when the business
+ * has asked to hear from us again). The row stays as history.
+ */
+export async function releaseProspectAction(_prev: SalesFormState, fd: FormData): Promise<SalesFormState> {
+  const session = await assertAdmin();
+  const id = Id.safeParse(str(fd, "prospectId"));
+  if (!id.success) return { error: "That prospect couldn't be found." };
+  const released = await adminReleaseProspect(id.data, `released by ${session.email}`);
+  if (!released) return { error: "That prospect was already released." };
+  revalidatePath("/admin/sales/prospects");
+  return { ok: true, message: "Released. Any agent can add this business again." };
 }

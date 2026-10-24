@@ -1,12 +1,13 @@
 "use client";
 
-import { LayoutDashboard, Wrench } from "lucide-react";
+import { Building2, LayoutDashboard, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/agent", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/agent/leads", label: "Leads", icon: Building2 },
   { href: "/agent/toolkit", label: "Toolkit", icon: Wrench },
 ] as const;
 
@@ -15,7 +16,7 @@ export function AgentNav() {
   return (
     <nav aria-label="Agent portal" className="flex items-center gap-1">
       {LINKS.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href;
+        const active = href === "/agent" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}
@@ -27,7 +28,7 @@ export function AgentNav() {
             )}
           >
             <Icon className="size-4" aria-hidden />
-            {label}
+            <span className="max-[399px]:sr-only">{label}</span>
           </Link>
         );
       })}

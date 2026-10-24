@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Field, Input } from "@/components/ui/form";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
+import { AgentFollowUpConsent, type ReferringAgent } from "./agent-follow-up-consent";
 import { Honeypot } from "./honeypot";
 import { INTEREST_OPTIONS, type OptInPlacement } from "./lead-options";
 
@@ -15,10 +16,13 @@ export function OptInForm({
   placement,
   submitLabel = "Send me the free kit",
   className,
+  referrer,
 }: {
   placement: OptInPlacement;
   submitLabel?: string;
   className?: string;
+  /** The sales agent whose link brought the visitor: shows the optional follow-up consent box. */
+  referrer?: ReferringAgent | null;
 }) {
   const [state, action] = useActionState<OptInState, FormData>(optInAction, {});
   const id = (field: string) => `optin-${placement}-${field}`;
@@ -78,6 +82,8 @@ export function OptInForm({
           </p>
         )}
       </fieldset>
+
+      <AgentFollowUpConsent agent={referrer} id={id("agent-follow-up")} />
 
       <SubmitButton size="lg" className="mt-1 w-full" pendingText="Unlocking your kit…">
         {submitLabel} <ArrowRight aria-hidden />

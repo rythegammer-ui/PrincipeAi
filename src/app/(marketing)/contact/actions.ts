@@ -3,6 +3,7 @@
 import type { LeadFormState } from "@/components/marketing/lead-options";
 import { captureContactMessage, contactSchema, fieldErrorsOf, isSpam, readFields } from "@/lib/leads";
 import { rateLimitByIp } from "@/lib/rate-limit";
+import { followUpConsentFrom } from "@/lib/sales/referrals";
 import { firstName } from "@/lib/utils";
 
 const FIELDS = ["name", "email", "topic", "message"] as const;
@@ -21,7 +22,7 @@ export async function sendContactMessageAction(_prev: ContactState, formData: Fo
   if (!limit.ok) return { error: "Too many messages in a short time. Please wait a few minutes, or email us directly.", values };
 
   try {
-    await captureContactMessage(parsed.data);
+    await captureContactMessage(parsed.data, { agentFollowUpConsent: followUpConsentFrom(formData) });
   } catch (err) {
     console.error("[leads] contact form failed", err);
     return { error: "Your message couldn't be sent just now. Please try again, or email us directly.", values };

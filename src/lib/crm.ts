@@ -185,6 +185,8 @@ export async function upsertContact(input: UpsertContactInput): Promise<{ contac
 export type CaptureLeadInput = Omit<UpsertContactInput, "visitor"> & {
   /** False when the visitor's referral cookie must not claim a new contact (payment-link orders carry their own code). */
   claimReferral?: boolean;
+  /** The agent code shown in a ticked "OK for <agent> to follow up with me" box (lib/sales/referrals.ts). */
+  agentFollowUpConsent?: string | null;
   /** Timeline entry describing what the lead just did. */
   activity: { type: ActivityType; title: string; body?: string | null; meta?: Record<string, unknown> };
   /** Funnel event to record (e.g. "optin"). */
@@ -206,7 +208,7 @@ export async function captureLead(input: CaptureLeadInput): Promise<{ contact: C
   const visitor = await getVisitorContext().catch(() => null);
   const { contact, created } = await upsertContact({ ...input, visitor });
   // A new contact who came through a sales agent's link becomes that agent's customer (lib/sales/referrals.ts).
-  if (created && input.claimReferral !== false) await claimNewContactFromCookie(contact.id);
+  if (created && input.claimReferral !== false) await claimNewContactFromCookie(contact.id, { followUpConsentCode: input.agentFollowUpConsent });
   await logActivity(contact.id, input.activity.type, input.activity.title, { body: input.activity.body, meta: input.activity.meta });
   if (input.event) {
     await trackEvent({ name: input.event.name, path: input.event.path, props: input.event.props, contactId: contact.id, visitorId: visitor?.visitorId });

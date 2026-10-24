@@ -57,6 +57,8 @@ function serverEnv(siteUrl: string, anthropic?: { baseUrl: string }): Record<str
     AI_DAILY_LIMIT: "",
     AI_TUTOR_DAILY_LIMIT: "",
     DEMO_MODE: "",
+    // Agents add businesses by hand in the e2e run (no Google search calls).
+    GOOGLE_MAPS_API_KEY: "",
     VERCEL: "",
     ADMIN_EMAIL: E2E_ADMIN.email,
     ADMIN_PASSWORD: E2E_ADMIN.password,

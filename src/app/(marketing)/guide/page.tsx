@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { StarterKitGuide } from "@/components/marketing/starter-kit-guide";
 import { starterKit } from "@/content/starter-kit";
 import { getGuideAccess } from "@/lib/leads";
+import { referringAgent } from "@/lib/sales/referrals";
 import { firstName } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -20,7 +21,7 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) 
  */
 export default async function GuidePage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
-  const { unlocked, contact } = await getGuideAccess(one(sp.src));
+  const [{ unlocked, contact }, referrer] = await Promise.all([getGuideAccess(one(sp.src)), referringAgent()]);
   return (
     <StarterKitGuide
       kit={starterKit}
@@ -28,6 +29,7 @@ export default async function GuidePage({ searchParams }: { searchParams: Promis
       greetingName={contact?.name ? firstName(contact.name) : null}
       welcome={unlocked && one(sp.welcome) === "1"}
       welcomeEmailed={one(sp.sent) !== "0"}
+      referrer={unlocked ? null : referrer}
     />
   );
 }

@@ -5,6 +5,7 @@ import { pluralize } from "@/lib/utils";
 import { CopyButton } from "./copy-button";
 import { Faq, type FaqItem } from "./faq";
 import { CheckList, FeatureCard } from "./feature-card";
+import type { ReferringAgent } from "./agent-follow-up-consent";
 import { OptInForm } from "./opt-in-form";
 import { PageHero } from "./page-hero";
 import { Accent, Section, SectionHeading } from "./section";
@@ -49,7 +50,7 @@ const FAQS: FaqItem[] = [
 ];
 
 /** The /free-guide opt-in landing page, driven by the Starter Kit content (any array may be empty). */
-export function FreeGuideLanding({ kit }: { kit: StarterKit }) {
+export function FreeGuideLanding({ kit, referrer }: { kit: StarterKit; referrer?: ReferringAgent | null }) {
   const stats = kitStats(kit);
   const included = [
     stats.days > 0 && {
@@ -105,7 +106,7 @@ export function FreeGuideLanding({ kit }: { kit: StarterKit }) {
                   <p className="text-sm text-zinc-500">Free · opens straight away</p>
                 </div>
               </div>
-              <OptInForm placement="free-guide" className="mt-6" />
+              <OptInForm placement="free-guide" className="mt-6" referrer={referrer} />
             </div>
           </div>
         }

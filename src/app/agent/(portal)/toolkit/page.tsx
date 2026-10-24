@@ -36,6 +36,7 @@ const DONTS = [
 
 const TIPS = [
   { title: "Start with people you know", body: "Friends, family, former colleagues and clients who've mentioned AI, or who are stretched for time. A personal note beats any post." },
+  { title: "Local businesses", body: "Open the Leads tab to find businesses near you, write a personal first message in one click and get a reminder to follow up. Each business has its own tracked link." },
   { title: "Local business groups", body: "Chambers of commerce, BNI chapters, co-working spaces and meetups. Small-business owners are a natural fit for the business courses." },
   { title: "LinkedIn", body: "Share what you've learned about using AI at work, and mention the courses where they genuinely fit. Comment helpfully on others' posts." },
   { title: "Community events", body: "Libraries, community colleges, churches and clubs often welcome a short “AI for everyday life” talk. Ask the organizer first." },

@@ -19,6 +19,7 @@ import { agentBalance, agentLedger, DISPUTE_HOLD_CAP, DISPUTE_NOTE, livePayments
 import { formatRate, standing } from "@/lib/sales/game";
 import { EXPERIENCE_OPTIONS, HOURS_OPTIONS, optionLabel, PAYOUT_METHODS, stateName } from "@/lib/sales/options";
 import { getSalesProgram } from "@/lib/sales/program";
+import { prospectCounts } from "@/lib/sales/prospects";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { formatDate, formatDateTime, formatMoney } from "@/lib/utils";
 import {
@@ -92,7 +93,7 @@ export default async function SalesAgentPage({ params }: Params) {
 
   const db = await getDb();
   const now = new Date();
-  const [tz, program, balance, ledger, payouts, customers, monthly] = await Promise.all([
+  const [tz, program, balance, ledger, payouts, customers, monthly, prospects] = await Promise.all([
     getBusinessTimezone(),
     getSalesProgram(),
     agentBalance(agent.id),
@@ -112,6 +113,7 @@ export default async function SalesAgentPage({ params }: Params) {
       .orderBy(desc(schema.agentReferrals.createdAt))
       .limit(50),
     monthlySales(agent.id, now),
+    prospectCounts(agent.id),
   ]);
   const orderIds = [...new Set(ledger.map((r) => r.orderId).filter((v): v is string => Boolean(v)))];
   const orders = orderIds.length
@@ -444,6 +446,36 @@ export default async function SalesAgentPage({ params }: Params) {
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Prospects</CardTitle>
+              <CardDescription>Businesses this agent is reaching out to from their Leads tab.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-zinc-500">Active</dt>
+                  <dd className="font-semibold text-zinc-900 tabular-nums">{prospects.total}</dd>
+                </div>
+                <div>
+                  <dt className="text-zinc-500">Contacted</dt>
+                  <dd className="font-semibold text-zinc-900 tabular-nums">{prospects.contacted}</dd>
+                </div>
+                <div>
+                  <dt className="text-zinc-500">Signed up</dt>
+                  <dd className="font-semibold text-zinc-900 tabular-nums">{prospects.signedUp}</dd>
+                </div>
+                <div>
+                  <dt className="text-zinc-500">Do not contact</dt>
+                  <dd className="font-semibold text-zinc-900 tabular-nums">{prospects.doNotContact}</dd>
+                </div>
+              </dl>
+              <Link href={`/admin/sales/prospects?agent=${agent.id}`} className="text-sm font-medium text-brand-700 hover:underline">
+                See their prospects →
+              </Link>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Referral code</CardTitle>

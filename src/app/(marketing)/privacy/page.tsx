@@ -9,7 +9,7 @@ import { absoluteUrl } from "@/lib/utils";
  * advice. Have it reviewed by a qualified professional for your jurisdiction (e.g. GDPR, CCPA/CPRA)
  * before relying on it, and update LAST_UPDATED whenever you change it.
  */
-const LAST_UPDATED = "October 20, 2026";
+const LAST_UPDATED = "October 24, 2026";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -76,6 +76,8 @@ We may also disclose information if required by law, to protect our rights or th
 Some customers are introduced to us by independent **sales agents** who earn a commission on the courses they sell (see the [Sales Agent Program Terms](/sales-team/terms)).
 
 - **If an agent introduced you, or we assigned you to one:** when you sign up or buy after following an agent's link, or when we assign you to an agent who is helping you, we record that you're their customer. For each sale they're credited with, the agent sees the course and the amount paid, never your name or email address.
+- **If you let the agent follow up with you:** forms you reach through an agent's link include an optional, unticked box saying it's OK for that agent to follow up with you personally. Only if you tick it does that agent see your name, email address and which free resource you signed up for, so they can contact you about ${site.name}. You can withdraw at any time by unsubscribing from our emails or by contacting us, and the agent then no longer sees your details.
+- **If you run a business an agent contacts:** agents keep a list of the businesses they reach out to, with the business name, its public business contact details or details you gave them, and notes about your conversation. Businesses found through search are identified by their Google Maps listing (we keep its ID and the business name; the address, website and phone are looked up from Google again when needed). If you ask an agent or us not to be contacted, we mark your business "do not contact" for the whole team.
 - **If you apply to join the sales team:** we collect your name, email, phone number, city and state, and your answers about your experience and availability, to review your application. If you join, we use your details to run the program: your dashboard, commissions and payouts (including how you'd like to be paid and, for tax purposes, a Form W-9). Your first name, last initial and state appear on the team leaderboard and wins feed for other agents unless you opt out in your dashboard. We never sell this information.
 
 ## Cookies
@@ -88,6 +90,7 @@ We use a small number of first-party cookies:
 | \`pa_utm\`, \`pa_ref\`, \`pa_land\` | Remember how you first found us (campaign tags, referring site, landing page) | 90 days |
 | \`pa_guide\` | Remembers that you've unlocked the free AI Starter Kit | 1 year |
 | \`pa_agent\` | If you followed an independent sales agent's link, their referral code, so the agent who introduced you is credited if you sign up or buy | 90 days |
+| \`pa_prospect\` | If you followed a link an agent made for your business, which of the agent's prospects it was, so the agent can see the business signed up | 90 days |
 | \`pa_student\`, \`pa_admin\` | Keep you signed in to the student portal (or sales agent dashboard) or admin area | Session length |
 
 These cookies are set by us, not by third-party advertisers. You can block or delete cookies in your browser settings, although some features (such as staying signed in) may stop working. Stripe may set its own cookies on its checkout pages to prevent fraud.

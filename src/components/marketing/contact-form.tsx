@@ -7,11 +7,12 @@ import { Alert } from "@/components/ui/alert";
 import { ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { AgentFollowUpConsent, type ReferringAgent } from "./agent-follow-up-consent";
 import { Honeypot } from "./honeypot";
 import { CONTACT_TOPIC_OPTIONS } from "./lead-options";
 
 /** Contact form with an inline success state. */
-export function ContactForm({ defaultTopic }: { defaultTopic?: string }) {
+export function ContactForm({ defaultTopic, referrer }: { defaultTopic?: string; referrer?: ReferringAgent | null }) {
   const [state, action] = useActionState<ContactState, FormData>(sendContactMessageAction, {});
   const err = state.fieldErrors ?? {};
   const v = state.values ?? {};
@@ -86,6 +87,8 @@ export function ContactForm({ defaultTopic }: { defaultTopic?: string }) {
           aria-invalid={err.message ? true : undefined}
         />
       </Field>
+      <AgentFollowUpConsent agent={referrer} id="contact-agent-follow-up" />
+
       <SubmitButton size="lg" className="w-full sm:w-auto sm:self-start" pendingText="Sending…">
         Send message <Send aria-hidden />
       </SubmitButton>

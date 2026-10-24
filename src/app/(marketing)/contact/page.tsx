@@ -1,6 +1,7 @@
 import { ArrowRight, CalendarDays, Gauge, Handshake, Mail } from "lucide-react";
 import type { Metadata } from "next";
 import { ContactForm } from "@/components/marketing/contact-form";
+import { referringAgent } from "@/lib/sales/referrals";
 import { Accent } from "@/components/marketing/section";
 import { TrackedLink } from "@/components/marketing/tracked-link";
 import { site } from "@/config/site";
@@ -93,7 +94,7 @@ export default async function ContactPage({ searchParams }: { searchParams: Prom
           <h2 className="text-xl font-semibold tracking-tight text-zinc-900">Send us a message</h2>
           <p className="mt-1 text-sm text-zinc-500">All fields are required.</p>
           <div className="mt-6">
-            <ContactForm defaultTopic={defaultTopic} />
+            <ContactForm defaultTopic={defaultTopic} referrer={await referringAgent()} />
           </div>
         </div>
       </div>

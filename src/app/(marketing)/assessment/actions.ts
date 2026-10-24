@@ -21,6 +21,7 @@ import { captureLead, createTask } from "@/lib/crm";
 import { emailBusinessName, sendEmail } from "@/lib/email";
 import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
 import { absoluteUrl } from "@/lib/utils";
+import { followUpConsentFrom } from "@/lib/sales/referrals";
 import { loadOffer, loadStrategyCall, withPrefill } from "./data";
 
 export type AssessmentFormState = {
@@ -95,6 +96,7 @@ export async function submitAssessmentAction(_prev: AssessmentFormState, formDat
     const { contact: lead } = await captureLead({
       email,
       name,
+      agentFollowUpConsent: followUpConsentFrom(formData),
       company: company ?? null,
       source: "assessment",
       segment: result.segment,

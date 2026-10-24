@@ -11,6 +11,7 @@ import { Field, Input } from "@/components/ui/form";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { type AnswerDraft, type Question, validateQuestion, visibleQuestions } from "@/lib/assessment";
 import { cn } from "@/lib/utils";
+import { AgentFollowUpConsent, type ReferringAgent } from "@/components/marketing/agent-follow-up-consent";
 import { QuestionField } from "./question-field";
 
 const AUTO_ADVANCE_MS = 320;
@@ -25,7 +26,7 @@ const TRANSITION_CSS = `
 type Contact = { name: string; email: string; company: string };
 
 /** The AI readiness quiz: one question per step, then contact details → server action → results page. */
-export function AssessmentQuiz() {
+export function AssessmentQuiz({ referrer }: { referrer?: ReferringAgent | null } = {}) {
   const [answers, setAnswers] = useState<AnswerDraft>({});
   const [step, setStep] = useState(0);
   /** null until the visitor first moves between steps (no entrance animation on page load). */
@@ -204,6 +205,7 @@ export function AssessmentQuiz() {
             formAction={formAction}
             onBack={() => goTo(step - 1, "prev")}
             onRestart={restart}
+            referrer={referrer}
           />
         )}
       </div>
@@ -221,6 +223,7 @@ function ContactStep({
   formAction,
   onBack,
   onRestart,
+  referrer,
 }: {
   headingRef: RefObject<HTMLHeadingElement | null>;
   headingId: string;
@@ -231,6 +234,7 @@ function ContactStep({
   formAction: (formData: FormData) => void;
   onBack: () => void;
   onRestart: () => void;
+  referrer?: ReferringAgent | null;
 }) {
   const set = (key: keyof Contact) => (e: ChangeEvent<HTMLInputElement>) => onContactChange({ ...contact, [key]: e.target.value });
   const showCompany = answers.focus !== "life" || (answers.role !== undefined && answers.role !== "individual");
@@ -311,6 +315,12 @@ function ContactStep({
             </button>
           )}
         </Alert>
+      )}
+
+      {referrer && (
+        <div className="mt-5">
+          <AgentFollowUpConsent agent={referrer} id="assessment-agent-follow-up" />
+        </div>
       )}
 
       <p className="mt-5 text-xs leading-relaxed text-zinc-500">

@@ -1,10 +1,12 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb, schema } from "@/db";
 import type { SalesAgent } from "@/db/schema";
+import { firstName } from "@/lib/utils";
 import { normalizeAgentCode, sameMailbox } from "@/lib/sales/game";
 import { getSalesProgram } from "@/lib/sales/program";
+import { attachContactToProspect, LINK_TOKEN_RE } from "@/lib/sales/prospects";
 
 /**
  * Which agent a customer belongs to. An agent's link (?ref=CODE on any page, or /r/CODE) leaves a cookie (src/proxy.ts).
@@ -17,6 +19,8 @@ import { getSalesProgram } from "@/lib/sales/program";
 
 /** Set by src/proxy.ts from ?ref=CODE, and by /r/CODE. */
 export const AGENT_COOKIE = "pa_agent";
+/** Set by /r/CODE?p=TOKEN: the agent's prospect (business) the visitor came from (lib/sales/prospects.ts). */
+export const PROSPECT_COOKIE = "pa_prospect";
 export const AGENT_REF_PARAM = "ref";
 /** Stripe client_reference_id prefix for payment-link checkouts started from an agent's link. */
 export const CLIENT_REFERENCE_PREFIX = "agent_";
@@ -91,7 +95,8 @@ export async function claimContactFor(contactId: string, agent: Pick<SalesAgent,
     if (await claimHolds(existing, at)) return false;
     const [moved] = await db
       .update(schema.agentReferrals)
-      .set({ agentId: agent.id, source: "link", createdAt: at })
+      // Consent to follow up was given to the previous agent only.
+      .set({ agentId: agent.id, source: "link", createdAt: at, followUpConsentAt: null })
       .where(and(eq(schema.agentReferrals.contactId, contactId), eq(schema.agentReferrals.agentId, existing.agentId)))
       .returning();
     if (moved) await noteClaim(contactId, agent, at);
@@ -138,14 +143,101 @@ export async function claimContactForAgent(contactId: string, code: string | nul
   }
 }
 
+/** The approved agent whose link this visitor followed (first name for the follow-up consent checkbox), or null. */
+export async function referringAgent(): Promise<{ code: string; firstName: string } | null> {
+  try {
+    const agent = await approvedAgentByCode(await referralCodeFromCookie());
+    return agent?.code ? { code: agent.code, firstName: firstName(agent.name) || "your sales agent" } : null;
+  } catch (err) {
+    console.error("[sales] referring agent lookup failed", err);
+    return null;
+  }
+}
+
+/** From a lead form: the agent code of a ticked follow-up consent box (components/marketing/agent-follow-up-consent.tsx), or null. */
+export function followUpConsentFrom(formData: FormData): string | null {
+  if (formData.get("agentFollowUp") !== "on") return null;
+  return normalizeAgentCode(String(formData.get("agentFollowUpCode") ?? ""));
+}
+
+async function prospectTokenFromCookie(): Promise<string | null> {
+  try {
+    const token = (await cookies()).get(PROSPECT_COOKIE)?.value ?? "";
+    return LINK_TOKEN_RE.test(token) ? token : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A contact created just now by a visitor who came through an agent's link becomes that agent's customer. Only new
  * contacts: anyone can type any address into a public form, so a form never moves a contact that already exists
  * (an existing customer is credited to an agent only by a checkout that came through the agent's link: orders.agent_code).
+ * When the claim succeeds:
+ * - `followUpConsentCode`: the form's "OK for <agent> to follow up with me" box was ticked for this agent's code, so
+ *   the agent may see the contact's name and email (Leads → Warm leads). Only for the agent the box named.
+ * - A prospect link (/r/CODE?p=TOKEN) of the same agent gets this contact as its sign-up.
+ * Never throws: attribution must not break a sign-up.
  */
-export async function claimNewContactFromCookie(contactId: string): Promise<boolean> {
-  const code = await referralCodeFromCookie();
-  return code ? claimContactForAgent(contactId, code) : false;
+export async function claimNewContactFromCookie(contactId: string, opts: { followUpConsentCode?: string | null } = {}): Promise<boolean> {
+  try {
+    const agent = await approvedAgentByCode(await referralCodeFromCookie());
+    if (!agent) return false;
+    if (!(await claimContactFor(contactId, agent))) return false;
+    if (agent.code && normalizeAgentCode(opts.followUpConsentCode) === agent.code) {
+      const db = await getDb();
+      await db
+        .update(schema.agentReferrals)
+        .set({ followUpConsentAt: new Date() })
+        .where(and(eq(schema.agentReferrals.contactId, contactId), eq(schema.agentReferrals.agentId, agent.id)));
+    }
+    const token = await prospectTokenFromCookie();
+    if (token) await attachContactToProspect(agent.id, token, contactId);
+    return true;
+  } catch (err) {
+    console.error("[sales] referral claim failed", contactId, err);
+    return false;
+  }
+}
+
+export type WarmLead = {
+  contactId: string;
+  name: string | null;
+  email: string;
+  source: string | null;
+  stage: string;
+  consentedAt: Date;
+  tookAssessment: boolean;
+};
+
+/**
+ * The agent's warm leads: their customers who said it's OK for them to follow up. Someone who unsubscribed, or who
+ * now belongs to another agent, drops off the list.
+ */
+export async function listWarmLeads(agentId: string): Promise<WarmLead[]> {
+  const db = await getDb();
+  const rows = await db
+    .select({
+      contactId: schema.contacts.id,
+      name: schema.contacts.name,
+      email: schema.contacts.email,
+      source: schema.contacts.source,
+      stage: schema.contacts.stage,
+      consentedAt: schema.agentReferrals.followUpConsentAt,
+      tookAssessment: sql<boolean>`exists (select 1 from ${schema.quizSubmissions} q where q.contact_id = ${schema.contacts.id})`,
+    })
+    .from(schema.agentReferrals)
+    .innerJoin(schema.contacts, eq(schema.contacts.id, schema.agentReferrals.contactId))
+    .where(
+      and(
+        eq(schema.agentReferrals.agentId, agentId),
+        isNotNull(schema.agentReferrals.followUpConsentAt),
+        eq(schema.contacts.unsubscribed, false),
+      ),
+    )
+    .orderBy(desc(schema.agentReferrals.followUpConsentAt))
+    .limit(200);
+  return rows.map((r) => ({ ...r, consentedAt: r.consentedAt as Date, tookAssessment: Boolean(r.tookAssessment) }));
 }
 
 /**
@@ -174,5 +266,5 @@ export async function assignContactToAgent(contactId: string, agentId: string | 
   await db
     .insert(schema.agentReferrals)
     .values({ contactId, agentId, source: "manual", createdAt: new Date() })
-    .onConflictDoUpdate({ target: schema.agentReferrals.contactId, set: { agentId, source: "manual", createdAt: new Date() } });
+    .onConflictDoUpdate({ target: schema.agentReferrals.contactId, set: { agentId, source: "manual", createdAt: new Date(), followUpConsentAt: null } });
 }

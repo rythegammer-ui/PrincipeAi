@@ -223,7 +223,11 @@ async function sendGuideLinkEmail(contact: Contact, name: string): Promise<boole
  * is emailed on its own (see `sendGuideLinkEmail` for when it isn't). `emailed` says whether a link email went out or
  * is queued, so the confirmation can promise one only then.
  */
-export async function captureGuideOptIn(input: OptInInput, path: string): Promise<{ contact: Contact; emailed: boolean }> {
+export async function captureGuideOptIn(
+  input: OptInInput,
+  path: string,
+  opts: { agentFollowUpConsent?: string | null } = {},
+): Promise<{ contact: Contact; emailed: boolean }> {
   const interest = optionLabel(INTEREST_OPTIONS, input.interest);
   const email = normalizeEmail(input.email);
   const before = await kitEnrollmentIds(email);
@@ -233,6 +237,7 @@ export async function captureGuideOptIn(input: OptInInput, path: string): Promis
     segment: input.interest,
     source: "lead_magnet",
     tags: ["starter-kit"],
+    agentFollowUpConsent: opts.agentFollowUpConsent,
     activity: { type: "optin", title: "Downloaded the AI Starter Kit", meta: { interest, path } },
     event: { name: "optin", path, props: { offer: "starter-kit", interest: input.interest } },
     stage: "new",
@@ -444,11 +449,12 @@ export async function readDiscoveryPrefill(meetingType: { slug: string; question
 }
 
 /** Contact form → contact + timeline entry + owner alert + a reply-to task. */
-export async function captureContactMessage(input: ContactInput): Promise<Contact> {
+export async function captureContactMessage(input: ContactInput, opts: { agentFollowUpConsent?: string | null } = {}): Promise<Contact> {
   const topic = optionLabel(CONTACT_TOPIC_OPTIONS, input.topic);
   const { contact } = await captureLead({
     email: input.email,
     name: input.name,
+    agentFollowUpConsent: opts.agentFollowUpConsent,
     segment: input.topic === "implementation" || input.topic === "workshop" ? "business" : null,
     source: "contact_form",
     tags: ["contact-form"],

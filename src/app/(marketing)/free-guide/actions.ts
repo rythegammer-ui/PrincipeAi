@@ -6,7 +6,8 @@ import { captureGuideOptIn, fieldErrorsOf, grantGuideAccess, isSpam, optInSchema
 import { rateLimitByIp } from "@/lib/rate-limit";
 import { followUpConsentFrom } from "@/lib/sales/referrals";
 
-const FIELDS = ["name", "email", "interest"] as const;
+// agentFollowUp: the optional "OK for <agent> to follow up" box, echoed back so it stays ticked after an error.
+const FIELDS = ["name", "email", "interest", "agentFollowUp"] as const;
 export type OptInField = (typeof FIELDS)[number];
 export type OptInState = LeadFormState<OptInField>;
 

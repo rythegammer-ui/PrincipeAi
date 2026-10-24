@@ -31,7 +31,11 @@ export type OutreachInput = {
   link: string;
 };
 
-export type OutreachMessage = { subject: string | null; body: string; ai: boolean };
+/** `addressMissing`: an email without our mailing address set (Admin → Settings → Business): it has a placeholder to fill in. */
+export type OutreachMessage = { subject: string | null; body: string; ai: boolean; addressMissing: boolean };
+
+/** Stands in for the mailing address until it's set; the agent can't send the email as it is. */
+export const MISSING_ADDRESS = "[mailing address: ask the team]";
 
 export const DISCLOSURE = `Full disclosure: I'm an independent sales agent for ${site.name} and earn a commission if you buy a course through my link.`;
 
@@ -96,25 +100,33 @@ function fallback(input: OutreachInput): { subject: string | null; body: string 
 }
 
 /** Adds the link, disclosure and (email) opt-out + address. */
-async function finish(channel: OutreachChannel, subject: string | null, body: string, link: string): Promise<{ subject: string | null; body: string }> {
+async function finish(
+  channel: OutreachChannel,
+  subject: string | null,
+  body: string,
+  link: string,
+): Promise<{ subject: string | null; body: string; addressMissing: boolean }> {
   if (channel === "call") {
     return {
       subject: null,
       body: `${body}\n\n(If they say yes, send them your link: ${link}\nTell them you're an independent sales agent and earn a commission on course sales, and if they say no or ask you not to contact them, mark them "Do not contact".)`,
+      addressMissing: false,
     };
   }
   const parts = [body, `Free AI Readiness Assessment (about 3 minutes): ${link}`, DISCLOSURE];
+  let addressMissing = false;
   if (channel === "email") {
     const address = (await emailMailingAddress())
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean)
       .join(", ");
-    parts.push(`Not interested? Reply "stop" and I won't contact you again.\n${site.company}${address ? `, ${address}` : ""}`);
+    addressMissing = !address;
+    parts.push(`Not interested? Reply "stop" and I won't contact you again.\n${site.company}, ${address || MISSING_ADDRESS}`);
   } else {
     parts.push(`Not for you? Just say so and I won't message again.`);
   }
-  return { subject, body: parts.join("\n\n") };
+  return { subject, body: parts.join("\n\n"), addressMissing };
 }
 
 /** Writes a message for one prospect. Counts against the site's daily AI budget (falls back to the template after it). */

@@ -126,7 +126,8 @@ test.describe("sales team", () => {
     await expect(agent.getByRole("heading", { level: 1, name: "Leads" })).toBeVisible();
     // No Google key in this run: search is off, adding by hand still works.
     await expect(agent.getByText("Business search isn't switched on yet")).toBeVisible();
-    await agent.getByText("Add a business you found yourself").click();
+    // With search off, the add-by-hand form starts open.
+    await expect(agent.locator("details").filter({ has: agent.locator("summary", { hasText: "Add a business you found yourself" }) })).toHaveAttribute("open", "");
     const addForm = agent.locator("form").filter({ has: agent.getByRole("button", { name: "Add business" }) });
     await addForm.getByLabel(/^Business name\*?$/).fill(business);
     await addForm.getByLabel("Kind of business").fill("Dental practice");
@@ -141,13 +142,28 @@ test.describe("sales team", () => {
 
     // A first email (the built-in template: no AI key), with the parts the rules need.
     await agent.getByRole("button", { name: "Write my message" }).click();
-    const message = agent.locator("[aria-live=polite]").filter({ hasText: "Your message" });
+    const message = agent.getByRole("region", { name: "Your message" });
     await expect(message).toContainText(link);
     await expect(message).toContainText("Full disclosure: I'm an independent sales agent");
     await expect(message).toContainText('Reply "stop"');
     await expect(message).toContainText("Quinn");
+    // The channel picker keeps its choice after a message is written.
+    await agent.getByLabel("How you'll reach out").selectOption("message");
+    await agent.getByRole("button", { name: "Write another version" }).click();
+    await expect(message).not.toContainText('Reply "stop"');
+    await expect(agent.getByLabel("How you'll reach out")).toHaveValue("message");
     await agent.getByRole("button", { name: /I sent it: mark as contacted/ }).click();
-    await expect(agent.getByText(/Marked as contacted/)).toBeVisible();
+    await expect(agent.getByText(/Marked as sent\. We'll remind you to follow up on/)).toBeVisible();
+
+    // A saved status stays selected, so the next save doesn't quietly put the old one back.
+    await agent.getByLabel("Status", { exact: true }).selectOption("replied");
+    await agent.getByLabel("Notes").fill("Spoke with the office manager.");
+    await agent.getByRole("button", { name: "Save changes" }).click();
+    await expect(agent.getByText("Saved.")).toBeVisible();
+    await expect(agent.getByLabel("Status", { exact: true })).toHaveValue("replied");
+    await agent.reload();
+    await expect(agent.getByLabel("Status", { exact: true })).toHaveValue("replied");
+    await expect(agent.getByLabel("Notes")).toHaveValue("Spoke with the office manager.");
 
     // A visitor follows the business's link, then gets the free kit and says the agent may follow up.
     const visitorContext = await browser.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": randomClientIp() } });
@@ -168,7 +184,7 @@ test.describe("sales team", () => {
 
     await agent.goto("/agent/leads");
     const row = agent.getByRole("row").filter({ hasText: business });
-    await expect(row).toContainText("Contacted");
+    await expect(row).toContainText("Replied");
     await expect(row).toContainText("Signed up");
     await expect(agent.getByRole("row").filter({ hasText: visitorEmail })).toContainText("AI Starter Kit");
 

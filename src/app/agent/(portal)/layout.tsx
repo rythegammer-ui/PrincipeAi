@@ -38,7 +38,7 @@ export default async function AgentPortalLayout({ children }: { children: React.
             <form action={agentLogoutAction}>
               <button
                 type="submit"
-                className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 sm:min-h-10"
               >
                 <LogOut className="size-4" aria-hidden />
                 <span className="hidden sm:inline">Sign out</span>

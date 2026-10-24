@@ -11,7 +11,7 @@ import { approveAgent, rejectAgent, setAgentCode, setAgentStatus } from "@/lib/s
 import { addAgentAdjustment, cancelChallenge, PayoutChangedError, recordPayout, voidCommission } from "@/lib/sales/commissions";
 import { MAX_RATE_BPS } from "@/lib/sales/game";
 import { getSalesProgram, saveSalesProgram } from "@/lib/sales/program";
-import { adminReleaseProspect } from "@/lib/sales/prospects";
+import { adminMarkDoNotContact, adminReleaseProspect } from "@/lib/sales/prospects";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { formatMoney } from "@/lib/utils";
 
@@ -290,4 +290,14 @@ export async function releaseProspectAction(_prev: SalesFormState, fd: FormData)
   if (!released) return { error: "That prospect was already released." };
   revalidatePath("/admin/sales/prospects");
   return { ok: true, message: "Released. Any agent can add this business again." };
+}
+
+/** The business asked us (not the agent) not to be contacted: blocks it for the whole team. */
+export async function markProspectDoNotContactAction(_prev: SalesFormState, fd: FormData): Promise<SalesFormState> {
+  await assertAdmin();
+  const id = Id.safeParse(str(fd, "prospectId"));
+  if (!id.success) return { error: "That prospect couldn't be found." };
+  if (!(await adminMarkDoNotContact(id.data))) return { error: "That prospect was already released." };
+  revalidatePath("/admin/sales/prospects");
+  return { ok: true, message: "Marked do not contact. No agent can contact this business now." };
 }

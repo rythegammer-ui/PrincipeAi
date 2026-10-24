@@ -673,10 +673,14 @@ export const agentProspects = pgTable(
     /** Google Places place ID (from search), or null for a business the agent added by hand. */
     placeId: text("place_id"),
     name: text("name").notNull(),
+    /** `name` folded for matching ("Joe's Café" → "joescafe"; lib/sales/prospects.ts matchKey). */
+    nameKey: text("name_key").notNull().default(""),
     /** What kind of business, as the agent searched or typed it ("dentist"). */
     category: text("category"),
     /** Where, as the agent searched or typed it ("Tampa, FL"). */
     area: text("area"),
+    /** The town part of `area`, folded the same way ("Tampa, FL" → "tampa"), or "" when there's none. */
+    areaKey: text("area_key").notNull().default(""),
     /** Website, phone and email the agent typed in themselves (never copied from Google). */
     website: text("website"),
     /** Lowercased host of `website` without "www.", for spotting the same business twice. */
@@ -691,6 +695,8 @@ export const agentProspects = pgTable(
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     signedUpAt: timestamp("signed_up_at", { withTimezone: true }),
     lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
+    /** How many times the agent has reached out (the first message plus follow-ups). */
+    contactCount: integer("contact_count").notNull().default(0),
     nextFollowUpAt: timestamp("next_follow_up_at", { withTimezone: true }),
     /** Last time the agent worked this prospect; the claim runs out a while after it (lib/sales/prospects.ts). */
     activeAt: timestamp("active_at", { withTimezone: true }).notNull().defaultNow(),
@@ -705,6 +711,8 @@ export const agentProspects = pgTable(
     uniqueIndex("agent_prospects_domain_active_idx").on(t.domain).where(sql`${t.releasedAt} is null and ${t.domain} is not null`),
     uniqueIndex("agent_prospects_link_token_idx").on(t.linkToken),
     index("agent_prospects_agent_idx").on(t.agentId, t.releasedAt),
+    // Same business added another way (by hand vs from Google): matched by name.
+    index("agent_prospects_name_key_idx").on(t.nameKey).where(sql`${t.releasedAt} is null`),
   ],
 );
 

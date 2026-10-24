@@ -17,6 +17,7 @@ import {
   UNDELIVERABLE_ALERT_TTL_MS,
 } from "@/lib/payments";
 import { awardDueChallenges, reconcileAgentSales } from "@/lib/sales/commissions";
+import { PLACES_SITE_KEY_PREFIX, PLACES_SITE_RETENTION_MS } from "@/lib/sales/places";
 import { getStripe, paymentIntentId, type Stripe } from "@/lib/stripe";
 import type { JobKey } from "@/components/funnels/automation-utils";
 
@@ -215,6 +216,8 @@ const JOBS: Record<JobKey, (ctx: JobContext) => Promise<{ count: number; detail?
           lt(rl.windowStart, new Date(now - RATE_LIMIT_RETENTION_MS)),
           // "Owner already alerted" markers for undeliverable payments must outlive Stripe's webhook retries.
           or(notLike(rl.key, `${UNDELIVERABLE_ALERT_PREFIX}%`), lt(rl.windowStart, new Date(now - UNDELIVERABLE_ALERT_TTL_MS))),
+          // The sales team's monthly Google search allowance must last the whole month (lib/sales/places.ts).
+          or(notLike(rl.key, `${PLACES_SITE_KEY_PREFIX}%`), lt(rl.windowStart, new Date(now - PLACES_SITE_RETENTION_MS))),
         ),
       )
       .returning({ key: rl.key });

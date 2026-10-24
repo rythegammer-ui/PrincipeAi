@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import type { AgentProspect, ProspectStatus, SalesAgent } from "@/db/schema";
@@ -9,25 +9,31 @@ import { absoluteUrl, isValidEmail } from "@/lib/utils";
 
 /**
  * Businesses a sales agent is reaching out to (Agent portal → Leads). Rules:
- * - One active owner per business across the team, matched by Google place ID, or by website for businesses added by
- *   hand. Agents never see who holds a claim, only that someone does.
- * - A claim lasts while the agent works it: it runs out `CLAIM_DAYS` after their last activity (`NOT_INTERESTED_DAYS`
- *   once the business said no). Then another agent can add the business, and the old row becomes history.
- * - "Do not contact" never runs out and blocks the business for everyone, until an admin clears it.
- * - A business that signed up through the agent's prospect link stays theirs.
+ * - One agent per business across the team. The same business is recognized by its Google place ID, its website, its
+ *   email or phone, or (when either side was added by hand) its name in the same town (`sameBusiness`). Agents never see
+ *   who holds a claim, only that someone does.
+ * - A claim lasts while the agent works it: it runs out `CLAIM_DAYS` after their last activity, or `HOLD_DAYS` once
+ *   they've closed it or someone signed up through its link (so nobody else cold-contacts it soon after). Then another
+ *   agent can add the business, and the old row becomes history.
+ * - "Do not contact" never runs out and blocks the business for everyone, matched by name alone, until an admin clears
+ *   it. The agent can't change it or the details it's matched by.
  */
 
 export const CLAIM_DAYS = 30;
-export const NOT_INTERESTED_DAYS = 90;
+export const HOLD_DAYS = 90;
+/** Businesses in progress (new, contacted or replied, and still claimed) an agent can have at once. */
 export const MAX_ACTIVE_PROSPECTS = 200;
+/** The first message plus two follow-ups; after that no more reminders. */
+export const MAX_CONTACTS = 3;
 export const DEFAULT_FOLLOW_UP_DAYS = 3;
 const DAY = 86_400_000;
+const LIST_LIMIT = 500;
 
 export const PROSPECT_STATUSES: { value: ProspectStatus; label: string }[] = [
   { value: "new", label: "New" },
   { value: "contacted", label: "Contacted" },
   { value: "replied", label: "Replied" },
-  { value: "not_interested", label: "Not interested" },
+  { value: "not_interested", label: "Closed" },
   { value: "do_not_contact", label: "Do not contact" },
 ];
 
@@ -60,11 +66,108 @@ export function normalizeWebsite(website: string | null | undefined): string | n
   }
 }
 
+/** Hosts many businesses share (social pages, link pages, maps): a page there doesn't identify one business. */
+const SHARED_HOSTS = new Set([
+  "facebook.com",
+  "m.facebook.com",
+  "business.facebook.com",
+  "fb.com",
+  "fb.me",
+  "instagram.com",
+  "linktr.ee",
+  "linkin.bio",
+  "sites.google.com",
+  "google.com",
+  "business.google.com",
+  "g.page",
+  "goo.gl",
+  "maps.app.goo.gl",
+  "maps.google.com",
+  "yelp.com",
+  "tiktok.com",
+  "x.com",
+  "twitter.com",
+  "linkedin.com",
+  "youtube.com",
+  "nextdoor.com",
+  "wa.me",
+  "square.site",
+  "wixsite.com",
+  "godaddysites.com",
+]);
+
+/** The website's domain as a business identity (null for shared hosts like facebook.com). */
+export function claimDomain(website: string | null | undefined): string | null {
+  const domain = normalizeDomain(website);
+  return domain && !SHARED_HOSTS.has(domain) ? domain : null;
+}
+
+const SUFFIXES = new Set(["llc", "inc", "co", "corp", "corporation", "ltd", "limited", "pllc", "pc", "company", "incorporated"]);
+
+/** Folds a business name for matching: "The Joe's Café, LLC" → "joescafe". */
+export function matchKey(value: string | null | undefined): string {
+  const words = (value ?? "")
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  if (words[0] === "the" && words.length > 1) words.shift();
+  while (words.length > 1 && SUFFIXES.has(words[words.length - 1])) words.pop();
+  return words.join("");
+}
+
+/** The town part of an area, folded: "Tampa, FL" → "tampa". */
+export function areaKeyOf(area: string | null | undefined): string {
+  return matchKey((area ?? "").split(",")[0]);
+}
+
+/** The last 10 digits of a phone number, or null when it has fewer. */
+function phoneKey(phone: string | null | undefined): string | null {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : null;
+}
+
+type BusinessKey = { placeId: string | null; domain: string | null; email: string | null; phone: string | null; nameKey: string; areaKey: string };
+
+/** Whether an existing row is the business described by `key` (see the rules above). */
+function sameBusiness(row: AgentProspect, key: BusinessKey): boolean {
+  if (key.placeId && row.placeId === key.placeId) return true;
+  if (key.domain && row.domain === key.domain) return true;
+  if (key.email && row.email === key.email) return true;
+  if (key.phone && phoneKey(row.phone) === key.phone) return true;
+  // Two Google listings with different place IDs are different businesses, whatever their names.
+  if (row.placeId && key.placeId) return false;
+  if (key.nameKey.length < 2 || row.nameKey !== key.nameKey) return false;
+  if (row.status === "do_not_contact") return true;
+  return !row.areaKey || !key.areaKey || row.areaKey === key.areaKey;
+}
+
+/** Rows that could be `key`'s business (sameBusiness narrows them down). */
+function candidatesWhere(key: BusinessKey): SQL | undefined {
+  const p = schema.agentProspects;
+  const ors: SQL[] = [];
+  if (key.placeId) ors.push(eq(p.placeId, key.placeId));
+  if (key.domain) ors.push(eq(p.domain, key.domain));
+  if (key.email) ors.push(eq(p.email, key.email));
+  if (key.phone) ors.push(sql`right(regexp_replace(coalesce(${p.phone}, ''), '[^0-9]', '', 'g'), 10) = ${key.phone}`);
+  if (key.nameKey.length >= 2) ors.push(eq(p.nameKey, key.nameKey));
+  return ors.length ? and(isNull(p.releasedAt), or(...ors)) : undefined;
+}
+
 /** Whether `row`'s claim has run out, so another agent may take the business. */
 export function claimExpired(row: Pick<AgentProspect, "status" | "contactId" | "activeAt">, now = Date.now()): boolean {
-  if (row.status === "do_not_contact" || row.contactId) return false;
-  const days = row.status === "not_interested" ? NOT_INTERESTED_DAYS : CLAIM_DAYS;
+  if (row.status === "do_not_contact") return false;
+  const days = row.contactId || row.status === "not_interested" ? HOLD_DAYS : CLAIM_DAYS;
   return now - row.activeAt.getTime() >= days * DAY;
+}
+
+/** A unique-index violation (Postgres 23505), also when the driver wraps it (drizzle puts the original in `cause`). */
+function isUniqueViolation(err: unknown): boolean {
+  for (let e = err as { code?: unknown; cause?: unknown } | null | undefined, depth = 0; e && depth < 4; e = e.cause as typeof e, depth++) {
+    if (e.code === "23505") return true;
+  }
+  return false;
 }
 
 const text = (max: number) => z.string().trim().max(max, `Please keep this under ${max} characters.`);
@@ -90,63 +193,64 @@ export const prospectInputSchema = z.object({
 });
 export type ProspectInput = z.infer<typeof prospectInputSchema>;
 
-/** A unique-index violation (Postgres 23505), also when the driver wraps it (drizzle puts the original in `cause`). */
-function isUniqueViolation(err: unknown): boolean {
-  for (let e = err as { code?: unknown; cause?: unknown } | null | undefined, depth = 0; e && depth < 4; e = e.cause as typeof e, depth++) {
-    if (e.code === "23505") return true;
-  }
-  return false;
-}
-
 export type AddProspectResult =
   | { status: "added"; prospect: AgentProspect }
   | { status: "already_yours"; prospect: AgentProspect }
   | { status: "claimed" | "do_not_contact" | "limit" };
 
+/** In-progress prospects (they count towards MAX_ACTIVE_PROSPECTS): new, contacted or replied, not signed up, still claimed. */
+const inProgress = () => {
+  const p = schema.agentProspects;
+  return sql`${p.status} in ('new', 'contacted', 'replied') and ${p.contactId} is null and ${p.activeAt} > now() - make_interval(days => ${CLAIM_DAYS})`;
+};
+
 /** Adds a business to the agent's prospects, following the claim rules above. */
 export async function addProspect(agent: Pick<SalesAgent, "id">, input: ProspectInput): Promise<AddProspectResult> {
   const db = await getDb();
+  const p = schema.agentProspects;
   const website = normalizeWebsite(input.website);
-  const domain = normalizeDomain(website);
+  const key: BusinessKey = {
+    placeId: input.placeId,
+    domain: claimDomain(website),
+    email: input.email?.toLowerCase() ?? null,
+    phone: phoneKey(input.phone),
+    nameKey: matchKey(input.name),
+    areaKey: areaKeyOf(input.area),
+  };
   try {
     return await db.transaction(async (tx) => {
-      const matches = [];
-      if (input.placeId) matches.push(eq(schema.agentProspects.placeId, input.placeId));
-      if (domain) matches.push(eq(schema.agentProspects.domain, domain));
-      if (matches.length) {
-        const existing = await tx
-          .select()
-          .from(schema.agentProspects)
-          .where(and(isNull(schema.agentProspects.releasedAt), matches.length === 1 ? matches[0] : sql`(${sql.join(matches, sql` or `)})`))
-          .for("update");
-        const mine = existing.find((r) => r.agentId === agent.id);
-        if (mine) return { status: "already_yours", prospect: mine } as const;
-        if (existing.some((r) => r.status === "do_not_contact")) return { status: "do_not_contact" } as const;
-        if (existing.some((r) => !claimExpired(r))) return { status: "claimed" } as const;
-        if (existing.length) {
-          await tx
-            .update(schema.agentProspects)
-            .set({ releasedAt: new Date(), releaseReason: "expired", updatedAt: new Date() })
-            .where(inArray(schema.agentProspects.id, existing.map((r) => r.id)));
-        }
-      }
+      const where = candidatesWhere(key);
+      const candidates = where ? await tx.select().from(p).where(where).for("update") : [];
+      const same = candidates.filter((r) => sameBusiness(r, key));
+      const mine = same.find((r) => r.agentId === agent.id);
+      if (mine) return { status: "already_yours", prospect: mine } as const;
+      if (same.some((r) => r.status === "do_not_contact")) return { status: "do_not_contact" } as const;
+      if (same.some((r) => !claimExpired(r))) return { status: "claimed" } as const;
       const [{ count }] = await tx
         .select({ count: sql<number>`count(*)::int` })
-        .from(schema.agentProspects)
-        .where(and(eq(schema.agentProspects.agentId, agent.id), isNull(schema.agentProspects.releasedAt)));
+        .from(p)
+        .where(and(eq(p.agentId, agent.id), isNull(p.releasedAt), inProgress()));
       if (count >= MAX_ACTIVE_PROSPECTS) return { status: "limit" } as const;
+      if (same.length) {
+        await tx
+          .update(p)
+          .set({ releasedAt: new Date(), releaseReason: "expired", updatedAt: new Date() })
+          .where(inArray(p.id, same.map((r) => r.id)));
+      }
       const [prospect] = await tx
-        .insert(schema.agentProspects)
+        .insert(p)
         .values({
           agentId: agent.id,
           placeId: input.placeId,
           name: input.name,
+          nameKey: key.nameKey,
           category: input.category,
           area: input.area,
+          areaKey: key.areaKey,
           website,
-          domain,
+          domain: key.domain,
           phone: input.phone,
-          email: input.email?.toLowerCase() ?? null,
+          email: key.email,
           notes: input.notes,
           linkToken: newLinkToken(),
         })
@@ -162,66 +266,80 @@ export async function addProspect(agent: Pick<SalesAgent, "id">, input: Prospect
 
 export type PlaceClaimState = "mine" | "claimed" | "do_not_contact" | "available";
 
-/** For search results: which businesses are already the agent's, someone else's, or blocked. */
-export async function claimStatesForPlaces(agentId: string, placeIds: string[]): Promise<Map<string, PlaceClaimState>> {
+/** For search results (searched in `where`): which businesses are already the agent's, someone else's, or blocked. */
+export async function claimStatesForPlaces(agentId: string, places: { placeId: string; name: string }[], where: string): Promise<Map<string, PlaceClaimState>> {
   const states = new Map<string, PlaceClaimState>();
-  if (!placeIds.length) return states;
+  if (!places.length) return states;
+  const keys = places.map((pl) => ({
+    placeId: pl.placeId,
+    key: { placeId: pl.placeId, domain: null, email: null, phone: null, nameKey: matchKey(pl.name), areaKey: areaKeyOf(where) } satisfies BusinessKey,
+  }));
+  const nameKeys = [...new Set(keys.map((k) => k.key.nameKey).filter((k) => k.length >= 2))];
+  const p = schema.agentProspects;
   const db = await getDb();
   const rows = await db
     .select()
-    .from(schema.agentProspects)
-    .where(and(isNull(schema.agentProspects.releasedAt), inArray(schema.agentProspects.placeId, placeIds)));
-  for (const r of rows) {
-    if (!r.placeId) continue;
-    const state: PlaceClaimState =
-      r.agentId === agentId ? "mine" : r.status === "do_not_contact" ? "do_not_contact" : claimExpired(r) ? "available" : "claimed";
-    // A business can't hold two active rows (unique index), but stay safe: "mine" and "do not contact" win.
-    const prev = states.get(r.placeId);
-    if (!prev || prev === "available" || state === "mine" || state === "do_not_contact") states.set(r.placeId, state);
+    .from(p)
+    .where(
+      and(
+        isNull(p.releasedAt),
+        or(
+          inArray(
+            p.placeId,
+            places.map((pl) => pl.placeId),
+          ),
+          nameKeys.length ? and(isNull(p.placeId), inArray(p.nameKey, nameKeys)) : undefined,
+        ),
+      ),
+    );
+  for (const { placeId, key } of keys) {
+    const same = rows.filter((r) => sameBusiness(r, key));
+    states.set(
+      placeId,
+      same.some((r) => r.agentId === agentId)
+        ? "mine"
+        : same.some((r) => r.status === "do_not_contact")
+          ? "do_not_contact"
+          : same.some((r) => !claimExpired(r))
+            ? "claimed"
+            : "available",
+    );
   }
   return states;
 }
 
-export type ProspectRow = AgentProspect & {
-  /** From the contact who signed up through this prospect's link. */
-  signedUp: boolean;
-  tookAssessment: boolean;
-  customer: boolean;
-};
+/**
+ * A prospect as its agent sees it. `signedUp`: someone signed up through its link. Who, and what they did next, stays
+ * private (only people who tick the follow-up box appear to the agent, under Warm leads).
+ */
+export type ProspectRow = AgentProspect & { signedUp: boolean };
 
-const contactFlags = {
-  tookAssessment: sql<boolean>`exists (select 1 from ${schema.quizSubmissions} q where q.contact_id = ${schema.agentProspects.contactId})`,
-  customer: sql<boolean>`coalesce(${schema.contacts.stage} = 'customer', false)`,
-};
+const toRow = (r: AgentProspect): ProspectRow => ({ ...r, signedUp: Boolean(r.contactId) });
 
-function toRow(r: AgentProspect, flags: { tookAssessment: boolean; customer: boolean }): ProspectRow {
-  return { ...r, signedUp: Boolean(r.contactId), tookAssessment: Boolean(flags.tookAssessment), customer: Boolean(flags.customer) };
-}
-
-/** The agent's active prospects: due follow-ups first, then the most recently worked. */
+/** The agent's prospects: due follow-ups first, then the most recently worked. */
 export async function listProspects(agentId: string): Promise<ProspectRow[]> {
   const db = await getDb();
+  const p = schema.agentProspects;
   const rows = await db
-    .select({ p: schema.agentProspects, ...contactFlags })
-    .from(schema.agentProspects)
-    .leftJoin(schema.contacts, eq(schema.contacts.id, schema.agentProspects.contactId))
-    .where(and(eq(schema.agentProspects.agentId, agentId), isNull(schema.agentProspects.releasedAt)))
-    .orderBy(sql`${schema.agentProspects.nextFollowUpAt} is null`, asc(schema.agentProspects.nextFollowUpAt), desc(schema.agentProspects.activeAt))
-    .limit(MAX_ACTIVE_PROSPECTS);
-  return rows.map((r) => toRow(r.p, r));
+    .select()
+    .from(p)
+    .where(and(eq(p.agentId, agentId), isNull(p.releasedAt)))
+    .orderBy(sql`${p.nextFollowUpAt} is null`, asc(p.nextFollowUpAt), desc(p.activeAt))
+    .limit(LIST_LIMIT);
+  return rows.map(toRow);
 }
 
 /** One of the agent's own active prospects. */
 export async function getProspect(agentId: string, id: string): Promise<ProspectRow | null> {
   if (!z.string().uuid().safeParse(id).success) return null;
   const db = await getDb();
+  const p = schema.agentProspects;
   const [r] = await db
-    .select({ p: schema.agentProspects, ...contactFlags })
-    .from(schema.agentProspects)
-    .leftJoin(schema.contacts, eq(schema.contacts.id, schema.agentProspects.contactId))
-    .where(and(eq(schema.agentProspects.id, id), eq(schema.agentProspects.agentId, agentId), isNull(schema.agentProspects.releasedAt)))
+    .select()
+    .from(p)
+    .where(and(eq(p.id, id), eq(p.agentId, agentId), isNull(p.releasedAt)))
     .limit(1);
-  return r ? toRow(r.p, r) : null;
+  return r ? toRow(r) : null;
 }
 
 /** For updates: a field the form didn't send stays undefined (unchanged); an empty one becomes null (cleared). */
@@ -229,6 +347,13 @@ const patchText = (max: number) =>
   text(max)
     .optional()
     .transform((v) => (v === undefined ? undefined : v || null));
+
+/** A real calendar date, yyyy-mm-dd. */
+function isDate(v: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
 
 export const prospectUpdateSchema = z.object({
   status: z.enum(["new", "contacted", "replied", "not_interested", "do_not_contact"]).optional(),
@@ -238,7 +363,7 @@ export const prospectUpdateSchema = z.object({
     .string()
     .trim()
     .optional()
-    .refine((v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v), "Please choose a date."),
+    .refine((v) => !v || (isDate(v) && v >= "2000-01-01" && v <= "2100-12-31"), "Please choose a date."),
   website: patchText(300).refine((v) => v == null || normalizeDomain(v) !== null, "Please enter a website like example.com."),
   phone: patchText(40),
   email: patchText(254).refine((v) => v == null || isValidEmail(v), "Please enter a valid email address."),
@@ -248,39 +373,48 @@ export type ProspectUpdate = z.infer<typeof prospectUpdateSchema>;
 export type UpdateProspectResult = "ok" | "not_found" | "locked" | "taken";
 
 /**
- * The agent updates their prospect. "Do not contact" is final for them (an admin can clear it). Marking it contacted
- * sets a follow-up `DEFAULT_FOLLOW_UP_DAYS` out unless they chose a date. Any change renews the claim.
+ * The agent updates their prospect from its Status and notes form. "Do not contact" is final for them: only their
+ * notes still change (an admin can clear it). Moving it to Contacted counts as reaching out once. Any save renews the
+ * claim.
  */
 export async function updateProspect(agentId: string, id: string, input: ProspectUpdate): Promise<UpdateProspectResult> {
   const current = await getProspect(agentId, id);
   if (!current) return "not_found";
-  if (current.status === "do_not_contact" && input.status && input.status !== "do_not_contact") return "locked";
+  const p = schema.agentProspects;
   const now = new Date();
-  const patch: Partial<typeof schema.agentProspects.$inferInsert> = { activeAt: now, updatedAt: now };
-  if (input.status) patch.status = input.status;
-  if (input.notes !== undefined) patch.notes = input.notes;
-  if (input.nextFollowUp !== undefined) patch.nextFollowUpAt = input.nextFollowUp ? new Date(`${input.nextFollowUp}T14:00:00Z`) : null;
-  if (input.status === "contacted") {
-    patch.lastContactedAt = now;
-    if (!input.nextFollowUp) patch.nextFollowUpAt = new Date(now.getTime() + DEFAULT_FOLLOW_UP_DAYS * DAY);
-  }
-  if (input.status === "not_interested" || input.status === "do_not_contact") patch.nextFollowUpAt = null;
-  // Contact details are the agent's own notes, editable only on businesses they added by hand (Google details stay with Google).
-  if (!current.placeId) {
-    if (input.website !== undefined) {
-      patch.website = normalizeWebsite(input.website);
-      patch.domain = normalizeDomain(patch.website);
+  const patch: Partial<typeof p.$inferInsert> = { activeAt: now, updatedAt: now };
+  let countContact = false;
+  if (current.status === "do_not_contact") {
+    // Its contact details are what blocks the business for the team: they stay as they are.
+    const changes = (input.status && input.status !== "do_not_contact") || input.nextFollowUp || [input.website, input.phone, input.email].some((v) => v !== undefined);
+    if (changes) return "locked";
+    if (input.notes !== undefined) patch.notes = input.notes;
+  } else {
+    if (input.status) patch.status = input.status;
+    if (input.notes !== undefined) patch.notes = input.notes;
+    if (input.nextFollowUp !== undefined) patch.nextFollowUpAt = input.nextFollowUp ? new Date(`${input.nextFollowUp}T14:00:00Z`) : null;
+    if (input.status === "contacted" && current.status !== "contacted") {
+      patch.lastContactedAt = now;
+      countContact = true;
     }
-    if (input.phone !== undefined) patch.phone = input.phone;
-    if (input.email !== undefined) patch.email = input.email?.toLowerCase() ?? null;
+    if (input.status === "not_interested" || input.status === "do_not_contact") patch.nextFollowUpAt = null;
+    // Contact details are the agent's own notes, editable only on businesses they added by hand (Google details stay with Google).
+    if (!current.placeId) {
+      if (input.website !== undefined) {
+        patch.website = normalizeWebsite(input.website);
+        patch.domain = claimDomain(patch.website);
+      }
+      if (input.phone !== undefined) patch.phone = input.phone;
+      if (input.email !== undefined) patch.email = input.email?.toLowerCase() ?? null;
+    }
   }
   const db = await getDb();
   try {
     const [updated] = await db
-      .update(schema.agentProspects)
-      .set(patch)
-      .where(and(eq(schema.agentProspects.id, id), eq(schema.agentProspects.agentId, agentId), isNull(schema.agentProspects.releasedAt)))
-      .returning({ id: schema.agentProspects.id });
+      .update(p)
+      .set({ ...patch, ...(countContact ? { contactCount: sql`${p.contactCount} + 1` } : {}) })
+      .where(and(eq(p.id, id), eq(p.agentId, agentId), isNull(p.releasedAt)))
+      .returning({ id: p.id });
     return updated ? "ok" : "not_found";
   } catch (err) {
     // A website that another agent's active prospect already uses.
@@ -289,13 +423,43 @@ export async function updateProspect(agentId: string, id: string, input: Prospec
   }
 }
 
+export type MarkContactedResult = { status: "ok"; count: number; followUpAt: Date | null } | { status: "not_found" | "locked" };
+
+/**
+ * "I sent it": the agent reached out once more. Sets a follow-up reminder `DEFAULT_FOLLOW_UP_DAYS` out, up to
+ * `MAX_CONTACTS` messages in all; after the last one there's no reminder. A new or closed prospect becomes Contacted.
+ */
+export async function markProspectContacted(agentId: string, id: string): Promise<MarkContactedResult> {
+  const current = await getProspect(agentId, id);
+  if (!current) return { status: "not_found" };
+  if (current.status === "do_not_contact") return { status: "locked" };
+  const p = schema.agentProspects;
+  const now = new Date();
+  const followUpAt = current.contactCount + 1 < MAX_CONTACTS ? new Date(now.getTime() + DEFAULT_FOLLOW_UP_DAYS * DAY) : null;
+  const db = await getDb();
+  const [updated] = await db
+    .update(p)
+    .set({
+      status: current.status === "new" || current.status === "not_interested" ? "contacted" : current.status,
+      lastContactedAt: now,
+      contactCount: sql`${p.contactCount} + 1`,
+      nextFollowUpAt: followUpAt,
+      activeAt: now,
+      updatedAt: now,
+    })
+    .where(and(eq(p.id, id), eq(p.agentId, agentId), isNull(p.releasedAt), sql`${p.status} <> 'do_not_contact'`))
+    .returning({ contactCount: p.contactCount });
+  return updated ? { status: "ok", count: updated.contactCount, followUpAt } : { status: "not_found" };
+}
+
 /** Renews the claim (e.g. after writing a message), without changing anything the agent sees. */
 export async function touchProspect(agentId: string, id: string): Promise<void> {
   const db = await getDb();
+  const p = schema.agentProspects;
   await db
-    .update(schema.agentProspects)
+    .update(p)
     .set({ activeAt: new Date() })
-    .where(and(eq(schema.agentProspects.id, id), eq(schema.agentProspects.agentId, agentId), isNull(schema.agentProspects.releasedAt)));
+    .where(and(eq(p.id, id), eq(p.agentId, agentId), isNull(p.releasedAt)));
 }
 
 /** The prospect's tracked link: opens the free AI Readiness Assessment and credits the agent (and this prospect). */
@@ -307,10 +471,11 @@ export function prospectLink(code: string, token: string): string {
 export async function prospectTokenValid(agentId: string, token: string): Promise<boolean> {
   if (!LINK_TOKEN_RE.test(token)) return false;
   const db = await getDb();
+  const p = schema.agentProspects;
   const [row] = await db
-    .select({ status: schema.agentProspects.status })
-    .from(schema.agentProspects)
-    .where(and(eq(schema.agentProspects.linkToken, token), eq(schema.agentProspects.agentId, agentId), isNull(schema.agentProspects.releasedAt)))
+    .select({ status: p.status })
+    .from(p)
+    .where(and(eq(p.linkToken, token), eq(p.agentId, agentId), isNull(p.releasedAt)))
     .limit(1);
   return Boolean(row && row.status !== "do_not_contact");
 }
@@ -319,20 +484,13 @@ export async function prospectTokenValid(agentId: string, token: string): Promis
 export async function attachContactToProspect(agentId: string, token: string, contactId: string): Promise<boolean> {
   if (!LINK_TOKEN_RE.test(token)) return false;
   const db = await getDb();
+  const p = schema.agentProspects;
   const now = new Date();
   const [row] = await db
-    .update(schema.agentProspects)
+    .update(p)
     .set({ contactId, signedUpAt: now, activeAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(schema.agentProspects.linkToken, token),
-        eq(schema.agentProspects.agentId, agentId),
-        isNull(schema.agentProspects.releasedAt),
-        isNull(schema.agentProspects.contactId),
-        sql`${schema.agentProspects.status} <> 'do_not_contact'`,
-      ),
-    )
-    .returning({ id: schema.agentProspects.id });
+    .where(and(eq(p.linkToken, token), eq(p.agentId, agentId), isNull(p.releasedAt), isNull(p.contactId), sql`${p.status} <> 'do_not_contact'`))
+    .returning({ id: p.id });
   return Boolean(row);
 }
 
@@ -343,15 +501,16 @@ export type AdminProspectRow = AgentProspect & { agentName: string; agentCode: s
 /** Admin → Sales Team → Prospects: every active prospect (or one agent's), newest activity first. */
 export async function adminListProspects(opts: { agentId?: string; status?: ProspectStatus; limit?: number } = {}): Promise<AdminProspectRow[]> {
   const db = await getDb();
-  const where = [isNull(schema.agentProspects.releasedAt)];
-  if (opts.agentId) where.push(eq(schema.agentProspects.agentId, opts.agentId));
-  if (opts.status) where.push(eq(schema.agentProspects.status, opts.status));
+  const p = schema.agentProspects;
+  const where = [isNull(p.releasedAt)];
+  if (opts.agentId) where.push(eq(p.agentId, opts.agentId));
+  if (opts.status) where.push(eq(p.status, opts.status));
   const rows = await db
-    .select({ p: schema.agentProspects, agentName: schema.salesAgents.name, agentCode: schema.salesAgents.code })
-    .from(schema.agentProspects)
-    .innerJoin(schema.salesAgents, eq(schema.salesAgents.id, schema.agentProspects.agentId))
+    .select({ p, agentName: schema.salesAgents.name, agentCode: schema.salesAgents.code })
+    .from(p)
+    .innerJoin(schema.salesAgents, eq(schema.salesAgents.id, p.agentId))
     .where(and(...where))
-    .orderBy(desc(schema.agentProspects.activeAt))
+    .orderBy(desc(p.activeAt))
     .limit(opts.limit ?? 500);
   return rows.map((r) => ({ ...r.p, agentName: r.agentName, agentCode: r.agentCode, expired: claimExpired(r.p) }));
 }
@@ -360,44 +519,42 @@ export async function adminListProspects(opts: { agentId?: string; status?: Pros
 export async function adminReleaseProspect(id: string, reason: string): Promise<boolean> {
   if (!z.string().uuid().safeParse(id).success) return false;
   const db = await getDb();
+  const p = schema.agentProspects;
   const now = new Date();
   const [row] = await db
-    .update(schema.agentProspects)
+    .update(p)
     .set({ releasedAt: now, releaseReason: reason.slice(0, 200), updatedAt: now })
-    .where(and(eq(schema.agentProspects.id, id), isNull(schema.agentProspects.releasedAt)))
-    .returning({ id: schema.agentProspects.id });
+    .where(and(eq(p.id, id), isNull(p.releasedAt)))
+    .returning({ id: p.id });
+  return Boolean(row);
+}
+
+/** Admin: the business asked us (not the agent) to stop. Blocks it for the whole team, like an agent's "Do not contact". */
+export async function adminMarkDoNotContact(id: string): Promise<boolean> {
+  if (!z.string().uuid().safeParse(id).success) return false;
+  const db = await getDb();
+  const p = schema.agentProspects;
+  const now = new Date();
+  const [row] = await db
+    .update(p)
+    .set({ status: "do_not_contact", nextFollowUpAt: null, activeAt: now, updatedAt: now })
+    .where(and(eq(p.id, id), isNull(p.releasedAt)))
+    .returning({ id: p.id });
   return Boolean(row);
 }
 
 /** Active prospect counts per status for one agent (admin agent page). */
 export async function prospectCounts(agentId: string): Promise<{ total: number; contacted: number; signedUp: number; doNotContact: number }> {
   const db = await getDb();
+  const p = schema.agentProspects;
   const [r] = await db
     .select({
       total: sql<number>`count(*)::int`,
-      contacted: sql<number>`count(*) filter (where ${schema.agentProspects.lastContactedAt} is not null)::int`,
-      signedUp: sql<number>`count(*) filter (where ${schema.agentProspects.contactId} is not null)::int`,
-      doNotContact: sql<number>`count(*) filter (where ${schema.agentProspects.status} = 'do_not_contact')::int`,
+      contacted: sql<number>`count(*) filter (where ${p.lastContactedAt} is not null)::int`,
+      signedUp: sql<number>`count(*) filter (where ${p.contactId} is not null)::int`,
+      doNotContact: sql<number>`count(*) filter (where ${p.status} = 'do_not_contact')::int`,
     })
-    .from(schema.agentProspects)
-    .where(and(eq(schema.agentProspects.agentId, agentId), isNull(schema.agentProspects.releasedAt)));
+    .from(p)
+    .where(and(eq(p.agentId, agentId), isNull(p.releasedAt)));
   return { total: r?.total ?? 0, contacted: r?.contacted ?? 0, signedUp: r?.signedUp ?? 0, doNotContact: r?.doNotContact ?? 0 };
-}
-
-/** Prospects whose follow-up date has come (dashboard nudge). */
-export async function dueFollowUps(agentId: string, now = new Date()): Promise<number> {
-  const db = await getDb();
-  const [r] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(schema.agentProspects)
-    .where(
-      and(
-        eq(schema.agentProspects.agentId, agentId),
-        isNull(schema.agentProspects.releasedAt),
-        isNotNull(schema.agentProspects.nextFollowUpAt),
-        sql`${schema.agentProspects.nextFollowUpAt} <= ${now}`,
-        inArray(schema.agentProspects.status, ["new", "contacted", "replied"]),
-      ),
-    );
-  return r?.n ?? 0;
 }

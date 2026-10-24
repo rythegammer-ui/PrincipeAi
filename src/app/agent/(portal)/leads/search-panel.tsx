@@ -18,7 +18,7 @@ export function SearchPanel({ defaultWhere, enabled }: { defaultWhere: string; e
     <div>
       {!enabled && (
         <Alert tone="info" title="Business search isn't switched on yet" className="mb-4">
-          You can still add businesses you find yourself (for example on Google Maps) with the form below.
+          You can still add businesses you find yourself (for example on Google Maps) with &ldquo;Add a business you found yourself&rdquo; below.
         </Alert>
       )}
       <form action={action} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
@@ -38,9 +38,12 @@ export function SearchPanel({ defaultWhere, enabled }: { defaultWhere: string; e
           {state.error}
         </Alert>
       )}
+      <p role="status" className="sr-only">
+        {results ? (results.length ? `${results.length} businesses found.` : "No businesses found.") : ""}
+      </p>
 
       {results && (
-        <div className="mt-5" aria-live="polite">
+        <div className="mt-5">
           {results.length === 0 ? (
             <p className="text-sm text-zinc-600">No businesses found. Try a broader kind of business or a nearby city.</p>
           ) : (
@@ -78,7 +81,12 @@ function ResultRow({ result, what, where }: { result: SearchResultView; what: st
           {result.category && <Badge>{result.category}</Badge>}
           {!result.operational && <Badge tone="amber">May be closed</Badge>}
           {result.mapsUrl && (
-            <a href={result.mapsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
+            <a
+              href={result.mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-brand-700 hover:underline sm:min-h-0"
+            >
               Open in Google Maps <ExternalLink className="size-3" aria-hidden />
               <span className="sr-only">(opens in a new tab)</span>
             </a>

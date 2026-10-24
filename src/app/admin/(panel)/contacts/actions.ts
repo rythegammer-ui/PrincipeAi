@@ -12,6 +12,7 @@ import { recipientTemplateVars, stopAutomations } from "@/lib/automations";
 import { addTags, logActivity, recomputeScore, setStage, upsertContact } from "@/lib/crm";
 import { emailBusinessName, fillTemplate, sendEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
+import { clearFollowUpConsent } from "@/lib/sales/referrals";
 import { PENDING_ORDER_TTL_MS } from "@/lib/jobs";
 import { isValidEmail, normalizeEmail, truncate } from "@/lib/utils";
 
@@ -225,7 +226,10 @@ export async function setUnsubscribedAction(contactId: string, unsubscribed: boo
   if (!parsed.success) return { ok: false, error: "Invalid request." };
   const db = await getDb();
   await db.update(c).set({ unsubscribed: parsed.data.unsubscribed }).where(eq(c.id, parsed.data.id));
-  if (parsed.data.unsubscribed) await stopAutomations(parsed.data.id);
+  if (parsed.data.unsubscribed) {
+    await stopAutomations(parsed.data.id);
+    await clearFollowUpConsent(parsed.data.id);
+  }
   await recomputeScore(parsed.data.id);
   revalidateCrm();
   return { ok: true };

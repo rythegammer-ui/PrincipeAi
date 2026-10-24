@@ -6,7 +6,8 @@ import { rateLimitByIp } from "@/lib/rate-limit";
 import { followUpConsentFrom } from "@/lib/sales/referrals";
 import { firstName } from "@/lib/utils";
 
-const FIELDS = ["name", "email", "topic", "message"] as const;
+// agentFollowUp: the optional "OK for <agent> to follow up" box, echoed back so it stays ticked after an error.
+const FIELDS = ["name", "email", "topic", "message", "agentFollowUp"] as const;
 export type ContactField = (typeof FIELDS)[number];
 export type ContactState = LeadFormState<ContactField>;
 

@@ -87,7 +87,7 @@ export function ContactForm({ defaultTopic, referrer }: { defaultTopic?: string;
           aria-invalid={err.message ? true : undefined}
         />
       </Field>
-      <AgentFollowUpConsent agent={referrer} id="contact-agent-follow-up" />
+      <AgentFollowUpConsent agent={referrer} id="contact-agent-follow-up" defaultChecked={v.agentFollowUp === "on"} />
 
       <SubmitButton size="lg" className="w-full sm:w-auto sm:self-start" pendingText="Sending…">
         Send message <Send aria-hidden />

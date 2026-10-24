@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, Link2, MessageSquareText, NotebookPen } from "lucide-react";
+import { ArrowLeft, Building2, ExternalLink, Link2, MessageSquareText, NotebookPen } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -7,7 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { currentAgent } from "@/lib/sales/agents";
 import { OUTREACH_CHANNELS } from "@/lib/sales/outreach";
-import { CLAIM_DAYS, getProspect, prospectLink } from "@/lib/sales/prospects";
+import { CLAIM_DAYS, getProspect, HOLD_DAYS, MAX_CONTACTS, prospectLink } from "@/lib/sales/prospects";
 import { formatDate, timeAgo } from "@/lib/utils";
 import { NotAnAgent } from "../../not-agent";
 import { ProspectBadges } from "../labels";
@@ -35,7 +35,11 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
         <ProspectBadges p={p} />
         {(p.category || p.area) && <span>{[p.category, p.area].filter(Boolean).join(" · ")}</span>}
         <span>Added {formatDate(p.createdAt)}</span>
-        {p.lastContactedAt && <span>· Last contacted {timeAgo(p.lastContactedAt)}</span>}
+        {p.lastContactedAt && (
+          <span>
+            · Contacted {p.contactCount} of {MAX_CONTACTS} times, last {timeAgo(p.lastContactedAt)}
+          </span>
+        )}
       </div>
 
       {blocked && (
@@ -45,13 +49,15 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
       )}
       {!active && !blocked && (
         <Alert tone="warning" title="Your agent account is paused" className="mt-6">
-          Hold off contacting this business until your account is active again.
+          Hold off contacting this business until your account is active again. If they asked not to be contacted, you can still mark them Do not
+          contact below.
         </Alert>
       )}
       {p.signedUp && (
-        <Alert tone="success" title={p.customer ? "They became a customer" : p.tookAssessment ? "They took the assessment" : "They signed up"} className="mt-6">
-          Someone from this business signed up through your link{p.signedUpAt ? ` ${timeAgo(p.signedUpAt)}` : ""}. If they buy a course, the commission shows on your
-          dashboard.
+        <Alert tone="success" title="Someone signed up through your link" className="mt-6">
+          Someone signed up through this business&apos;s link{p.signedUpAt ? ` ${timeAgo(p.signedUpAt)}` : ""}, so they&apos;re your customer. If they buy a course,
+          the commission shows on your dashboard. Their details stay private unless they said it&apos;s OK for you to follow up (then they&apos;re under Warm
+          leads).
         </Alert>
       )}
 
@@ -71,6 +77,8 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
                 {p.website ? (
                   <a href={p.website} target="_blank" rel="noopener noreferrer" className="break-all text-brand-700 hover:underline">
                     {p.website}
+                    <ExternalLink className="ml-1 inline size-3" aria-hidden />
+                    <span className="sr-only"> (opens in a new tab)</span>
                   </a>
                 ) : (
                   "—"
@@ -127,7 +135,10 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
           <CardTitle className="flex items-center gap-2">
             <NotebookPen className="size-4 text-brand-600" aria-hidden /> Status and notes
           </CardTitle>
-          <CardDescription>This business stays yours while you work on it; the claim runs out {CLAIM_DAYS} days after your last update.</CardDescription>
+          <CardDescription>
+            This business stays yours while you work on it: the claim runs out {CLAIM_DAYS} days after your last update ({HOLD_DAYS} once it&apos;s Closed or
+            someone signed up).
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ProspectUpdateForm

@@ -23,7 +23,7 @@ export function AgentNav() {
             href={href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors sm:px-3",
+              "inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors sm:min-h-10 sm:px-3",
               active ? "bg-brand-50 text-brand-800" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
             )}
           >

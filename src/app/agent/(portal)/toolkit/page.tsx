@@ -18,7 +18,7 @@ const DOS = [
   "On social media, put #ad and the commission line at the start of the post, before the link and above any “more” cut-off.",
   "In every promotional email, include a way to opt out (“reply stop”) and our mailing address, and honour opt-outs straight away (within 10 business days at the latest).",
   "Describe the courses accurately, using what's on the course pages.",
-  "Reach out to people you know, or people who've asked to hear from you.",
+  "Reach out to people you know, people who've asked to hear from you, or local businesses one at a time through the Leads tab, using their public business contact details.",
   "Stop messaging anyone who says no or asks you to stop, straight away.",
   "Forward any “stop” or unsubscribe reply to us so we can honour it too.",
   "Send questions about refunds, access or support to us.",
@@ -27,7 +27,8 @@ const DOS = [
 const DONTS = [
   "Promise results, like “this will save you 10 hours a week” or “you'll make more money”.",
   "Make claims about what anyone earns on the sales team.",
-  "Send texts, calls or emails to people who haven't agreed to hear from you, or buy contact lists.",
+  "Text cell phones without consent, use auto-dialers or recorded calls, call numbers on the Do Not Call Registry, send bulk or automated messages, or buy, rent or scrape contact lists.",
+  "Email or message people (rather than businesses) who haven't agreed to hear from you.",
   "Post fake reviews or pretend to be a customer.",
   `Run ads on our name (“${site.name}”) or make pages and accounts that look like ours.`,
   "Offer discounts, rebates or a share of your commission. Only the prices on the site are real.",

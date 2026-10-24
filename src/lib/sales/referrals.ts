@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb, schema } from "@/db";
 import type { SalesAgent } from "@/db/schema";
@@ -200,14 +200,22 @@ export async function claimNewContactFromCookie(contactId: string, opts: { follo
   }
 }
 
+/**
+ * Withdraws a contact's OK for their agent to follow up (they unsubscribed, or asked us). For good: subscribing again
+ * doesn't show them to the agent again; only ticking the box on a new sign-up would, and that only happens for new contacts.
+ */
+export async function clearFollowUpConsent(contactId: string): Promise<void> {
+  const db = await getDb();
+  await db.update(schema.agentReferrals).set({ followUpConsentAt: null }).where(eq(schema.agentReferrals.contactId, contactId));
+}
+
+/** What a warm lead agreed to share: their name, email and which free resource they signed up for. */
 export type WarmLead = {
   contactId: string;
   name: string | null;
   email: string;
   source: string | null;
-  stage: string;
   consentedAt: Date;
-  tookAssessment: boolean;
 };
 
 /**
@@ -222,9 +230,7 @@ export async function listWarmLeads(agentId: string): Promise<WarmLead[]> {
       name: schema.contacts.name,
       email: schema.contacts.email,
       source: schema.contacts.source,
-      stage: schema.contacts.stage,
       consentedAt: schema.agentReferrals.followUpConsentAt,
-      tookAssessment: sql<boolean>`exists (select 1 from ${schema.quizSubmissions} q where q.contact_id = ${schema.contacts.id})`,
     })
     .from(schema.agentReferrals)
     .innerJoin(schema.contacts, eq(schema.contacts.id, schema.agentReferrals.contactId))
@@ -237,7 +243,7 @@ export async function listWarmLeads(agentId: string): Promise<WarmLead[]> {
     )
     .orderBy(desc(schema.agentReferrals.followUpConsentAt))
     .limit(200);
-  return rows.map((r) => ({ ...r, consentedAt: r.consentedAt as Date, tookAssessment: Boolean(r.tookAssessment) }));
+  return rows.map((r) => ({ ...r, consentedAt: r.consentedAt as Date }));
 }
 
 /**

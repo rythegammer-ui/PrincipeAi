@@ -21,19 +21,26 @@ vi.mock("@/lib/ai", async (importOriginal) => ({
 import { site } from "@/config/site";
 import { getDb, schema } from "@/db";
 import type { SalesAgent } from "@/db/schema";
-import { captureLead } from "@/lib/crm";
-import { DISCLOSURE, writeOutreach } from "@/lib/sales/outreach";
-import { placeDetails, searchPlaces } from "@/lib/sales/places";
+import { captureLead, setMarketingSubscription } from "@/lib/crm";
+import { runScheduledJobs } from "@/lib/jobs";
+import { DISCLOSURE, MISSING_ADDRESS, writeOutreach } from "@/lib/sales/outreach";
+import { placeDetails, placesSiteKey, searchPlaces } from "@/lib/sales/places";
 import {
   addProspect,
+  adminMarkDoNotContact,
   adminReleaseProspect,
+  claimDomain,
   claimExpired,
   claimStatesForPlaces,
   CLAIM_DAYS,
   DEFAULT_FOLLOW_UP_DAYS,
   getProspect,
+  HOLD_DAYS,
   listProspects,
+  markProspectContacted,
+  matchKey,
   MAX_ACTIVE_PROSPECTS,
+  MAX_CONTACTS,
   normalizeDomain,
   normalizeWebsite,
   prospectInputSchema,
@@ -68,8 +75,30 @@ describe("lead generator rules (pure)", () => {
     expect(claimExpired({ status: "contacted", contactId: null, activeAt: at(CLAIM_DAYS - 1) }, now)).toBe(false);
     expect(claimExpired({ status: "contacted", contactId: null, activeAt: at(CLAIM_DAYS) }, now)).toBe(true);
     expect(claimExpired({ status: "not_interested", contactId: null, activeAt: at(CLAIM_DAYS + 5) }, now)).toBe(false);
+    expect(claimExpired({ status: "not_interested", contactId: null, activeAt: at(HOLD_DAYS) }, now)).toBe(true);
     expect(claimExpired({ status: "do_not_contact", contactId: null, activeAt: at(1000) }, now)).toBe(false);
-    expect(claimExpired({ status: "new", contactId: randomUUID(), activeAt: at(1000) }, now)).toBe(false);
+    // A sign-up holds the business longer, but not for ever (a throwaway sign-up mustn't lock a business for good).
+    expect(claimExpired({ status: "new", contactId: randomUUID(), activeAt: at(CLAIM_DAYS + 5) }, now)).toBe(false);
+    expect(claimExpired({ status: "new", contactId: randomUUID(), activeAt: at(HOLD_DAYS) }, now)).toBe(true);
+  });
+
+  it("matches the same business however it was typed, but not shared hosts", () => {
+    expect(matchKey("The Joe's Café, LLC")).toBe("joescafe");
+    expect(matchKey("JOES CAFE")).toBe("joescafe");
+    expect(matchKey("Joe’s Cafe Inc.")).toBe("joescafe");
+    expect(matchKey("The")).toBe("the");
+    expect(claimDomain("https://www.facebook.com/joescafe")).toBeNull();
+    expect(claimDomain("instagram.com/joescafe")).toBeNull();
+    expect(claimDomain("joes.square.site")).toBe("joes.square.site");
+    expect(claimDomain("www.joescafe.com/menu")).toBe("joescafe.com");
+  });
+
+  it("only takes real calendar dates for follow-ups", () => {
+    expect(prospectUpdateSchema.safeParse({ nextFollowUp: "2026-11-02" }).success).toBe(true);
+    expect(prospectUpdateSchema.safeParse({ nextFollowUp: "" }).success).toBe(true);
+    expect(prospectUpdateSchema.safeParse({ nextFollowUp: "2026-02-30" }).success).toBe(false);
+    expect(prospectUpdateSchema.safeParse({ nextFollowUp: "2026-13-01" }).success).toBe(false);
+    expect(prospectUpdateSchema.safeParse({ nextFollowUp: "0000-01-01" }).success).toBe(false);
   });
 
   it("validates what agents type in", () => {
@@ -135,13 +164,23 @@ describe("lead generator", () => {
     expect((await addProspect(jane, business({ name: "Main St Dental", website: `https://www.${site1}/team` }))).status).toBe("added");
     expect((await addProspect(sam, business({ name: "Main Street Dental", website: site1 }))).status).toBe("claimed");
 
-    const states = await claimStatesForPlaces(sam.id, [place, placeId()]);
+    const other = placeId();
+    const states = await claimStatesForPlaces(
+      sam.id,
+      [
+        { placeId: place, name: "Joe's Bakery" },
+        // Another Joe's Bakery listing on Google is a different business.
+        { placeId: other, name: "Joe's Bakery" },
+      ],
+      "Austin, TX",
+    );
     expect(states.get(place)).toBe("claimed");
-    expect((await claimStatesForPlaces(jane.id, [place])).get(place)).toBe("mine");
+    expect(states.get(other)).toBe("available");
+    expect((await claimStatesForPlaces(jane.id, [{ placeId: place, name: "Joe's Bakery" }], "Austin, TX")).get(place)).toBe("mine");
 
     // Jane stops working it: after CLAIM_DAYS it's free, and her row becomes history.
     await db.update(schema.agentProspects).set({ activeAt: new Date(Date.now() - (CLAIM_DAYS + 1) * DAY) }).where(eq(schema.agentProspects.id, added.prospect.id));
-    expect((await claimStatesForPlaces(sam.id, [place])).get(place)).toBe("available");
+    expect((await claimStatesForPlaces(sam.id, [{ placeId: place, name: "Joe's Bakery" }], "Austin, TX")).get(place)).toBe("available");
     const taken = await addProspect(sam, business({ placeId: place }));
     expect(taken.status).toBe("added");
     const [old] = await db.select().from(schema.agentProspects).where(eq(schema.agentProspects.id, added.prospect.id));
@@ -161,10 +200,64 @@ describe("lead generator", () => {
     // Never runs out.
     await db.update(schema.agentProspects).set({ activeAt: new Date(Date.now() - 400 * DAY) }).where(eq(schema.agentProspects.id, added.prospect.id));
     expect((await addProspect(sam, business({ placeId: place }))).status).toBe("do_not_contact");
-    expect((await claimStatesForPlaces(sam.id, [place])).get(place)).toBe("do_not_contact");
+    expect((await claimStatesForPlaces(sam.id, [{ placeId: place, name: "Joe's Bakery" }], "Austin, TX")).get(place)).toBe("do_not_contact");
 
     expect(await adminReleaseProspect(added.prospect.id, "released by owner@example.com")).toBe(true);
     expect((await addProspect(sam, business({ placeId: place }))).status).toBe("added");
+  });
+
+  it("recognizes a do-not-contact business added the other way (by hand vs from Google), and the agent can't undo it", async () => {
+    const jane = await newAgent();
+    const sam = await newAgent("Sam Other");
+    const name = `Maple Dental ${randomUUID().slice(0, 6)}`;
+    const none = { notes: undefined, website: undefined, phone: undefined, email: undefined };
+
+    // From Google, then the owner says stop.
+    const google = await addProspect(jane, business({ name, placeId: placeId(), area: "Austin, TX" }));
+    if (google.status !== "added") throw new Error("not added");
+    await updateProspect(jane.id, google.prospect.id, { status: "do_not_contact", ...none });
+    // By hand, written differently, even in another town: still blocked.
+    expect((await addProspect(sam, business({ name: `the ${name.toUpperCase()}, LLC`, area: "Round Rock, TX" }))).status).toBe("do_not_contact");
+
+    // By hand first, then found on Google.
+    const handName = `Oak Street Gym ${randomUUID().slice(0, 6)}`;
+    const handSite = `${randomUUID().slice(0, 8)}.example.com`;
+    const hand = await addProspect(jane, business({ name: handName, website: handSite, email: "Front@Desk.example.com", phone: "(512) 555-0199" }));
+    if (hand.status !== "added") throw new Error("not added");
+    const found = placeId();
+    expect((await claimStatesForPlaces(sam.id, [{ placeId: found, name: handName }], "Austin, TX")).get(found)).toBe("claimed");
+    expect((await addProspect(sam, business({ name: handName, placeId: found }))).status).toBe("claimed");
+    // Same email or phone, another name: the same business.
+    expect((await addProspect(sam, business({ name: "OSG", email: "front@desk.example.com" }))).status).toBe("claimed");
+    expect((await addProspect(sam, business({ name: "OSG Fitness", phone: "512.555.0199" }))).status).toBe("claimed");
+    // Same name in another town, added by hand: a different business.
+    expect((await addProspect(sam, business({ name: handName, area: "Dallas, TX" }))).status).toBe("added");
+
+    await updateProspect(jane.id, hand.prospect.id, { status: "do_not_contact", ...none });
+    expect((await claimStatesForPlaces(sam.id, [{ placeId: found, name: handName }], "Austin, TX")).get(found)).toBe("do_not_contact");
+    // Do not contact is final for the agent: the details it's matched by can't change, nor can the status or reminder.
+    expect(await updateProspect(jane.id, hand.prospect.id, { ...none, website: null })).toBe("locked");
+    expect(await updateProspect(jane.id, hand.prospect.id, { ...none, website: "other.example.com" })).toBe("locked");
+    expect(await updateProspect(jane.id, hand.prospect.id, { ...none, nextFollowUp: "2026-12-01" })).toBe("locked");
+    expect(await updateProspect(jane.id, hand.prospect.id, { ...none, notes: "Owner asked us to stop on 10/24." })).toBe("ok");
+    expect(await getProspect(jane.id, hand.prospect.id)).toMatchObject({ status: "do_not_contact", domain: handSite, notes: "Owner asked us to stop on 10/24." });
+    expect(await markProspectContacted(jane.id, hand.prospect.id)).toEqual({ status: "locked" });
+
+    // A shared host (a Facebook page) isn't a business's identity: two businesses can both use one.
+    expect((await addProspect(jane, business({ name: `Pine Bakery ${randomUUID().slice(0, 6)}`, website: "facebook.com/pinebakery" }))).status).toBe("added");
+    expect((await addProspect(sam, business({ name: `Elm Salon ${randomUUID().slice(0, 6)}`, website: "facebook.com/elmsalon" }))).status).toBe("added");
+  });
+
+  it("lets an admin mark a business do-not-contact when it asked us directly", async () => {
+    const jane = await newAgent();
+    const sam = await newAgent("Sam Other");
+    const place = placeId();
+    const added = await addProspect(jane, business({ placeId: place }));
+    if (added.status !== "added") throw new Error("not added");
+    expect(await adminMarkDoNotContact(added.prospect.id)).toBe(true);
+    expect(await getProspect(jane.id, added.prospect.id)).toMatchObject({ status: "do_not_contact", nextFollowUpAt: null });
+    expect((await addProspect(sam, business({ placeId: place }))).status).toBe("do_not_contact");
+    expect(await adminMarkDoNotContact("not-a-uuid")).toBe(false);
   });
 
   it("tracks status and follow-ups, and only lets agents edit details they typed in", async () => {
@@ -176,20 +269,27 @@ describe("lead generator", () => {
     const none = { notes: undefined, website: undefined, phone: undefined, email: undefined };
 
     const before = Date.now();
-    expect(await updateProspect(jane.id, google.prospect.id, { status: "contacted", ...none })).toBe("ok");
+    // Moving it to Contacted in the form counts one message; the reminder is what the form says (empty: none).
+    expect(await updateProspect(jane.id, google.prospect.id, { status: "contacted", nextFollowUp: "", ...none })).toBe("ok");
     let row = await getProspect(jane.id, google.prospect.id);
     expect(row?.lastContactedAt?.getTime()).toBeGreaterThanOrEqual(before - 1000);
-    expect(row!.nextFollowUpAt!.getTime() - row!.lastContactedAt!.getTime()).toBeCloseTo(DEFAULT_FOLLOW_UP_DAYS * DAY, -4);
+    expect(row).toMatchObject({ contactCount: 1, nextFollowUpAt: null });
+    // Saving it again as Contacted doesn't count another message.
+    const firstContact = row!.lastContactedAt!.getTime();
+    expect(await updateProspect(jane.id, google.prospect.id, { status: "contacted", nextFollowUp: "", ...none })).toBe("ok");
+    row = await getProspect(jane.id, google.prospect.id);
+    expect(row).toMatchObject({ contactCount: 1, nextFollowUpAt: null });
+    expect(row!.lastContactedAt!.getTime()).toBe(firstContact);
 
     expect(await updateProspect(jane.id, google.prospect.id, { nextFollowUp: "2026-11-02", ...none })).toBe("ok");
     expect((await getProspect(jane.id, google.prospect.id))?.nextFollowUpAt?.toISOString()).toBe("2026-11-02T14:00:00.000Z");
     expect(await updateProspect(jane.id, google.prospect.id, { status: "not_interested", ...none })).toBe("ok");
     expect((await getProspect(jane.id, google.prospect.id))?.nextFollowUpAt).toBeNull();
 
-    // Marking it contacted from the message box (a form with only the status) keeps everything else.
+    // A form that sends only the status keeps everything else.
     await updateProspect(jane.id, manual.prospect.id, prospectUpdateSchema.parse({ notes: "Met the owner at the chamber mixer", phone: "555-0100" }));
-    expect(await updateProspect(jane.id, manual.prospect.id, prospectUpdateSchema.parse({ status: "contacted" }))).toBe("ok");
-    expect(await getProspect(jane.id, manual.prospect.id)).toMatchObject({ status: "contacted", notes: "Met the owner at the chamber mixer", phone: "555-0100" });
+    expect(await updateProspect(jane.id, manual.prospect.id, prospectUpdateSchema.parse({ status: "replied" }))).toBe("ok");
+    expect(await getProspect(jane.id, manual.prospect.id)).toMatchObject({ status: "replied", notes: "Met the owner at the chamber mixer", phone: "555-0100" });
     expect((await getProspect(jane.id, manual.prospect.id))?.website).toMatch(/^https:\/\//);
     // An emptied field is cleared.
     await updateProspect(jane.id, manual.prospect.id, prospectUpdateSchema.parse({ notes: "" }));
@@ -212,12 +312,47 @@ describe("lead generator", () => {
     expect(await getProspect(sam.id, manual.prospect.id)).toBeNull();
   });
 
-  it("caps how many businesses an agent holds at once", async () => {
+  it("counts a first message and two follow-ups, then stops reminding", async () => {
     const jane = await newAgent();
+    const added = await addProspect(jane, business({ placeId: placeId() }));
+    if (added.status !== "added") throw new Error("not added");
+    for (let n = 1; n <= MAX_CONTACTS; n++) {
+      const before = Date.now();
+      const res = await markProspectContacted(jane.id, added.prospect.id);
+      expect(res).toMatchObject({ status: "ok", count: n });
+      if (res.status !== "ok") return;
+      if (n < MAX_CONTACTS) expect(res.followUpAt!.getTime() - before).toBeGreaterThanOrEqual(DEFAULT_FOLLOW_UP_DAYS * DAY - 1000);
+      else expect(res.followUpAt).toBeNull();
+    }
+    expect(await getProspect(jane.id, added.prospect.id)).toMatchObject({ status: "contacted", contactCount: MAX_CONTACTS, nextFollowUpAt: null });
+    // A reply isn't turned back into Contacted by another message.
+    await updateProspect(jane.id, added.prospect.id, prospectUpdateSchema.parse({ status: "replied" }));
+    await markProspectContacted(jane.id, added.prospect.id);
+    expect((await getProspect(jane.id, added.prospect.id))?.status).toBe("replied");
+  });
+
+  it("caps the businesses in progress, not closed, blocked or expired ones", async () => {
+    const jane = await newAgent();
+    const sam = await newAgent("Sam Other");
+    const token = () => randomUUID().replace(/-/g, "").slice(0, 12);
     await db.insert(schema.agentProspects).values(
-      Array.from({ length: MAX_ACTIVE_PROSPECTS }, (_, i) => ({ agentId: jane.id, name: `Biz ${i}`, linkToken: randomUUID().replace(/-/g, "").slice(0, 12) })),
+      Array.from({ length: MAX_ACTIVE_PROSPECTS }, (_, i) => ({ agentId: jane.id, name: `Biz ${i}`, linkToken: token() })),
     );
-    expect((await addProspect(jane, business({ placeId: placeId() }))).status).toBe("limit");
+    // Sam's claim on this business ran out.
+    const place = placeId();
+    const samRow = await addProspect(sam, business({ placeId: place }));
+    if (samRow.status !== "added") throw new Error("not added");
+    await db.update(schema.agentProspects).set({ activeAt: new Date(Date.now() - (CLAIM_DAYS + 1) * DAY) }).where(eq(schema.agentProspects.id, samRow.prospect.id));
+
+    expect((await addProspect(jane, business({ placeId: place }))).status).toBe("limit");
+    // A refused add changes nothing: Sam's old claim isn't released.
+    const [stillSams] = await db.select().from(schema.agentProspects).where(eq(schema.agentProspects.id, samRow.prospect.id));
+    expect(stillSams.releasedAt).toBeNull();
+
+    // Closing one (or marking it do-not-contact) makes room.
+    const [one] = await db.select().from(schema.agentProspects).where(and(eq(schema.agentProspects.agentId, jane.id), eq(schema.agentProspects.name, "Biz 0")));
+    await updateProspect(jane.id, one.id, prospectUpdateSchema.parse({ status: "not_interested" }));
+    expect((await addProspect(jane, business({ placeId: place }))).status).toBe("added");
   });
 
   it("marks a business signed up when someone comes through its link, and credits the agent", async () => {
@@ -236,9 +371,10 @@ describe("lead generator", () => {
     expect(res.headers.get("location")).toBe("http://localhost:3000/assessment");
     const cookies = res.headers.getSetCookie();
     expect(cookies.some((c) => c.startsWith(`${PROSPECT_COOKIE}=${added.prospect.linkToken};`) && c.includes("HttpOnly"))).toBe(true);
-    // Someone else's code with Jane's token: no prospect cookie.
-    expect((await call(sam.code!, added.prospect.linkToken)).headers.getSetCookie().some((c) => c.startsWith(PROSPECT_COOKIE))).toBe(false);
-    expect((await call(jane.code!, "../../etc")).headers.getSetCookie().some((c) => c.startsWith(PROSPECT_COOKIE))).toBe(false);
+    // Someone else's code with Jane's token, or a made-up token: no prospect remembered.
+    const remembers = (r: Response) => r.headers.getSetCookie().some((c) => c.startsWith(`${PROSPECT_COOKIE}=`) && !c.startsWith(`${PROSPECT_COOKIE}=;`));
+    expect(remembers(await call(sam.code!, added.prospect.linkToken))).toBe(false);
+    expect(remembers(await call(jane.code!, "../../etc"))).toBe(false);
 
     mocks.jar.set(AGENT_COOKIE, jane.code!);
     mocks.jar.set(PROSPECT_COOKIE, added.prospect.linkToken);
@@ -248,10 +384,17 @@ describe("lead generator", () => {
     expect(row?.signedUpAt).toBeInstanceOf(Date);
     const [ref] = await db.select().from(schema.agentReferrals).where(eq(schema.agentReferrals.contactId, contact.id));
     expect(ref.agentId).toBe(jane.id);
-    // A signed-up business stays the agent's.
-    await db.update(schema.agentProspects).set({ activeAt: new Date(Date.now() - 400 * DAY) }).where(eq(schema.agentProspects.id, added.prospect.id));
+    // A signed-up business stays the agent's for longer than the usual claim...
+    await db.update(schema.agentProspects).set({ activeAt: new Date(Date.now() - (CLAIM_DAYS + 5) * DAY) }).where(eq(schema.agentProspects.id, added.prospect.id));
     expect((await addProspect(sam, business({ placeId: added.prospect.placeId! }))).status).toBe("claimed");
     expect((await listProspects(jane.id)).some((p) => p.id === added.prospect.id)).toBe(true);
+    // ...but not for ever.
+    await db.update(schema.agentProspects).set({ activeAt: new Date(Date.now() - (HOLD_DAYS + 1) * DAY) }).where(eq(schema.agentProspects.id, added.prospect.id));
+    expect((await addProspect(sam, business({ placeId: added.prospect.placeId! }))).status).toBe("added");
+
+    // A later link without a prospect clears the remembered one.
+    const plain = await GET(new Request(`http://localhost:3000/r/${jane.code}`), { params: Promise.resolve({ code: jane.code! }) });
+    expect(plain.headers.getSetCookie().some((c) => c.startsWith(`${PROSPECT_COOKIE}=;`) && c.includes("Max-Age=0"))).toBe(true);
   });
 
   it("shows an agent a warm lead only with that person's consent, for that agent", async () => {
@@ -277,9 +420,14 @@ describe("lead generator", () => {
     await lead(existing.contact.email, jane.code!);
     expect((await listWarmLeads(jane.id)).map((w) => w.contactId)).not.toContain(existing.contact.id);
 
-    // Unsubscribing hides them.
-    await db.update(schema.contacts).set({ unsubscribed: true }).where(eq(schema.contacts.id, yes.contact.id));
+    // Unsubscribing withdraws the OK for good: subscribing again doesn't show them to the agent again.
+    const [{ token }] = await db.select({ token: schema.contacts.unsubscribeToken }).from(schema.contacts).where(eq(schema.contacts.id, yes.contact.id));
+    await setMarketingSubscription(token, false, "unsubscribe_link");
     expect((await listWarmLeads(jane.id)).map((w) => w.contactId)).not.toContain(yes.contact.id);
+    await setMarketingSubscription(token, true, "unsubscribe_link");
+    expect((await listWarmLeads(jane.id)).map((w) => w.contactId)).not.toContain(yes.contact.id);
+    // A warm lead shows only what the person agreed to share.
+    expect(Object.keys(warm.find((w) => w.contactId === yes.contact.id)!).sort()).toEqual(["consentedAt", "contactId", "email", "name", "source"]);
 
     // Their consent was for Jane: if the customer moves to another agent, it doesn't go with them.
     const moved = await lead(unique("moved"), jane.code!);
@@ -322,7 +470,13 @@ describe("lead generator", () => {
     expect(ai.body).toContain(link);
     expect(ai.body).toContain(DISCLOSURE);
     expect(ai.body).toContain('Reply "stop"');
+
+    // No mailing address set yet: a placeholder (and a flag for the warning), never an email without one.
     await updateSettings({ mailingAddress: "" });
+    const noAddress = await writeOutreach({ ...input, channel: "email" });
+    expect(noAddress.addressMissing).toBe(true);
+    expect(noAddress.body).toContain(`${site.company}, ${MISSING_ADDRESS}`);
+    expect(email.addressMissing).toBe(false);
   });
 
   it("searches Google only with a key, within each agent's and the team's allowance", async () => {
@@ -362,9 +516,12 @@ describe("lead generator", () => {
     expect(details).toMatchObject({ ok: true, data: { website: null, phone: "(512) 555-0100" } });
     expect(await placeDetails(jane.id, "../secrets")).toEqual({ ok: false, error: "unavailable" });
 
-    // Google down: a clear error, not a crash.
+    // Google down: a clear error, not a crash, and the refused call isn't counted.
+    const count = async (key: string) => (await db.select().from(schema.rateLimits).where(eq(schema.rateLimits.key, key)))[0]?.count ?? 0;
+    const detailsBefore = await count(`places-details:${jane.id}`);
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
     expect(await placeDetails(jane.id, good)).toEqual({ ok: false, error: "unavailable" });
+    expect(await count(`places-details:${jane.id}`)).toBe(detailsBefore);
   });
 
   it("stops search for everyone once the team's monthly allowance is spent", async () => {
@@ -373,10 +530,24 @@ describe("lead generator", () => {
     vi.stubGlobal("fetch", fetchMock);
     // The site-wide counter is shared with other tests in this file: set it straight to the cap.
     vi.stubEnv("PLACES_SEARCHES_PER_MONTH", "1");
-    await db.execute(sql`insert into rate_limits (key, count, window_start) values ('places-search:site', 1, now()) on conflict (key) do update set count = 1, window_start = now()`);
+    const siteKey = placesSiteKey("search");
+    expect(siteKey).toMatch(/^places-site:search:\d{4}-\d{2}$/);
+    await db.execute(sql`insert into rate_limits (key, count, window_start) values (${siteKey}, 1, now()) on conflict (key) do update set count = 1, window_start = now()`);
     const sam = await newAgent("Sam Other");
     expect(await searchPlaces(sam.id, "gym", "Austin, TX")).toEqual({ ok: false, error: "site_limit" });
     expect(fetchMock).not.toHaveBeenCalled();
+    // The refusal used up none of Sam's own allowance.
+    const [samRow] = await db.select().from(schema.rateLimits).where(eq(schema.rateLimits.key, `places-search:${sam.id}`));
+    expect(samRow?.count ?? 0).toBe(0);
+
+    // The daily cleanup keeps this month's counter (it used to vanish after two days, resetting the cap).
+    await db.update(schema.rateLimits).set({ windowStart: new Date(Date.now() - 20 * DAY) }).where(eq(schema.rateLimits.key, siteKey));
+    await runScheduledJobs();
+    expect((await db.select().from(schema.rateLimits).where(eq(schema.rateLimits.key, siteKey))).length).toBe(1);
+    expect(await searchPlaces(sam.id, "gym", "Austin, TX")).toEqual({ ok: false, error: "site_limit" });
+    await db.update(schema.rateLimits).set({ windowStart: new Date(Date.now() - 40 * DAY) }).where(eq(schema.rateLimits.key, siteKey));
+    await runScheduledJobs();
+    expect((await db.select().from(schema.rateLimits).where(eq(schema.rateLimits.key, siteKey))).length).toBe(0);
   });
 
   it("lists only the agent's own active prospects", async () => {

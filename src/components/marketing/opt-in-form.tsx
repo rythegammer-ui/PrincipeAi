@@ -83,7 +83,7 @@ export function OptInForm({
         )}
       </fieldset>
 
-      <AgentFollowUpConsent agent={referrer} id={id("agent-follow-up")} />
+      <AgentFollowUpConsent agent={referrer} id={id("agent-follow-up")} defaultChecked={state.values?.agentFollowUp === "on"} />
 
       <SubmitButton size="lg" className="mt-1 w-full" pendingText="Unlocking your kit…">
         {submitLabel} <ArrowRight aria-hidden />

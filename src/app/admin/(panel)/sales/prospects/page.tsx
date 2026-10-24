@@ -12,7 +12,7 @@ import { requireAdmin } from "@/lib/auth";
 import { placesConfigured, placesLimits } from "@/lib/sales/places";
 import { adminListProspects, CLAIM_DAYS, PROSPECT_STATUSES } from "@/lib/sales/prospects";
 import { formatDate, timeAgo, truncate } from "@/lib/utils";
-import { releaseProspectAction } from "../actions";
+import { markProspectDoNotContactAction, releaseProspectAction } from "../actions";
 import { ConfirmAction } from "../forms";
 
 export const metadata: Metadata = { title: "Prospects · Sales Team" };
@@ -127,18 +127,30 @@ export default async function AdminProspectsPage({ searchParams }: { searchParam
                     </TD>
                     <TD className="hidden text-sm text-zinc-600 md:table-cell">{timeAgo(p.activeAt)}</TD>
                     <TD className="text-right">
-                      <ConfirmAction
-                        action={releaseProspectAction}
-                        hidden={{ prospectId: p.id }}
-                        label={p.status === "do_not_contact" ? "Clear do-not-contact" : "Release"}
-                        confirmLabel={p.status === "do_not_contact" ? "Yes, clear it" : "Yes, release"}
-                        subject={p.name}
-                        description={
-                          p.status === "do_not_contact"
-                            ? "Only if the business has asked to hear from us again. Any agent could then contact it."
-                            : `${p.agentName} loses this business and any agent can add it.`
-                        }
-                      />
+                      <span className="flex flex-col items-end gap-1.5">
+                        {p.status !== "do_not_contact" && (
+                          <ConfirmAction
+                            action={markProspectDoNotContactAction}
+                            hidden={{ prospectId: p.id }}
+                            label="Mark do not contact"
+                            confirmLabel="Yes, block it"
+                            subject={p.name}
+                            description="When the business asked us not to be contacted. No agent can add or contact it until you clear it."
+                          />
+                        )}
+                        <ConfirmAction
+                          action={releaseProspectAction}
+                          hidden={{ prospectId: p.id }}
+                          label={p.status === "do_not_contact" ? "Clear do-not-contact" : "Release"}
+                          confirmLabel={p.status === "do_not_contact" ? "Yes, clear it" : "Yes, release"}
+                          subject={p.name}
+                          description={
+                            p.status === "do_not_contact"
+                              ? "Only if the business has asked to hear from us again. Any agent could then contact it."
+                              : `${p.agentName} loses this business and any agent can add it.`
+                          }
+                        />
+                      </span>
                     </TD>
                   </TR>
                 ))}

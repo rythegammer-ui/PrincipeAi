@@ -6,7 +6,7 @@ import { STAGES } from "@/db/schema";
 import { SCORE_RULES } from "@/components/admin/crm-utils";
 import { stopAutomations, triggerAutomations } from "@/lib/automations";
 import { notifyOwner } from "@/lib/email";
-import { claimNewContactFromCookie } from "@/lib/sales/referrals";
+import { claimNewContactFromCookie, clearFollowUpConsent } from "@/lib/sales/referrals";
 import { getSettings } from "@/lib/settings";
 import { getVisitorContext, linkVisitorToContact, trackEvent, type FunnelEventName, type VisitorContext } from "@/lib/tracking";
 import { absoluteUrl, normalizeEmail } from "@/lib/utils";
@@ -278,7 +278,11 @@ export async function setMarketingSubscription(
   const unsubscribe = !subscribed;
   if (contact.unsubscribed === unsubscribe) return { contactId: contact.id, changed: false };
   await db.update(c).set({ unsubscribed: unsubscribe }).where(eq(c.id, contact.id));
-  if (unsubscribe) await stopAutomations(contact.id);
+  if (unsubscribe) {
+    await stopAutomations(contact.id);
+    // Unsubscribing also withdraws any OK for a sales agent to follow up (lib/sales/referrals.ts).
+    await clearFollowUpConsent(contact.id);
+  }
   await logActivity(contact.id, "note", unsubscribe ? "Unsubscribed from marketing emails" : "Resubscribed to marketing emails", {
     meta: { via, unsubscribed: unsubscribe },
   });

@@ -111,8 +111,8 @@ You represent our brand, so please promote it honestly and lawfully. You must:
 - Use a business's **public business contact details** (its website, business phone or business email) or details the business gave you. Don't buy, rent or scrape contact lists, and don't guess personal email addresses.
 - Keep the **commission disclosure** in every message, and in email the opt-out line and our mailing address. The messages the Leads tab writes include them.
 - **No texts to cell phones** without the person's prior consent, and no auto-dialers, recorded calls or calls to numbers on the Do Not Call Registry.
-- If anyone says no, "stop" or asks not to be contacted, **mark the business "Do not contact" straight away.** That blocks it for the whole team. Follow up at most twice with anyone who hasn't replied.
-- A business you add is yours while you're working on it: the claim runs out 30 days after you last update it (90 days once it's marked "Not interested"), and then another agent may contact it. We may release a claim at any time.
+- If anyone says no, "stop" or asks not to be contacted, **mark the business "Do not contact" straight away.** That blocks it for the whole team, and only we can lift it. Follow up at most twice with anyone who hasn't replied, then mark the business "Closed".
+- A business you add is yours while you're working on it: the claim runs out 30 days after you last update it (90 days once you mark it "Closed" or someone signs up through its link), and then another agent may contact it. We may release a claim, or mark a business "Do not contact", at any time.
 - Business search results come from Google Maps. Use them only to find businesses to contact through the Leads tab, and don't copy them into other lists.
 
 ## 10. Customer information

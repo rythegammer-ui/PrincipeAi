@@ -23,7 +23,7 @@ const TRANSITION_CSS = `
 @keyframes pa-quiz-in-prev { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
 `;
 
-type Contact = { name: string; email: string; company: string };
+type Contact = { name: string; email: string; company: string; followUp: boolean };
 
 /** The AI readiness quiz: one question per step, then contact details → server action → results page. */
 export function AssessmentQuiz({ referrer }: { referrer?: ReferringAgent | null } = {}) {
@@ -32,7 +32,7 @@ export function AssessmentQuiz({ referrer }: { referrer?: ReferringAgent | null 
   /** null until the visitor first moves between steps (no entrance animation on page load). */
   const [direction, setDirection] = useState<"next" | "prev" | null>(null);
   const [stepError, setStepError] = useState<string | null>(null);
-  const [contact, setContact] = useState<Contact>({ name: "", email: "", company: "" });
+  const [contact, setContact] = useState<Contact>({ name: "", email: "", company: "", followUp: false });
   const [state, formAction] = useActionState(submitAssessmentAction, INITIAL_STATE);
   /** A server response the visitor has already acted on (e.g. "start again"), so it isn't shown twice. */
   const [dismissedState, setDismissedState] = useState<AssessmentFormState | null>(null);
@@ -319,7 +319,12 @@ function ContactStep({
 
       {referrer && (
         <div className="mt-5">
-          <AgentFollowUpConsent agent={referrer} id="assessment-agent-follow-up" />
+          <AgentFollowUpConsent
+            agent={referrer}
+            id="assessment-agent-follow-up"
+            checked={contact.followUp}
+            onCheckedChange={(followUp) => onContactChange({ ...contact, followUp })}
+          />
         </div>
       )}
 

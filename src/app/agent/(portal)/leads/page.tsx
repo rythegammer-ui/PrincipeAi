@@ -2,13 +2,12 @@ import { BellRing, Building2, HeartHandshake, Search, ShieldCheck, UserPlus } fr
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Alert } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, StatCard } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { agentLocation, currentAgent } from "@/lib/sales/agents";
 import { placesConfigured } from "@/lib/sales/places";
-import { CLAIM_DAYS, listProspects, MAX_ACTIVE_PROSPECTS } from "@/lib/sales/prospects";
+import { CLAIM_DAYS, listProspects, MAX_ACTIVE_PROSPECTS, MAX_CONTACTS } from "@/lib/sales/prospects";
 import { listWarmLeads } from "@/lib/sales/referrals";
 import { formatDate, pluralize, timeAgo } from "@/lib/utils";
 import { NotAnAgent } from "../not-agent";
@@ -25,7 +24,7 @@ const RULES = [
   "Use a business's public contact details (website, business phone, business email) or details they gave you. Never buy or scrape email lists.",
   "Don't text anyone's cell phone unless they've told you it's OK, and never use auto-dialers or recorded calls.",
   "If anyone says no, \"stop\" or \"don't contact me\", mark them Do not contact straight away. That blocks them for the whole team.",
-  "Follow up at most twice. Then move on.",
+  `Follow up at most twice (${MAX_CONTACTS} messages in all). If they haven't replied, mark them Closed and move on.`,
 ];
 
 export default async function AgentLeadsPage() {
@@ -37,6 +36,7 @@ export default async function AgentLeadsPage() {
   const signedUp = prospects.filter((p) => p.signedUp).length;
   const area = agentLocation(agent);
   const active = agent.status === "approved" && Boolean(agent.code);
+  const searchOn = placesConfigured();
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
@@ -93,8 +93,9 @@ export default async function AgentLeadsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <SearchPanel defaultWhere={area} enabled={placesConfigured()} />
-            <details className="group mt-6 rounded-xl border border-zinc-200">
+            <SearchPanel defaultWhere={area} enabled={searchOn} />
+            {/* Open from the start when search is off: then it's the only way to add a business. */}
+            <details className="group mt-6 rounded-xl border border-zinc-200" open={!searchOn}>
               <summary className="flex min-h-11 cursor-pointer list-none items-center px-4 text-sm font-semibold text-zinc-800 [&::-webkit-details-marker]:hidden">
                 <span className="mr-2 text-brand-600 group-open:rotate-90">›</span> Add a business you found yourself
               </summary>
@@ -112,7 +113,8 @@ export default async function AgentLeadsPage() {
             <Building2 className="size-4 text-brand-600" aria-hidden /> My prospects
           </CardTitle>
           <CardDescription>
-            Open one to write your message, copy its tracked link and update its status. Up to {MAX_ACTIVE_PROSPECTS} at a time.
+            Open one to write your message, copy its tracked link and update its status. Up to {MAX_ACTIVE_PROSPECTS} in progress at a time (Closed,
+            Do not contact and signed-up businesses don&apos;t count).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -131,7 +133,10 @@ export default async function AgentLeadsPage() {
                 {prospects.map((p) => (
                   <TR key={p.id}>
                     <TD>
-                      <Link href={`/agent/leads/${p.id}`} className="font-medium text-zinc-900 hover:text-brand-700 hover:underline">
+                      <Link
+                        href={`/agent/leads/${p.id}`}
+                        className="inline-flex min-h-11 items-center font-medium text-zinc-900 hover:text-brand-700 hover:underline sm:min-h-0"
+                      >
                         {p.name}
                       </Link>
                       {(p.category || p.area) && <p className="text-xs text-zinc-500">{[p.category, p.area].filter(Boolean).join(" · ")}</p>}
@@ -179,16 +184,11 @@ export default async function AgentLeadsPage() {
                   <TR key={w.contactId}>
                     <TD>
                       <p className="font-medium text-zinc-900">{w.name || "—"}</p>
-                      <a href={`mailto:${w.email}`} className="text-sm break-all text-brand-700 hover:underline">
+                      <a href={`mailto:${w.email}`} className="inline-flex min-h-11 items-center text-sm break-all text-brand-700 hover:underline sm:min-h-0">
                         {w.email}
                       </a>
                     </TD>
-                    <TD className="text-sm text-zinc-700">
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        {SOURCE_LABELS[w.source ?? ""] ?? "Free resources"}
-                        {w.stage === "customer" ? <Badge tone="green">Customer</Badge> : w.tookAssessment ? <Badge tone="gold">Took the assessment</Badge> : null}
-                      </span>
-                    </TD>
+                    <TD className="text-sm text-zinc-700">{SOURCE_LABELS[w.source ?? ""] ?? "Free resources"}</TD>
                     <TD className="hidden text-sm text-zinc-600 sm:table-cell">{timeAgo(w.consentedAt)}</TD>
                   </TR>
                 ))}

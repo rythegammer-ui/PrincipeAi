@@ -24,11 +24,13 @@ import type { SalesAgent } from "@/db/schema";
 import { captureLead, setMarketingSubscription } from "@/lib/crm";
 import { runScheduledJobs } from "@/lib/jobs";
 import { DISCLOSURE, MISSING_ADDRESS, writeOutreach } from "@/lib/sales/outreach";
+import { areaKeyOf, rekeyProspects } from "@/lib/sales/match-keys";
 import { placeDetails, placesSiteKey, searchPlaces } from "@/lib/sales/places";
 import {
   addProspect,
   adminMarkDoNotContact,
   adminReleaseProspect,
+  blockedByDoNotContact,
   claimDomain,
   claimExpired,
   claimStatesForPlaces,
@@ -41,10 +43,12 @@ import {
   matchKey,
   MAX_ACTIVE_PROSPECTS,
   MAX_CONTACTS,
+  messageAllowed,
   normalizeDomain,
   normalizeWebsite,
   prospectInputSchema,
   prospectLink,
+  prospectTokenValid,
   prospectUpdateSchema,
   updateProspect,
 } from "@/lib/sales/prospects";
@@ -91,6 +95,20 @@ describe("lead generator rules (pure)", () => {
     expect(claimDomain("instagram.com/joescafe")).toBeNull();
     expect(claimDomain("joes.square.site")).toBe("joes.square.site");
     expect(claimDomain("www.joescafe.com/menu")).toBe("joescafe.com");
+    // Any subdomain of a shared host, and booking/ordering pages.
+    expect(claimDomain("https://web.facebook.com/joescafe")).toBeNull();
+    expect(claimDomain("m.yelp.com/biz/joes-cafe")).toBeNull();
+    expect(claimDomain("order.toasttab.com/online/joes")).toBeNull();
+    expect(claimDomain("www.vagaro.com/joessalon")).toBeNull();
+    expect(claimDomain("square.site")).toBeNull();
+  });
+
+  it("folds areas to the town, whatever the state or ZIP", () => {
+    for (const a of ["Austin, TX", "Austin TX", "Austin Texas", "Austin, TX 78701", "austin"]) expect(areaKeyOf(a)).toBe("austin");
+    expect(areaKeyOf("78701")).toBe("");
+    expect(areaKeyOf("TX")).toBe("");
+    expect(areaKeyOf("Virginia Beach VA")).toBe("virginiabeach");
+    expect(areaKeyOf("The Woodlands, TX")).toBe("woodlands");
   });
 
   it("only takes real calendar dates for follow-ups", () => {
@@ -144,8 +162,9 @@ describe("lead generator", () => {
     return agent;
   }
 
+  // A different name each time: a do-not-contact in one test blocks a same-named listing in the same town in the next.
   const business = (extra: Partial<Parameters<typeof prospectInputSchema.parse>[0]> = {}) =>
-    prospectInputSchema.parse({ name: "Joe's Bakery", category: "Bakery", area: "Austin, TX", ...extra });
+    prospectInputSchema.parse({ name: `Joe's Bakery ${randomUUID().slice(0, 6)}`, category: "Bakery", area: "Austin, TX", ...extra });
 
   it("gives each business to one agent at a time, by Google place or by website", async () => {
     const jane = await newAgent();
@@ -248,6 +267,63 @@ describe("lead generator", () => {
     expect((await addProspect(sam, business({ name: `Elm Salon ${randomUUID().slice(0, 6)}`, website: "facebook.com/elmsalon" }))).status).toBe("added");
   });
 
+  it("stops every agent's copy of a business once one is do-not-contact, and checks edited contact details", async () => {
+    const jane = await newAgent();
+    const sam = await newAgent("Sam Other");
+    const none = { notes: undefined, website: undefined, phone: undefined, email: undefined };
+    const name = `Oak Dental ${randomUUID().slice(0, 6)}`;
+    // Added in different towns (the Google row's area is the search), so both rows exist.
+    const samRow = await addProspect(sam, business({ name, area: "Tampa" }));
+    const janeRow = await addProspect(jane, business({ name, placeId: placeId(), area: "Brandon, FL" }));
+    if (samRow.status !== "added" || janeRow.status !== "added") throw new Error("not added");
+    expect(await blockedByDoNotContact(samRow.prospect)).toBe(false);
+    await updateProspect(jane.id, janeRow.prospect.id, { status: "do_not_contact", ...none });
+    // Sam's copy can't be messaged, marked as sent or opened through its link any more.
+    const samNow = (await getProspect(sam.id, samRow.prospect.id))!;
+    expect(await blockedByDoNotContact(samNow)).toBe(true);
+    expect(await messageAllowed(sam.id, samNow)).toBe("blocked");
+    expect(await markProspectContacted(sam.id, samRow.prospect.id)).toEqual({ status: "locked" });
+    expect(await prospectTokenValid(sam.id, samNow.linkToken)).toBe(false);
+
+    // A Google do-not-contact listing also blocks a duplicate listing (new place ID) of the same name in the same town.
+    const dup = placeId();
+    const dupStates = await claimStatesForPlaces(sam.id, [{ placeId: dup, name }], "Brandon, FL");
+    expect(dupStates.get(dup)).toBe("do_not_contact");
+    expect((await addProspect(sam, business({ name, placeId: dup, area: "Brandon FL 33511" }))).status).toBe("do_not_contact");
+    // A branch of the same name in another town is a different business.
+    const branch = placeId();
+    expect((await claimStatesForPlaces(sam.id, [{ placeId: branch, name }], "Orlando, FL")).get(branch)).toBe("available");
+
+    // Contact details typed in later are checked too.
+    const blockedSite = `${randomUUID().slice(0, 8)}.example.com`;
+    const blockedRow = await addProspect(jane, business({ name: `Blocked ${randomUUID().slice(0, 6)}`, website: blockedSite, email: "owner@blocked.example.com" }));
+    if (blockedRow.status !== "added") throw new Error("not added");
+    await updateProspect(jane.id, blockedRow.prospect.id, { status: "do_not_contact", ...none });
+    const other = await addProspect(sam, business({ name: `Another ${randomUUID().slice(0, 6)}` }));
+    if (other.status !== "added") throw new Error("not added");
+    expect(await updateProspect(sam.id, other.prospect.id, { ...none, email: "Owner@Blocked.example.com" })).toBe("blocked");
+    expect(await updateProspect(sam.id, other.prospect.id, { ...none, website: blockedSite })).toBe("blocked");
+    const claimedRow = await addProspect(jane, business({ name: `Claimed ${randomUUID().slice(0, 6)}`, phone: "(813) 555-0142" }));
+    if (claimedRow.status !== "added") throw new Error("not added");
+    expect(await updateProspect(sam.id, other.prospect.id, { ...none, phone: "813-555-0142" })).toBe("taken");
+    expect(await getProspect(sam.id, other.prospect.id)).toMatchObject({ email: null, website: null, phone: null });
+  });
+
+  it("re-keys stored names and areas to match the app (rows from before the keys existed)", async () => {
+    const jane = await newAgent();
+    const name = `The Smile Studio ${randomUUID().slice(0, 6)}, LLC`;
+    const [row] = await db
+      .insert(schema.agentProspects)
+      .values({ agentId: jane.id, name, area: "Austin TX 78701", nameKey: "wrong", areaKey: "wrong", status: "do_not_contact", linkToken: randomUUID().replace(/-/g, "").slice(0, 12) })
+      .returning();
+    expect(await rekeyProspects(db)).toBeGreaterThanOrEqual(1);
+    const [after] = await db.select().from(schema.agentProspects).where(eq(schema.agentProspects.id, row.id));
+    expect(after).toMatchObject({ nameKey: matchKey(name), areaKey: "austin" });
+    expect(await rekeyProspects(db)).toBe(0);
+    const sam = await newAgent("Sam Other");
+    expect((await addProspect(sam, business({ name: name.replace(/^The /, "").replace(", LLC", "") }))).status).toBe("do_not_contact");
+  });
+
   it("lets an admin mark a business do-not-contact when it asked us directly", async () => {
     const jane = await newAgent();
     const sam = await newAgent("Sam Other");
@@ -325,10 +401,15 @@ describe("lead generator", () => {
       else expect(res.followUpAt).toBeNull();
     }
     expect(await getProspect(jane.id, added.prospect.id)).toMatchObject({ status: "contacted", contactCount: MAX_CONTACTS, nextFollowUpAt: null });
-    // A reply isn't turned back into Contacted by another message.
+    // A reply isn't turned back into Contacted by another message, and a conversation keeps its reminders.
     await updateProspect(jane.id, added.prospect.id, prospectUpdateSchema.parse({ status: "replied" }));
-    await markProspectContacted(jane.id, added.prospect.id);
+    const reply = await markProspectContacted(jane.id, added.prospect.id);
+    expect(reply).toMatchObject({ status: "ok", count: MAX_CONTACTS + 1 });
+    expect(reply.status === "ok" && reply.followUpAt).toBeTruthy();
     expect((await getProspect(jane.id, added.prospect.id))?.status).toBe("replied");
+    // Setting it back to Contacted in the form doesn't count as another message.
+    await updateProspect(jane.id, added.prospect.id, prospectUpdateSchema.parse({ status: "contacted" }));
+    expect((await getProspect(jane.id, added.prospect.id))?.contactCount).toBe(MAX_CONTACTS + 1);
   });
 
   it("caps the businesses in progress, not closed, blocked or expired ones", async () => {
@@ -353,6 +434,12 @@ describe("lead generator", () => {
     const [one] = await db.select().from(schema.agentProspects).where(and(eq(schema.agentProspects.agentId, jane.id), eq(schema.agentProspects.name, "Biz 0")));
     await updateProspect(jane.id, one.id, prospectUpdateSchema.parse({ status: "not_interested" }));
     expect((await addProspect(jane, business({ placeId: place }))).status).toBe("added");
+    // ...and reopening a closed one past the cap is refused, from the form or by sending a message.
+    expect(await updateProspect(jane.id, one.id, prospectUpdateSchema.parse({ status: "contacted" }))).toBe("limit");
+    expect(await markProspectContacted(jane.id, one.id)).toEqual({ status: "limit" });
+    expect(await messageAllowed(jane.id, (await getProspect(jane.id, one.id))!)).toBe("limit");
+    // Notes on a closed one are fine.
+    expect(await updateProspect(jane.id, one.id, prospectUpdateSchema.parse({ notes: "Try again in spring" }))).toBe("ok");
   });
 
   it("marks a business signed up when someone comes through its link, and credits the agent", async () => {
@@ -515,6 +602,10 @@ describe("lead generator", () => {
     const details = await placeDetails(jane.id, good);
     expect(details).toMatchObject({ ok: true, data: { website: null, phone: "(512) 555-0100" } });
     expect(await placeDetails(jane.id, "../secrets")).toEqual({ ok: false, error: "unavailable" });
+
+    // A listing Google no longer has: its own answer, not "try again".
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })));
+    expect(await placeDetails(jane.id, good)).toEqual({ ok: false, error: "not_found" });
 
     // Google down: a clear error, not a crash, and the refused call isn't counted.
     const count = async (key: string) => (await db.select().from(schema.rateLimits).where(eq(schema.rateLimits.key, key)))[0]?.count ?? 0;

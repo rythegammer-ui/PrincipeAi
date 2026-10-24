@@ -65,7 +65,7 @@ import { agentForContact, assignableAgents } from "@/lib/sales/stats";
 import { getBusinessTimezone } from "@/lib/scheduling";
 import { cn, formatDate, formatDateTime, formatMoney, timeAgo } from "@/lib/utils";
 import { ActionForm } from "../../sales/forms";
-import { assignContactAgentAction } from "./agent-actions";
+import { assignContactAgentAction, withdrawFollowUpConsentAction } from "./agent-actions";
 
 const ORDER_TONES: Record<OrderStatus, BadgeTone> = { paid: "green", pending: "neutral", refunded: "amber", failed: "red", expired: "neutral" };
 const EMAIL_TONES: Record<string, BadgeTone> = { sent: "green", simulated: "blue", failed: "red", skipped: "neutral" };
@@ -358,6 +358,24 @@ export default async function ContactPage({ params }: Params) {
                 className="mt-2"
                 resetOnSuccess={false}
               />
+            )}
+            {salesAgent?.followUpConsentAt && (
+              <div className="mt-3 border-t border-zinc-100 pt-3">
+                <p className="text-xs text-zinc-500">
+                  Said it&apos;s OK for this agent to follow up ({formatDate(salesAgent.followUpConsentAt, {}, tz)}): the agent sees their name, email and
+                  what they signed up for.
+                </p>
+                <ActionForm
+                  action={withdrawFollowUpConsentAction}
+                  hidden={{ contactId: ct.id }}
+                  submit="Withdraw the agent's OK to follow up"
+                  pendingText="Withdrawing…"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  resetOnSuccess={false}
+                />
+              </div>
             )}
           </Section>
 

@@ -14,6 +14,7 @@ import {
   getProspect,
   markProspectContacted,
   MAX_CONTACTS,
+  messageAllowed,
   prospectInputSchema,
   prospectLink,
   prospectUpdateSchema,
@@ -90,6 +91,7 @@ const ADD_MESSAGES: Record<Exclude<AddProspectResult["status"], "added" | "alrea
   limit: "You have the most businesses in progress at once. Mark the ones you're done with as Closed (or Do not contact) to make room.",
 };
 
+
 async function add(agent: SalesAgent, values: Record<string, string>): Promise<AddState> {
   const limit = await rateLimit(`agent-prospect-add:${agent.id}`, 60, 24 * 60 * 60);
   if (!limit.ok) return { error: "You've added a lot of businesses today. Please try again tomorrow." };
@@ -129,10 +131,15 @@ export async function addManualProspectAction(_prev: ManualAddState, formData: F
 
 // ------------------------------------------------------------------------------------------------- one prospect
 
-/** `values`: what the agent submitted, so the form keeps it after an error. */
+/**
+ * `values`: what the agent submitted, so the form keeps it after an error, with `baseStatus`/`baseFollowUp` (what the
+ * form was showing), so it's only put back while the prospect hasn't changed since.
+ */
 export type UpdateState = { ok?: boolean; error?: string; values?: Record<string, string> };
 
 const UPDATE_FIELDS = ["status", "notes", "nextFollowUp", "website", "phone", "email"] as const;
+const LIMIT = "You have the most businesses in progress at once. Mark the ones you're done with as Closed (or Do not contact) first.";
+const BLOCKED = "This business asked not to be contacted.";
 
 export async function updateProspectAction(_prev: UpdateState, formData: FormData): Promise<UpdateState> {
   const agent = await currentAgent();
@@ -143,11 +150,17 @@ export async function updateProspectAction(_prev: UpdateState, formData: FormDat
     if (formData.has(key)) raw[key] = str(formData, key);
   }
   if (raw.status === "") delete raw.status;
-  const fail = (error: string): UpdateState => ({ error, values: raw });
+  const base = { baseStatus: str(formData, "baseStatus"), baseFollowUp: str(formData, "baseFollowUp") };
+  const fail = (error: string): UpdateState => ({ error, values: { ...raw, ...base } });
+  // Fields the agent left as they were aren't saved: the server may have changed them since the page loaded (another
+  // tab, "I sent it", an admin marking it do not contact).
+  const input = { ...raw };
+  if (formData.has("baseStatus") && input.status === base.baseStatus) delete input.status;
+  if (formData.has("baseFollowUp") && input.nextFollowUp === base.baseFollowUp) delete input.nextFollowUp;
 
   const limit = await rateLimit(`agent-prospect-update:${agent.id}`, 300, 60 * 60);
   if (!limit.ok) return fail("Too many changes in a short time. Please try again later.");
-  const parsed = prospectUpdateSchema.safeParse(raw);
+  const parsed = prospectUpdateSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Please check the details.");
   // Paused: no prospecting, but an opt-out must still be recorded straight away.
   if (agent.status !== "approved" || !agent.code) {
@@ -158,13 +171,16 @@ export async function updateProspectAction(_prev: UpdateState, formData: FormDat
   const res = await updateProspect(agent.id, id, parsed.data);
   if (res === "not_found") return fail("That prospect isn't in your list any more.");
   if (res === "locked") return fail("This business asked not to be contacted. Only an admin can change that.");
-  if (res === "taken") return fail("Another agent is already working with the business at that website.");
+  if (res === "taken") return fail("Another agent is already working with the business at that website, email or phone.");
+  if (res === "blocked") return fail("That website, email or phone belongs to a business that asked not to be contacted.");
+  if (res === "limit") return fail(LIMIT);
   revalidatePath("/agent/leads");
   revalidatePath(`/agent/leads/${id}`);
   return { ok: true };
 }
 
 export type ContactedState = { error?: string; ok?: boolean; count?: number; followUpAt?: string | null };
+
 
 /** "I sent it": counts one message and sets the next reminder (none after the last follow-up). */
 export async function markContactedAction(_prev: ContactedState, formData: FormData): Promise<ContactedState> {
@@ -173,7 +189,9 @@ export async function markContactedAction(_prev: ContactedState, formData: FormD
     const limit = await rateLimit(`agent-prospect-update:${agent.id}`, 300, 60 * 60);
     if (!limit.ok) return { error: "Too many changes in a short time. Please try again later." };
     const res = await markProspectContacted(agent.id, id);
-    if (res.status !== "ok") return { error: res.status === "locked" ? "This business asked not to be contacted." : "That prospect isn't in your list any more." };
+    if (res.status !== "ok") {
+      return { error: res.status === "locked" ? BLOCKED : res.status === "limit" ? LIMIT : "That prospect isn't in your list any more." };
+    }
     revalidatePath("/agent/leads");
     revalidatePath(`/agent/leads/${id}`);
     return { ok: true, count: res.count, followUpAt: res.followUpAt?.toISOString() ?? null };
@@ -187,9 +205,10 @@ export type MessageState = {
   ai?: boolean;
   addressMissing?: boolean;
   channel?: OutreachChannel;
-  /** Messages sent so far (before this one) and the most the rules allow. */
+  /** Messages sent so far (before this one) and the most the rules allow a business that hasn't replied. */
   sent?: number;
   maxSent?: number;
+  replied?: boolean;
 };
 
 const channelSchema = z.enum(OUTREACH_CHANNELS.map((c) => c.value) as [OutreachChannel, ...OutreachChannel[]]);
@@ -201,7 +220,9 @@ export async function writeMessageAction(_prev: MessageState, formData: FormData
     if (!channel.success) return { error: "Choose how you'll reach out." };
     const prospect = await getProspect(agent.id, str(formData, "id"));
     if (!prospect) return { error: "That prospect isn't in your list any more." };
-    if (prospect.status === "do_not_contact") return { error: "This business asked not to be contacted." };
+    const allowed = await messageAllowed(agent.id, prospect);
+    if (allowed === "blocked") return { error: BLOCKED };
+    if (allowed === "limit") return { error: LIMIT };
     const limit = await rateLimit(`agent-outreach:${agent.id}`, 40, 24 * 60 * 60);
     if (!limit.ok) return { error: "You've written a lot of messages today. Please try again tomorrow." };
     const message = await writeOutreach({
@@ -214,7 +235,7 @@ export async function writeMessageAction(_prev: MessageState, formData: FormData
       link: prospectLink(agent.code, prospect.linkToken),
     });
     await touchProspect(agent.id, prospect.id);
-    return { ...message, channel: channel.data, sent: prospect.contactCount, maxSent: MAX_CONTACTS };
+    return { ...message, channel: channel.data, sent: prospect.contactCount, maxSent: MAX_CONTACTS, replied: prospect.status === "replied" };
   });
 }
 

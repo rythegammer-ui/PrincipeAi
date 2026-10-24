@@ -7,7 +7,7 @@ import { EmptyState, StatCard } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { agentLocation, currentAgent } from "@/lib/sales/agents";
 import { placesConfigured } from "@/lib/sales/places";
-import { CLAIM_DAYS, listProspects, MAX_ACTIVE_PROSPECTS, MAX_CONTACTS } from "@/lib/sales/prospects";
+import { CLAIM_DAYS, LIST_LIMIT, listProspects, MAX_ACTIVE_PROSPECTS, MAX_CONTACTS, prospectCounts } from "@/lib/sales/prospects";
 import { listWarmLeads } from "@/lib/sales/referrals";
 import { formatDate, pluralize, timeAgo } from "@/lib/utils";
 import { NotAnAgent } from "../not-agent";
@@ -30,10 +30,9 @@ const RULES = [
 export default async function AgentLeadsPage() {
   const agent = await currentAgent();
   if (!agent) return <NotAnAgent />;
-  const [prospects, warm] = await Promise.all([listProspects(agent.id), listWarmLeads(agent.id)]);
+  const [prospects, warm, counts] = await Promise.all([listProspects(agent.id), listWarmLeads(agent.id), prospectCounts(agent.id)]);
   const now = new Date();
   const due = prospects.filter((p) => p.nextFollowUpAt && p.nextFollowUpAt <= now && ["new", "contacted", "replied"].includes(p.status));
-  const signedUp = prospects.filter((p) => p.signedUp).length;
   const area = agentLocation(agent);
   const active = agent.status === "approved" && Boolean(agent.code);
   const searchOn = placesConfigured();
@@ -51,9 +50,9 @@ export default async function AgentLeadsPage() {
       )}
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Prospects" value={String(prospects.length)} icon={Building2} />
+        <StatCard label="Prospects" value={String(counts.total)} icon={Building2} />
         <StatCard label="Follow up today" value={String(due.length)} icon={BellRing} />
-        <StatCard label="Signed up" value={String(signedUp)} icon={UserPlus} />
+        <StatCard label="Signed up" value={String(counts.signedUp)} icon={UserPlus} />
         <StatCard label="Warm leads" value={String(warm.length)} icon={HeartHandshake} />
       </div>
 
@@ -150,6 +149,11 @@ export default async function AgentLeadsPage() {
               </TBody>
             </Table>
           )}
+          {prospects.length < counts.total && (
+            <p className="mt-3 text-xs text-zinc-500">
+              Showing the {LIST_LIMIT} most urgent and most recently worked of your {counts.total} businesses.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -218,7 +222,7 @@ export default async function AgentLeadsPage() {
             ))}
           </ul>
           <p className="mt-3 text-xs text-zinc-500">
-            {pluralize(prospects.length, "prospect")} in your list. Businesses you&apos;ve marked Do not contact stay blocked for everyone.
+            {pluralize(counts.total, "prospect")} in your list. Businesses you&apos;ve marked Do not contact stay blocked for everyone.
           </p>
         </CardContent>
       </Card>

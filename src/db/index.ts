@@ -26,6 +26,8 @@ async function createPglite(dataDir: string): Promise<DB> {
   const client = new PGlite(dataDir);
   const db = drizzle(client, { schema });
   await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+  const { rekeyProspects } = await import("../lib/sales/match-keys");
+  await rekeyProspects(db as unknown as DB);
   const { seedIfEmpty } = await import("./seed");
   // The PGlite and postgres-js drivers expose the same query-builder API.
   await seedIfEmpty(db as unknown as DB, { demoData: true });

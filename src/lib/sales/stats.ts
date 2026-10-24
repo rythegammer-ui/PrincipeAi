@@ -262,10 +262,17 @@ export async function agentsForOrders(orderIds: string[]): Promise<Map<string, {
 }
 
 /** The agent a contact belongs to (Admin → Contacts). */
-export async function agentForContact(contactId: string): Promise<{ agent: SalesAgent; source: string; since: Date } | null> {
+export async function agentForContact(
+  contactId: string,
+): Promise<{ agent: SalesAgent; source: string; since: Date; followUpConsentAt: Date | null } | null> {
   const db = await getDb();
   const [row] = await db
-    .select({ agent: schema.salesAgents, source: schema.agentReferrals.source, since: schema.agentReferrals.createdAt })
+    .select({
+      agent: schema.salesAgents,
+      source: schema.agentReferrals.source,
+      since: schema.agentReferrals.createdAt,
+      followUpConsentAt: schema.agentReferrals.followUpConsentAt,
+    })
     .from(schema.agentReferrals)
     .innerJoin(schema.salesAgents, eq(schema.salesAgents.id, schema.agentReferrals.agentId))
     .where(eq(schema.agentReferrals.contactId, contactId))

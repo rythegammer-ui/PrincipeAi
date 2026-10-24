@@ -1,9 +1,10 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import type { AgentProspect, ProspectStatus, SalesAgent } from "@/db/schema";
+import { areaKeyOf, matchKey } from "@/lib/sales/match-keys";
 import { PLACE_ID_RE } from "@/lib/sales/places";
 import { absoluteUrl, isValidEmail } from "@/lib/utils";
 
@@ -27,7 +28,10 @@ export const MAX_ACTIVE_PROSPECTS = 200;
 export const MAX_CONTACTS = 3;
 export const DEFAULT_FOLLOW_UP_DAYS = 3;
 const DAY = 86_400_000;
-const LIST_LIMIT = 500;
+/** The most prospects the Leads list shows (follow-ups first, then the most recently worked). */
+export const LIST_LIMIT = 500;
+
+export { areaKeyOf, matchKey };
 
 export const PROSPECT_STATUSES: { value: ProspectStatus; label: string }[] = [
   { value: "new", label: "New" },
@@ -66,60 +70,62 @@ export function normalizeWebsite(website: string | null | undefined): string | n
   }
 }
 
-/** Hosts many businesses share (social pages, link pages, maps): a page there doesn't identify one business. */
-const SHARED_HOSTS = new Set([
+/** Hosts many businesses share (social, maps, booking and ordering sites, link pages), with any subdomain: a page there doesn't identify one business. */
+const SHARED_HOSTS = [
   "facebook.com",
-  "m.facebook.com",
-  "business.facebook.com",
   "fb.com",
   "fb.me",
   "instagram.com",
+  "threads.net",
   "linktr.ee",
   "linkin.bio",
-  "sites.google.com",
+  "beacons.ai",
   "google.com",
-  "business.google.com",
   "g.page",
   "goo.gl",
-  "maps.app.goo.gl",
-  "maps.google.com",
+  "share.google",
+  "bit.ly",
   "yelp.com",
   "tiktok.com",
   "x.com",
   "twitter.com",
   "linkedin.com",
   "youtube.com",
+  "youtu.be",
   "nextdoor.com",
   "wa.me",
-  "square.site",
-  "wixsite.com",
-  "godaddysites.com",
-]);
+  "whatsapp.com",
+  "tripadvisor.com",
+  "vagaro.com",
+  "booksy.com",
+  "styleseat.com",
+  "schedulicity.com",
+  "fresha.com",
+  "glossgenius.com",
+  "mindbodyonline.com",
+  "calendly.com",
+  "acuityscheduling.com",
+  "squareup.com",
+  "toasttab.com",
+  "doordash.com",
+  "ubereats.com",
+  "grubhub.com",
+  "opentable.com",
+  "resy.com",
+  "zocdoc.com",
+  "healthgrades.com",
+  "etsy.com",
+  "amazon.com",
+  "shopify.com",
+];
+/** Site builders whose bare domain is shared, but where each business gets its own subdomain (joes.square.site). */
+const SHARED_EXACT = new Set(["square.site", "wixsite.com", "godaddysites.com", "weebly.com", "business.site"]);
 
 /** The website's domain as a business identity (null for shared hosts like facebook.com). */
 export function claimDomain(website: string | null | undefined): string | null {
   const domain = normalizeDomain(website);
-  return domain && !SHARED_HOSTS.has(domain) ? domain : null;
-}
-
-const SUFFIXES = new Set(["llc", "inc", "co", "corp", "corporation", "ltd", "limited", "pllc", "pc", "company", "incorporated"]);
-
-/** Folds a business name for matching: "The Joe's Café, LLC" → "joescafe". */
-export function matchKey(value: string | null | undefined): string {
-  const words = (value ?? "")
-    .normalize("NFKD")
-    .replace(/\p{M}+/gu, "")
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
-  if (words[0] === "the" && words.length > 1) words.shift();
-  while (words.length > 1 && SUFFIXES.has(words[words.length - 1])) words.pop();
-  return words.join("");
-}
-
-/** The town part of an area, folded: "Tampa, FL" → "tampa". */
-export function areaKeyOf(area: string | null | undefined): string {
-  return matchKey((area ?? "").split(",")[0]);
+  if (!domain || SHARED_EXACT.has(domain)) return null;
+  return SHARED_HOSTS.some((h) => domain === h || domain.endsWith(`.${h}`)) ? null : domain;
 }
 
 /** The last 10 digits of a phone number, or null when it has fewer. */
@@ -136,12 +142,23 @@ function sameBusiness(row: AgentProspect, key: BusinessKey): boolean {
   if (key.domain && row.domain === key.domain) return true;
   if (key.email && row.email === key.email) return true;
   if (key.phone && phoneKey(row.phone) === key.phone) return true;
-  // Two Google listings with different place IDs are different businesses, whatever their names.
-  if (row.placeId && key.placeId) return false;
   if (key.nameKey.length < 2 || row.nameKey !== key.nameKey) return false;
-  if (row.status === "do_not_contact") return true;
-  return !row.areaKey || !key.areaKey || row.areaKey === key.areaKey;
+  const sameTown = !row.areaKey || !key.areaKey || row.areaKey === key.areaKey;
+  // Two Google listings with different place IDs are usually different businesses (branches of a chain). But listings
+  // get duplicated and place IDs change, so a do-not-contact listing still blocks one of the same name in the same town.
+  if (row.placeId && key.placeId) return row.status === "do_not_contact" && sameTown;
+  return row.status === "do_not_contact" || sameTown;
 }
+
+/** A row's own identity, to compare it with other rows. */
+const keyOfRow = (r: AgentProspect): BusinessKey => ({
+  placeId: r.placeId,
+  domain: r.domain,
+  email: r.email,
+  phone: phoneKey(r.phone),
+  nameKey: r.nameKey,
+  areaKey: r.areaKey,
+});
 
 /** Rows that could be `key`'s business (sameBusiness narrows them down). */
 function candidatesWhere(key: BusinessKey): SQL | undefined {
@@ -288,7 +305,7 @@ export async function claimStatesForPlaces(agentId: string, places: { placeId: s
             p.placeId,
             places.map((pl) => pl.placeId),
           ),
-          nameKeys.length ? and(isNull(p.placeId), inArray(p.nameKey, nameKeys)) : undefined,
+          nameKeys.length ? and(inArray(p.nameKey, nameKeys), or(isNull(p.placeId), eq(p.status, "do_not_contact"))) : undefined,
         ),
       ),
     );
@@ -370,12 +387,49 @@ export const prospectUpdateSchema = z.object({
 });
 export type ProspectUpdate = z.infer<typeof prospectUpdateSchema>;
 
-export type UpdateProspectResult = "ok" | "not_found" | "locked" | "taken";
+export type UpdateProspectResult = "ok" | "not_found" | "locked" | "taken" | "blocked" | "limit";
+
+const IN_PROGRESS: ProspectStatus[] = ["new", "contacted", "replied"];
+
+/** Whether the row counts towards MAX_ACTIVE_PROSPECTS now (in progress, not signed up, claim still fresh). */
+function countsNow(row: AgentProspect, now = Date.now()): boolean {
+  return IN_PROGRESS.includes(row.status) && !row.contactId && now - row.activeAt.getTime() < CLAIM_DAYS * DAY;
+}
+
+/** Whether saving `row` with `nextStatus` (renewing it) would put the agent over MAX_ACTIVE_PROSPECTS. */
+async function overCap(agentId: string, row: AgentProspect, nextStatus: ProspectStatus): Promise<boolean> {
+  if (countsNow(row) || !IN_PROGRESS.includes(nextStatus) || row.contactId) return false;
+  const db = await getDb();
+  const p = schema.agentProspects;
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(p)
+    .where(and(eq(p.agentId, agentId), isNull(p.releasedAt), inProgress()));
+  return count >= MAX_ACTIVE_PROSPECTS;
+}
+
+/**
+ * Whether another agent's row says this business asked not to be contacted (the rows can coexist: added by hand and from
+ * Google in different towns, say). Checked before every message, mark-as-sent and tracked link.
+ */
+export async function blockedByDoNotContact(row: AgentProspect): Promise<boolean> {
+  if (row.status === "do_not_contact") return true;
+  const key = keyOfRow(row);
+  const where = candidatesWhere(key);
+  if (!where) return false;
+  const db = await getDb();
+  const p = schema.agentProspects;
+  const rows = await db
+    .select()
+    .from(p)
+    .where(and(where, ne(p.id, row.id), eq(p.status, "do_not_contact")));
+  return rows.some((r) => sameBusiness(r, key));
+}
 
 /**
  * The agent updates their prospect from its Status and notes form. "Do not contact" is final for them: only their
- * notes still change (an admin can clear it). Moving it to Contacted counts as reaching out once. Any save renews the
- * claim.
+ * notes still change (an admin can clear it). New contact details mustn't point at a business that's blocked or
+ * another agent's. The first move from New to Contacted counts as one message. Any save renews the claim.
  */
 export async function updateProspect(agentId: string, id: string, input: ProspectUpdate): Promise<UpdateProspectResult> {
   const current = await getProspect(agentId, id);
@@ -390,10 +444,11 @@ export async function updateProspect(agentId: string, id: string, input: Prospec
     if (changes) return "locked";
     if (input.notes !== undefined) patch.notes = input.notes;
   } else {
+    if (await overCap(agentId, current, input.status ?? current.status)) return "limit";
     if (input.status) patch.status = input.status;
     if (input.notes !== undefined) patch.notes = input.notes;
     if (input.nextFollowUp !== undefined) patch.nextFollowUpAt = input.nextFollowUp ? new Date(`${input.nextFollowUp}T14:00:00Z`) : null;
-    if (input.status === "contacted" && current.status !== "contacted") {
+    if (input.status === "contacted" && current.status === "new" && current.contactCount === 0) {
       patch.lastContactedAt = now;
       countContact = true;
     }
@@ -406,6 +461,22 @@ export async function updateProspect(agentId: string, id: string, input: Prospec
       }
       if (input.phone !== undefined) patch.phone = input.phone;
       if (input.email !== undefined) patch.email = input.email?.toLowerCase() ?? null;
+      // Only what changed: does it identify a business that's blocked or another agent's?
+      const key: BusinessKey = {
+        placeId: null,
+        domain: patch.domain && patch.domain !== current.domain ? patch.domain : null,
+        email: patch.email && patch.email !== current.email ? patch.email : null,
+        phone: patch.phone && phoneKey(patch.phone) !== phoneKey(current.phone) ? phoneKey(patch.phone) : null,
+        nameKey: "",
+        areaKey: "",
+      };
+      const where = candidatesWhere(key);
+      if (where) {
+        const db = await getDb();
+        const others = (await db.select().from(p).where(and(where, ne(p.id, id)))).filter((r) => sameBusiness(r, key));
+        if (others.some((r) => r.status === "do_not_contact")) return "blocked";
+        if (others.some((r) => r.agentId !== agentId && !claimExpired(r))) return "taken";
+      }
     }
   }
   const db = await getDb();
@@ -413,9 +484,11 @@ export async function updateProspect(agentId: string, id: string, input: Prospec
     const [updated] = await db
       .update(p)
       .set({ ...patch, ...(countContact ? { contactCount: sql`${p.contactCount} + 1` } : {}) })
-      .where(and(eq(p.id, id), eq(p.agentId, agentId), isNull(p.releasedAt)))
+      // Re-checks the status in the same statement: an admin may have marked it do not contact since it was read.
+      .where(and(eq(p.id, id), eq(p.agentId, agentId), isNull(p.releasedAt), current.status === "do_not_contact" ? undefined : ne(p.status, "do_not_contact")))
       .returning({ id: p.id });
-    return updated ? "ok" : "not_found";
+    if (updated) return "ok";
+    return (await getProspect(agentId, id))?.status === "do_not_contact" ? "locked" : "not_found";
   } catch (err) {
     // A website that another agent's active prospect already uses.
     if (isUniqueViolation(err)) return "taken";
@@ -423,33 +496,45 @@ export async function updateProspect(agentId: string, id: string, input: Prospec
   }
 }
 
-export type MarkContactedResult = { status: "ok"; count: number; followUpAt: Date | null } | { status: "not_found" | "locked" };
+export type MarkContactedResult = { status: "ok"; count: number; followUpAt: Date | null } | { status: "not_found" | "locked" | "limit" };
 
 /**
  * "I sent it": the agent reached out once more. Sets a follow-up reminder `DEFAULT_FOLLOW_UP_DAYS` out, up to
- * `MAX_CONTACTS` messages in all; after the last one there's no reminder. A new or closed prospect becomes Contacted.
+ * `MAX_CONTACTS` messages to a business that hasn't replied; after the last one there's no reminder. A business that
+ * replied is a conversation, so its reminders carry on. A new or closed prospect becomes Contacted.
  */
 export async function markProspectContacted(agentId: string, id: string): Promise<MarkContactedResult> {
   const current = await getProspect(agentId, id);
   if (!current) return { status: "not_found" };
-  if (current.status === "do_not_contact") return { status: "locked" };
+  if (await blockedByDoNotContact(current)) return { status: "locked" };
+  const nextStatus = current.status === "new" || current.status === "not_interested" ? "contacted" : current.status;
+  if (await overCap(agentId, current, nextStatus)) return { status: "limit" };
   const p = schema.agentProspects;
   const now = new Date();
-  const followUpAt = current.contactCount + 1 < MAX_CONTACTS ? new Date(now.getTime() + DEFAULT_FOLLOW_UP_DAYS * DAY) : null;
+  const remind = current.status === "replied" || current.contactCount + 1 < MAX_CONTACTS;
+  const followUpAt = remind ? new Date(now.getTime() + DEFAULT_FOLLOW_UP_DAYS * DAY) : null;
   const db = await getDb();
   const [updated] = await db
     .update(p)
     .set({
-      status: current.status === "new" || current.status === "not_interested" ? "contacted" : current.status,
+      status: nextStatus,
       lastContactedAt: now,
       contactCount: sql`${p.contactCount} + 1`,
       nextFollowUpAt: followUpAt,
       activeAt: now,
       updatedAt: now,
     })
-    .where(and(eq(p.id, id), eq(p.agentId, agentId), isNull(p.releasedAt), sql`${p.status} <> 'do_not_contact'`))
+    .where(and(eq(p.id, id), eq(p.agentId, agentId), isNull(p.releasedAt), ne(p.status, "do_not_contact")))
     .returning({ contactCount: p.contactCount });
-  return updated ? { status: "ok", count: updated.contactCount, followUpAt } : { status: "not_found" };
+  if (updated) return { status: "ok", count: updated.contactCount, followUpAt };
+  return (await getProspect(agentId, id))?.status === "do_not_contact" ? { status: "locked" } : { status: "not_found" };
+}
+
+/** Before writing a message: whether the agent may (not blocked, and not over the cap by renewing a lapsed claim). */
+export async function messageAllowed(agentId: string, row: AgentProspect): Promise<"ok" | "blocked" | "limit"> {
+  if (await blockedByDoNotContact(row)) return "blocked";
+  if (await overCap(agentId, row, row.status === "not_interested" ? "contacted" : row.status)) return "limit";
+  return "ok";
 }
 
 /** Renews the claim (e.g. after writing a message), without changing anything the agent sees. */
@@ -473,11 +558,11 @@ export async function prospectTokenValid(agentId: string, token: string): Promis
   const db = await getDb();
   const p = schema.agentProspects;
   const [row] = await db
-    .select({ status: p.status })
+    .select()
     .from(p)
     .where(and(eq(p.linkToken, token), eq(p.agentId, agentId), isNull(p.releasedAt)))
     .limit(1);
-  return Boolean(row && row.status !== "do_not_contact");
+  return Boolean(row && !(await blockedByDoNotContact(row)));
 }
 
 /** A new contact who came through a prospect link: links them to that prospect (only the agent's own, only once). */

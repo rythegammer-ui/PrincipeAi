@@ -38,7 +38,8 @@ export type PlaceResult = {
 
 export type PlaceDetails = PlaceResult & { website: string | null; phone: string | null };
 
-export type PlacesError = "not_configured" | "agent_limit" | "site_limit" | "unavailable";
+/** `not_found`: Google no longer lists the place (closed, merged or removed). */
+export type PlacesError = "not_configured" | "agent_limit" | "site_limit" | "unavailable" | "not_found";
 export type PlacesResponse<T> = { ok: true; data: T } | { ok: false; error: PlacesError };
 
 function envInt(name: string, fallback: number): number {
@@ -46,7 +47,7 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
-/** Allowances: per agent per day, and for the whole site per 30 days. */
+/** Allowances: per agent per day, and for the whole site per calendar month (Pacific time). */
 export function placesLimits() {
   return {
     searchesPerAgentPerDay: envInt("PLACES_SEARCHES_PER_AGENT_PER_DAY", 25),
@@ -142,8 +143,11 @@ function toResult(p: RawPlace): PlaceResult | null {
   };
 }
 
-/** Calls Google. A call Google answered with an error is given back to the allowance (`keys`); a timeout isn't, as it may have been served. */
-async function call(url: string, init: RequestInit, fieldMask: string, keys: string[]): Promise<unknown | null> {
+/**
+ * Calls Google. A call Google answered with an error is given back to the allowance (`keys`); a timeout isn't, as it may
+ * have been served. Returns the JSON, "not_found" for a 404, or null.
+ */
+async function call(url: string, init: RequestInit, fieldMask: string, keys: string[]): Promise<unknown | "not_found" | null> {
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
   if (!key) return null;
   try {
@@ -156,7 +160,7 @@ async function call(url: string, init: RequestInit, fieldMask: string, keys: str
     if (!res.ok) {
       console.error("[places] request failed", res.status, (await res.text().catch(() => "")).slice(0, 300));
       await refund(keys);
-      return null;
+      return res.status === 404 ? "not_found" : null;
     }
     return await res.json();
   } catch (err) {
@@ -175,8 +179,8 @@ export async function searchPlaces(agentId: string, what: string, where: string)
     { method: "POST", body: JSON.stringify({ textQuery: `${what} in ${where}`, pageSize: 20, regionCode: "US", languageCode: "en" }) },
     SEARCH_FIELDS,
     spent.keys,
-  )) as { places?: RawPlace[] } | null;
-  if (!json) return { ok: false, error: "unavailable" };
+  )) as { places?: RawPlace[] } | "not_found" | null;
+  if (!json || json === "not_found") return { ok: false, error: "unavailable" };
   const results = (json.places ?? []).map(toResult).filter((p): p is PlaceResult => p !== null);
   return { ok: true, data: results };
 }
@@ -187,7 +191,8 @@ export async function placeDetails(agentId: string, placeId: string): Promise<Pl
   if (!PLACE_ID_RE.test(placeId)) return { ok: false, error: "unavailable" };
   const spent = await spend("details", agentId);
   if ("error" in spent) return { ok: false, error: spent.error };
-  const json = (await call(`${DETAILS_URL}${encodeURIComponent(placeId)}`, { method: "GET" }, DETAILS_FIELDS, spent.keys)) as RawPlace | null;
+  const json = (await call(`${DETAILS_URL}${encodeURIComponent(placeId)}`, { method: "GET" }, DETAILS_FIELDS, spent.keys)) as RawPlace | "not_found" | null;
+  if (json === "not_found") return { ok: false, error: "not_found" };
   const base = json ? toResult(json) : null;
   if (!json || !base) return { ok: false, error: "unavailable" };
   return { ok: true, data: { ...base, website: safeUrl(json.websiteUri), phone: json.nationalPhoneNumber?.slice(0, 40) ?? null } };
@@ -202,6 +207,8 @@ export function placeDetailsErrorMessage(error: PlacesError): string {
       return "You've looked up the most businesses allowed today. Try again tomorrow, or open the business on Google Maps.";
     case "site_limit":
       return "Contact details from Google have reached this month's limit for the team. Open the business on Google Maps instead.";
+    case "not_found":
+      return "Google no longer lists this business: it may have closed or moved. Search for it on Google Maps, and mark it Closed if it's gone.";
     default:
       return "Google isn't responding right now. Please try again in a minute.";
   }

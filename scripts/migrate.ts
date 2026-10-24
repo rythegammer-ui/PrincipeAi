@@ -19,6 +19,7 @@ import { site } from "../src/config/site";
 import * as schema from "../src/db/schema";
 import { seedIfEmpty } from "../src/db/seed";
 import { describeSync, stripeModeForKey, syncPaymentLinks } from "../src/lib/payment-links";
+import { rekeyProspects } from "../src/lib/sales/match-keys";
 import { isValidEmail, normalizeEmail } from "../src/lib/utils";
 
 type DB = PostgresJsDatabase<typeof schema>;
@@ -92,6 +93,9 @@ async function main() {
   const db = drizzle(client, { schema });
   console.log("[migrate] Applying migrations…");
   await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+  // Sales prospects' match keys are computed in code; keep stored ones in step with it (src/lib/sales/match-keys.ts).
+  const rekeyed = await rekeyProspects(db);
+  if (rekeyed) console.log(`[migrate] Updated the match keys of ${rekeyed} sales prospect(s).`);
   const res = await seedIfEmpty(db, { demoData: process.env.SEED_DEMO_DATA === "1" });
   console.log(res.seeded ? "[migrate] Seeded default catalog." : "[migrate] Database already seeded.");
   await addTeamFromEnv(db);

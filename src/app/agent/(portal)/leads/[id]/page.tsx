@@ -7,7 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { currentAgent } from "@/lib/sales/agents";
 import { OUTREACH_CHANNELS } from "@/lib/sales/outreach";
-import { CLAIM_DAYS, getProspect, HOLD_DAYS, MAX_CONTACTS, prospectLink } from "@/lib/sales/prospects";
+import { blockedByDoNotContact, CLAIM_DAYS, getProspect, HOLD_DAYS, MAX_CONTACTS, prospectLink } from "@/lib/sales/prospects";
 import { formatDate, timeAgo } from "@/lib/utils";
 import { NotAnAgent } from "../../not-agent";
 import { ProspectBadges } from "../labels";
@@ -23,7 +23,9 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
   if (!p) notFound();
   const active = agent.status === "approved" && Boolean(agent.code);
   const link = agent.code ? prospectLink(agent.code, p.linkToken) : null;
-  const blocked = p.status === "do_not_contact";
+  // Their own "Do not contact", or another agent's record of the same business.
+  const blocked = await blockedByDoNotContact(p);
+  const countText = p.status === "replied" || p.contactCount > MAX_CONTACTS ? `${p.contactCount} times` : `${p.contactCount} of ${MAX_CONTACTS} times`;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
@@ -37,14 +39,15 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
         <span>Added {formatDate(p.createdAt)}</span>
         {p.lastContactedAt && (
           <span>
-            · Contacted {p.contactCount} of {MAX_CONTACTS} times, last {timeAgo(p.lastContactedAt)}
+            · Contacted {countText}, last {timeAgo(p.lastContactedAt)}
           </span>
         )}
       </div>
 
       {blocked && (
         <Alert tone="error" title="Do not contact" className="mt-6">
-          This business asked not to be contacted. Don&apos;t reach out again, and don&apos;t pass their details to anyone.
+          This business asked not to be contacted{p.status === "do_not_contact" ? "" : " (recorded by the team)"}. Don&apos;t reach out again, and
+          don&apos;t pass their details to anyone{p.status === "do_not_contact" ? "" : ". Mark it Do not contact below"}.
         </Alert>
       )}
       {!active && !blocked && (

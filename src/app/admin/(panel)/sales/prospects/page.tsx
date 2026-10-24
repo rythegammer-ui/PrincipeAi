@@ -53,7 +53,8 @@ export default async function AdminProspectsPage({ searchParams }: { searchParam
         {placesConfigured() ? (
           <>
             <strong className="font-medium text-zinc-900">on</strong>: each agent can run {limits.searchesPerAgentPerDay} searches and {limits.detailsPerAgentPerDay}{" "}
-            detail lookups a day, and the team {limits.searchesPerMonth} searches and {limits.detailsPerMonth} lookups every 30 days.
+            detail lookups a day, and the team {limits.searchesPerMonth} searches and {limits.detailsPerMonth} lookups each calendar month (it starts over on the 1st,
+            Pacific time).
           </>
         ) : (
           <>

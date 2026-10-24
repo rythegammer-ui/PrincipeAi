@@ -11,7 +11,7 @@ import { addFromSearchAction, searchBusinessesAction, type AddState, type Search
 
 /** Find businesses with Google search, then add the ones to reach out to. Results aren't stored (Google's terms). */
 export function SearchPanel({ defaultWhere, enabled }: { defaultWhere: string; enabled: boolean }) {
-  const [state, action] = useActionState<SearchState, FormData>(searchBusinessesAction, {});
+  const [state, action, pending] = useActionState<SearchState, FormData>(searchBusinessesAction, {});
   const results = state.results;
 
   return (
@@ -38,8 +38,9 @@ export function SearchPanel({ defaultWhere, enabled }: { defaultWhere: string; e
           {state.error}
         </Alert>
       )}
+      {/* Changes while searching, so every finished search is announced (even with the same count). */}
       <p role="status" className="sr-only">
-        {results ? (results.length ? `${results.length} businesses found.` : "No businesses found.") : ""}
+        {pending ? "Searching…" : results ? (results.length ? `${results.length} businesses found for ${state.what} in ${state.where}.` : "No businesses found.") : ""}
       </p>
 
       {results && (

@@ -192,8 +192,9 @@ at the last run before the call (up to 24 hours ahead). You can also trigger it 
    who.
 8. **Warm leads**: when a visitor arrives through an agent's link, the free guide, assessment and contact forms show an
    optional box "OK for {agent} to follow up with me personally". People who tick it (and are new to your CRM) appear
-   in that agent's Leads tab with their name, email and what they signed up for; unsubscribing withdraws it for good.
-   Nobody else's details are shared.
+   in that agent's Leads tab with their name, email and what they signed up for; unsubscribing withdraws it for good,
+   and so does **Withdraw the agent's OK to follow up** on the contact's page (which keeps them subscribed). Nobody
+   else's details are shared.
 9. **Turning on Google business search** (optional, pay-as-you-go): in [Google Cloud Console](https://console.cloud.google.com)
    create a project, add billing, enable **Places API (New)**, then **APIs & Services → Credentials → Create API key**.
    Restrict the key to *Places API (New)* (API restrictions); it's only used from the server, so no website restriction

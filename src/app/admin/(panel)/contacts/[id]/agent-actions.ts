@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { assertAdmin } from "@/lib/auth";
-import { assignContactToAgent } from "@/lib/sales/referrals";
+import { logActivity } from "@/lib/crm";
+import { assignContactToAgent, clearFollowUpConsent } from "@/lib/sales/referrals";
 
 export type AssignAgentState = { ok?: boolean; error?: string; message?: string };
 
@@ -49,4 +50,25 @@ export async function assignContactAgentAction(_prev: AssignAgentState, fd: Form
   if (current?.agentId && current.agentId !== selected) revalidatePath(`/admin/sales/${current.agentId}`);
   if (permanent && current?.agentId === selected) return { ok: true, message: "Now assigned to this agent until an admin changes it." };
   return { ok: true, message: selected ? "Assigned." : "Assignment removed." };
+}
+
+/**
+ * The person asked us to stop their sales agent following up, but still wants our emails: withdraws only the OK they
+ * gave the agent (Leads → Warm leads). The agent stays their agent for commission.
+ */
+export async function withdrawFollowUpConsentAction(_prev: AssignAgentState, fd: FormData): Promise<AssignAgentState> {
+  await assertAdmin();
+  const contactId = z.uuid().safeParse(String(fd.get("contactId") ?? ""));
+  if (!contactId.success) return { error: "Invalid request." };
+  const db = await getDb();
+  const [current] = await db
+    .select({ agentId: schema.agentReferrals.agentId })
+    .from(schema.agentReferrals)
+    .where(eq(schema.agentReferrals.contactId, contactId.data))
+    .limit(1);
+  await clearFollowUpConsent(contactId.data);
+  await logActivity(contactId.data, "note", "Withdrew the OK for their sales agent to follow up", { meta: { by: "admin" } });
+  revalidatePath(`/admin/contacts/${contactId.data}`);
+  if (current?.agentId) revalidatePath(`/admin/sales/${current.agentId}`);
+  return { ok: true, message: "Withdrawn. The agent no longer sees this person's details." };
 }

@@ -23,10 +23,10 @@ type Channel = { value: string; label: string; hint: string };
 
 /** Writes the first message for this business; the agent copies it, sends it themselves, then marks it contacted. */
 export function MessageWriter({ id, channels, disabled }: { id: string; channels: Channel[]; disabled: boolean }) {
-  const [state, action] = useActionState<MessageState, FormData>(writeMessageAction, {});
+  const [state, action, pending] = useActionState<MessageState, FormData>(writeMessageAction, {});
   const [channel, setChannel] = useState(channels[0]?.value ?? "email");
   const full = state.body ? (state.subject ? `Subject: ${state.subject}\n\n${state.body}` : state.body) : "";
-  const overLimit = state.body && state.sent !== undefined && state.maxSent !== undefined && state.sent >= state.maxSent;
+  const overLimit = state.body && !state.replied && state.sent !== undefined && state.maxSent !== undefined && state.sent >= state.maxSent;
 
   return (
     <div>
@@ -50,8 +50,9 @@ export function MessageWriter({ id, channels, disabled }: { id: string; channels
         </form>
       </div>
       <p className="mt-2 text-xs text-zinc-500">{channels.find((c) => c.value === channel)?.hint}</p>
+      {/* Emptied while writing, so each new version is announced again. */}
       <p role="status" className="sr-only">
-        {state.body ? "Your message is ready below." : ""}
+        {!pending && state.body ? "Your message is ready below." : ""}
       </p>
 
       {state.error && (
@@ -135,7 +136,10 @@ const STATUSES: { value: ProspectStatus; label: string }[] = [
   { value: "do_not_contact", label: "Do not contact (they said no or asked us to stop)" },
 ];
 
-/** Status, follow-up date and notes (plus contact details for businesses the agent added by hand). */
+/**
+ * Status, follow-up date and notes (plus contact details for businesses the agent added by hand). baseStatus and
+ * baseFollowUp tell the server what the form was showing, so fields left as they were aren't saved over newer values.
+ */
 export function ProspectUpdateForm({
   prospect,
   manual,
@@ -145,12 +149,17 @@ export function ProspectUpdateForm({
 }) {
   const [state, action] = useActionState<UpdateState, FormData>(updateProspectAction, {});
   const locked = prospect.status === "do_not_contact";
-  // After an error the form shows what the agent submitted; after a save, what's stored.
+  // After an error the form shows what the agent submitted; after a save, what's stored. A submitted status or date
+  // only while the prospect still is as the form showed it (not after "I sent it" changed it, say).
   const v = state.error ? (state.values ?? {}) : {};
-  const status = v.status ?? prospect.status;
+  const fresh = v.baseStatus === prospect.status && v.baseFollowUp === prospect.nextFollowUp;
+  const status = (fresh ? (v.status as ProspectStatus | undefined) : undefined) ?? prospect.status;
+  const followUp = (fresh ? v.nextFollowUp : undefined) ?? prospect.nextFollowUp;
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
       <input type="hidden" name="id" value={prospect.id} />
+      <input type="hidden" name="baseStatus" value={prospect.status} />
+      <input type="hidden" name="baseFollowUp" value={prospect.nextFollowUp} />
       {state.error && (
         <Alert tone="error" className="sm:col-span-2">
           {state.error}
@@ -176,7 +185,8 @@ export function ProspectUpdateForm({
         </Select>
       </Field>
       <Field label="Next follow-up" htmlFor="prospect-follow-up" hint="Leave empty for no reminder">
-        <Input id="prospect-follow-up" name="nextFollowUp" type="date" defaultValue={v.nextFollowUp ?? prospect.nextFollowUp} disabled={locked} />
+        {/* Remounted when the stored date changes, so a date the server just set isn't shown (and saved) stale. */}
+        <Input key={`${prospect.nextFollowUp}:${followUp}`} id="prospect-follow-up" name="nextFollowUp" type="date" defaultValue={followUp} disabled={locked} />
       </Field>
       {manual && (
         <>

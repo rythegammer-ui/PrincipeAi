@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Principe AI avatar cards</title>
+<!--
+  Full-screen 1080x1920 card images for the HeyGen avatar videos (prompt cards and text cards).
+  This page is a template: render-cards.mjs reads videos.json, calls window.renderCard(spec, size) for each
+  card scene, picks the largest font size that fits, splits a prompt over two cards if it can't fit at 28 px,
+  and screenshots #frame.
+  Render: node deliverables/social-launch/ai-avatar/source/render-cards.mjs
+  Safe area: text stays inside .box: clear of the top 250 px, the bottom 420 px (Reels/TikTok/Shorts caption
+  and buttons) plus a 150 px caption lane above it for HeyGen's burned-in captions, and the right 130 px
+  (button rail).
+-->
+<style>
+  @font-face { font-family: "Geist"; src: url("../../../../scripts/course-kit/fonts/geist-latin.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url("../../../../scripts/course-kit/fonts/geist-mono-latin.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Instrument Serif"; font-style: italic; src: url("../../../../scripts/course-kit/fonts/instrument-serif-italic-latin.woff2") format("woff2"); }
+
+  :root {
+    --brand-300: #bdb4fe; --brand-400: #9b8afb; --brand-500: #7a5af8; --brand-600: #6938ef; --brand-700: #5925dc;
+    --brand-800: #4a1fb8; --brand-900: #3e1c96; --brand-950: #27115f;
+    --gold-200: #fedf89; --gold-300: #fec84b; --gold-400: #fdb022;
+    --ink: #0c0a1d; --ink-2: #15122b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #222; font-family: "Geist", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+
+  #frame { position: relative; width: 1080px; height: 1920px; overflow: hidden; color: #fff; }
+  .box { position: absolute; top: 250px; left: 80px; right: 130px; bottom: 570px; display: flex; flex-direction: column; }
+  .content { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+
+  .bg-ink { background:
+      radial-gradient(1000px 800px at 100% 0%, rgba(105, 56, 239, .5), transparent 65%),
+      radial-gradient(800px 700px at 0% 100%, rgba(253, 176, 34, .14), transparent 70%),
+      var(--ink); }
+  .bg-violet { background:
+      radial-gradient(900px 700px at 85% 8%, rgba(122, 90, 248, .75), transparent 70%),
+      radial-gradient(800px 800px at 0% 100%, rgba(39, 17, 95, .9), transparent 70%),
+      linear-gradient(165deg, #5925dc 0%, #4a1fb8 45%, #3e1c96 100%); }
+  .spark { position: absolute; pointer-events: none; }
+  .spark path { fill: currentColor; }
+
+  /* Header row: the logo tile, then the label (prompt cards) or the name (text cards) */
+  .head { display: flex; align-items: center; gap: 20px; flex: none; margin-bottom: 40px; }
+  .tile { width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; flex: none;
+    background: radial-gradient(circle at 28% 18%, rgba(255,255,255,.28), transparent 70%), linear-gradient(135deg, #7a5af8, #6938ef 55%, #4a1fb8);
+    box-shadow: 0 10px 30px rgba(39, 17, 95, .45), inset 0 0 0 1px rgba(255,255,255,.18); }
+  .tile svg { width: 64%; height: 64%; }
+  .label { font-size: 32px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--gold-300); }
+  .label .part { color: rgba(255,255,255,.6); margin-left: 14px; }
+  .name { font-size: 36px; font-weight: 600; letter-spacing: -.02em; }
+
+  /* Prompt cards */
+  .headline { font-size: 54px; font-weight: 600; letter-spacing: -.03em; line-height: 1.1; margin-bottom: 34px; }
+  .headline i { font-style: normal; color: var(--gold-300); }
+  .panel { border-radius: 36px; padding: 44px 44px; background: var(--ink-2);
+    border: 1.5px solid rgba(155, 138, 251, .35); box-shadow: 0 30px 80px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255,255,255,.04); }
+  .mono { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--fs); line-height: 1.42; color: #ececf1;
+    white-space: pre-wrap; overflow-wrap: anywhere; letter-spacing: -.01em; }
+  .mono b { font-weight: 500; color: var(--gold-300); }
+  .mono .cut { color: rgba(255,255,255,.7); }
+
+  /* Spec template (SV-22): a label column and a value column */
+  .tpl { font-family: "Geist Mono", ui-monospace, monospace; font-size: var(--fs); line-height: 1.36; color: #ececf1;
+    display: grid; grid-template-columns: minmax(11ch, max-content) 1fr; column-gap: .8em; row-gap: .45em; }
+  .tpl .k { color: var(--brand-300); font-weight: 600; }
+  .tpl .v { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .tpl .hl { color: var(--gold-300); }
+  .tpl .v.hl { color: #fff; }
+  .tpl .hlrow { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; column-gap: .8em; margin: 0 -.5em; padding: .35em .5em;
+    border-radius: 18px; background: rgba(254, 200, 75, .12); box-shadow: inset 0 0 0 1.5px rgba(254, 200, 75, .45); }
+
+  /* Text cards */
+  .stmt { font-size: var(--fs); font-weight: 600; letter-spacing: -.035em; line-height: 1.08; }
+  .stmt b, .quote b { font-weight: inherit; color: var(--gold-300); }
+  .quote { font-size: var(--fs); font-weight: 600; letter-spacing: -.03em; line-height: 1.14; }
+  .qmark { font-family: "Instrument Serif", serif; font-style: italic; color: var(--gold-300); font-size: 260px; line-height: .6; height: 120px; margin-left: -8px; }
+  .list { display: flex; flex-direction: column; gap: calc(var(--fs) * .42); padding: calc(var(--fs) * .25) calc(var(--fs) * .3); }
+  .li { display: flex; align-items: center; gap: calc(var(--fs) * .4); font-size: var(--fs); font-weight: 600; letter-spacing: -.03em; line-height: 1.08; }
+  .chip { flex: none; width: calc(var(--fs) * 1.25); height: calc(var(--fs) * 1.25); border-radius: 50%; display: grid; place-items: center;
+    font-size: calc(var(--fs) * .62); font-weight: 700; letter-spacing: 0; background: var(--gold-300); color: var(--ink); }
+  .chip.dot::after { content: ""; width: 34%; height: 34%; border-radius: 50%; background: var(--ink); }
+  .li.dim { opacity: .38; }
+  .li.dim .chip { background: rgba(255,255,255,.22); color: #fff; }
+  .li.on { position: relative; z-index: 0; }
+  .li.on::before { content: ""; position: absolute; inset: calc(var(--fs) * -.22) calc(var(--fs) * -.3); border-radius: 999px;
+    background: rgba(12, 10, 29, .32); box-shadow: inset 0 0 0 2px rgba(254, 200, 75, .55); z-index: -1; }
+
+  /* The AI label overlay (transparent PNG) */
+  #tag { display: inline-flex; align-items: center; gap: 16px; padding: 18px 30px 18px 22px; border-radius: 999px;
+    background: rgba(12, 10, 29, .82); border: 2px solid rgba(254, 200, 75, .7); color: #fff; font-size: 38px; font-weight: 600; letter-spacing: -.01em; }
+  #tag .tile { width: 52px; height: 52px; border-radius: 15px; }
+</style>
+</head>
+<body>
+<div id="frame"></div>
+<div id="tagwrap" style="display:inline-block;padding:12px"></div>
+<script>
+  const SPARK = '<path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2z" fill="#fff"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z" fill="#fec84b"/>';
+  const TILE = `<span class="tile"><svg viewBox="0 0 24 24">${SPARK}</svg></span>`;
+  const BIG_SPARK = (style) => `<svg class="spark" style="${style}" viewBox="0 0 24 24"><path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2z"/></svg>`;
+
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // [BRACKETS] and {{fields}} in gold; a line that is only "…" (the kit's own cut marker) dimmed.
+  const marks = (s) => esc(s)
+    .replace(/\[[^\]\n]*\]|\{\{[^}\n]*\}\}/g, (m) => `<b>${m}</b>`)
+    .replace(/^…$/gm, '<span class="cut">…</span>');
+  const dots = (s) => esc(s).replace(/ · /g, " <i>·</i> ");
+  // Keep hyphenated words ("copy-paste", "5-part") on one line in the big Geist text.
+  const keep = (html) => html.replace(/(^|[\s>])([^\s<>]+-[^\s<>]+)/g, '$1<span style="white-space:nowrap">$2</span>');
+
+  function promptBody(spec) {
+    if (spec.kind === "template") {
+      const rows = spec.rows.map((r) => {
+        const hl = (spec.highlightRows || []).includes(r.key.replace(":", ""));
+        const cells = `<span class="k${hl ? " hl" : ""}">${esc(r.key)}</span><span class="v${hl ? " hl" : ""}">${marks(r.value)}</span>`;
+        return hl ? `<div class="hlrow">${cells}</div>` : cells;
+      }).join("");
+      return `<div class="panel"><div class="tpl">${rows}</div></div>`;
+    }
+    return `<div class="panel"><div class="mono">${marks(spec.text)}</div></div>`;
+  }
+
+  function textBody(spec) {
+    if (spec.style === "list") {
+      const items = spec.text.split(" · ").map((it, i) => {
+        const m = it.match(/^(\d+) (.*)$/);
+        const chip = m ? `<span class="chip">${m[1]}</span>` : '<span class="chip dot"></span>';
+        const cls = spec.highlight ? (spec.highlight === i + 1 ? " on" : " dim") : "";
+        return `<div class="li${cls}">${chip}<span>${keep(esc(m ? m[2] : it))}</span></div>`;
+      }).join("");
+      return `<div class="list">${items}</div>`;
+    }
+    if (spec.style === "quote") return `<div class="qmark">“</div><div class="quote">${keep(marks(spec.text))}</div>`;
+    return `<div class="stmt">${keep(marks(spec.text))}</div>`;
+  }
+
+  // Lays out one card at font size `size`; returns true if everything fits inside the safe box.
+  window.renderCard = (spec, size) => {
+    const f = document.getElementById("frame");
+    const isPrompt = spec.type === "prompt_card";
+    f.className = isPrompt ? "bg-ink" : "bg-violet";
+    f.style.setProperty("--fs", size + "px");
+    const part = spec.part ? `<span class="part">· ${spec.part}</span>` : "";
+    const head = isPrompt
+      ? `<div class="head">${TILE}<span class="label">${spec.kind === "template" ? "The spec template" : "Copy this prompt"}${part}</span></div>`
+      : `<div class="head">${TILE}<span class="name">Principe AI</span></div>`;
+    const headline = spec.headline ? `<div class="headline">${dots(spec.headline)}</div>` : "";
+    const body = isPrompt ? promptBody(spec) : textBody(spec);
+    const deco = isPrompt
+      ? BIG_SPARK("right:-300px;top:-220px;width:900px;height:900px;color:rgba(122,90,248,.10);transform:rotate(16deg)")
+      : BIG_SPARK("right:-280px;top:1180px;width:1000px;height:1000px;color:rgba(255,255,255,.06);transform:rotate(12deg)");
+    f.innerHTML = `${deco}<div class="box">${head}<div class="content">${headline}${body}</div></div>`;
+    const c = f.querySelector(".content");
+    const fitsY = c.scrollHeight <= c.clientHeight + 1;
+    const fitsX = [...f.querySelectorAll(".panel, .list, .stmt, .quote, .headline")].every((el) => el.scrollWidth <= el.clientWidth + 1);
+    return fitsY && fitsX;
+  };
+
+  window.renderTag = (text) => {
+    document.getElementById("frame").style.display = "none";
+    document.body.style.background = "transparent";
+    document.getElementById("tagwrap").innerHTML = `<div id="tag">${TILE}<span>${esc(text)}</span></div>`;
+  };
+</script>
+</body>
+</html>

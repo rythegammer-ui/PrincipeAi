@@ -1,0 +1,294 @@
+{
+ "LD-01-3": {
+  "files": [
+   "LD-01-3.png"
+  ],
+  "font_px": 88
+ },
+ "LD-01-4": {
+  "files": [
+   "LD-01-4.png"
+  ],
+  "font_px": 88
+ },
+ "LD-01-5": {
+  "files": [
+   "LD-01-5.png"
+  ],
+  "font_px": 88
+ },
+ "LD-01-6": {
+  "files": [
+   "LD-01-6.png"
+  ],
+  "font_px": 88
+ },
+ "LD-02-2": {
+  "files": [
+   "LD-02-2.png"
+  ],
+  "font_px": 160
+ },
+ "LD-02-3": {
+  "files": [
+   "LD-02-3.png"
+  ],
+  "font_px": 68
+ },
+ "LD-02-4": {
+  "files": [
+   "LD-02-4.png"
+  ],
+  "font_px": 52
+ },
+ "LD-03-3": {
+  "files": [
+   "LD-03-3.png"
+  ],
+  "font_px": 88
+ },
+ "LD-03-4": {
+  "files": [
+   "LD-03-4.png"
+  ],
+  "font_px": 88
+ },
+ "SV-02-4": {
+  "files": [
+   "SV-02-4.png"
+  ],
+  "font_px": 48
+ },
+ "SV-03-2": {
+  "files": [
+   "SV-03-2.png"
+  ],
+  "font_px": 52
+ },
+ "SV-03-3": {
+  "files": [
+   "SV-03-3.png"
+  ],
+  "font_px": 28
+ },
+ "SV-04-3": {
+  "files": [
+   "SV-04-3.png"
+  ],
+  "font_px": 52
+ },
+ "SV-04-4": {
+  "files": [
+   "SV-04-4.png"
+  ],
+  "font_px": 52
+ },
+ "SV-05-3": {
+  "files": [
+   "SV-05-3.png"
+  ],
+  "font_px": 44
+ },
+ "SV-05-4": {
+  "files": [
+   "SV-05-4.png"
+  ],
+  "font_px": 104
+ },
+ "SV-06-3": {
+  "files": [
+   "SV-06-3.png"
+  ],
+  "font_px": 48
+ },
+ "SV-07-2": {
+  "files": [
+   "SV-07-2.png"
+  ],
+  "font_px": 44
+ },
+ "SV-07-3": {
+  "files": [
+   "SV-07-3.png"
+  ],
+  "font_px": 104
+ },
+ "SV-08-2": {
+  "files": [
+   "SV-08-2.png"
+  ],
+  "font_px": 44
+ },
+ "SV-08-3": {
+  "files": [
+   "SV-08-3.png"
+  ],
+  "font_px": 104
+ },
+ "SV-09-2": {
+  "files": [
+   "SV-09-2.png"
+  ],
+  "font_px": 52
+ },
+ "SV-10-2": {
+  "files": [
+   "SV-10-2.png"
+  ],
+  "font_px": 52
+ },
+ "SV-10-4": {
+  "files": [
+   "SV-10-4.png"
+  ],
+  "font_px": 52
+ },
+ "SV-11-2": {
+  "files": [
+   "SV-11-2.png"
+  ],
+  "font_px": 52
+ },
+ "SV-12-3": {
+  "files": [
+   "SV-12-3.png"
+  ],
+  "font_px": 52
+ },
+ "SV-12-4": {
+  "files": [
+   "SV-12-4.png"
+  ],
+  "font_px": 104
+ },
+ "SV-13-4": {
+  "files": [
+   "SV-13-4.png"
+  ],
+  "font_px": 52
+ },
+ "SV-13-5": {
+  "files": [
+   "SV-13-5.png"
+  ],
+  "font_px": 52
+ },
+ "SV-14-3": {
+  "files": [
+   "SV-14-3.png"
+  ],
+  "font_px": 52
+ },
+ "SV-15-4": {
+  "files": [
+   "SV-15-4.png"
+  ],
+  "font_px": 52
+ },
+ "SV-16-3": {
+  "files": [
+   "SV-16-3.png"
+  ],
+  "font_px": 52
+ },
+ "SV-17-4": {
+  "files": [
+   "SV-17-4.png"
+  ],
+  "font_px": 46
+ },
+ "SV-18-3": {
+  "files": [
+   "SV-18-3.png"
+  ],
+  "font_px": 40
+ },
+ "SV-19-3": {
+  "files": [
+   "SV-19-3-a.png",
+   "SV-19-3-b.png"
+  ],
+  "font_px": 38,
+  "parts": [
+   "GOAL: Draft a follow-up email to a prospect after a discovery call. Success = they book a 30-minute proposal review.\nCONTEXT: We are [COMPANY], a [WHAT YOU DO] for [WHO YOU SERVE]. The prospect is [NAME, ROLE, COMPANY]. They're comparing us with one other provider.\nINPUTS (my call notes):\n\"\"\"\n[PASTE NOTES]\n\"\"\"",
+   "CONSTRAINTS:\n- Under 150 words. Warm, direct, no hype.\n- Reference two specific things they told us.\n- Use only facts from my notes. If something is missing, write [CHECK] instead of guessing.\n- One clear call to action using this link: [BOOKING LINK]\nFORMAT: Subject line, then the email, then one alternative subject line.\n…"
+  ]
+ },
+ "SV-19-4": {
+  "files": [
+   "SV-19-4.png"
+  ],
+  "font_px": 104
+ },
+ "SV-19-5": {
+  "files": [
+   "SV-19-5.png"
+  ],
+  "font_px": 160
+ },
+ "SV-20-3": {
+  "files": [
+   "SV-20-3.png"
+  ],
+  "font_px": 40
+ },
+ "SV-20-4": {
+  "files": [
+   "SV-20-4.png"
+  ],
+  "font_px": 104
+ },
+ "SV-21-4": {
+  "files": [
+   "SV-21-4.png"
+  ],
+  "font_px": 40
+ },
+ "SV-22-4": {
+  "files": [
+   "SV-22-4-a.png",
+   "SV-22-4-b.png"
+  ],
+  "font_px": 36,
+  "parts": [
+   "WORKFLOW: New enquiry triage\nGOAL: Every enquiry is categorized and has a draft reply within 5 minutes\nTRIGGER: Website enquiry form submitted\nCONTEXT: Form fields + \"our services\" summary + ideal client profile\nMODEL STEP: Classify (hot / warm / cold / spam), give a reason, draft a reply.\nOutput: JSON",
+   "ACTIONS: Create or update CRM contact, tag with category, save reply as draft\nCHECKS: Before: JSON valid and category allowed\nAfter: CRM confirms the record was saved\nFALLBACK: Anything that fails a check goes to the \"Needs review\" list\nOWNER: Sales lead, alerted by email on any failure"
+  ]
+ },
+ "SV-23-3": {
+  "files": [
+   "SV-23-3.png"
+  ],
+  "font_px": 36
+ },
+ "SV-24-3": {
+  "files": [
+   "SV-24-3.png"
+  ],
+  "font_px": 34
+ },
+ "SV-25-3": {
+  "files": [
+   "SV-25-3.png"
+  ],
+  "font_px": 30
+ },
+ "SV-27-2": {
+  "files": [
+   "SV-27-2.png"
+  ],
+  "font_px": 48
+ },
+ "SV-27-3": {
+  "files": [
+   "SV-27-3.png"
+  ],
+  "font_px": 104
+ },
+ "SV-27-4": {
+  "files": [
+   "SV-27-4.png"
+  ],
+  "font_px": 104
+ }
+}

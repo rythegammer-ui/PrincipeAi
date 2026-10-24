@@ -37,8 +37,9 @@ const STATE_NAMES = new Set(
 );
 
 /**
- * The town part of an area, folded: "Tampa, FL", "Tampa FL 33602" and "tampa florida" → "tampa". "" when there's no
- * town (just a ZIP or a state), which matches any area.
+ * The town part of an area, folded: "Tampa, FL", "Tampa FL 33602" and "tampa florida" → "tampa". A state is only
+ * dropped after a town, so "New York, NY" → "newyork" and "Washington, DC" → "washington". "" when there's no town
+ * (just a ZIP or a state), which matches any area.
  */
 export function areaKeyOf(area: string | null | undefined): string {
   const words = (area ?? "").split(",")[0].trim().split(/\s+/).filter(Boolean);
@@ -47,8 +48,10 @@ export function areaKeyOf(area: string | null | undefined): string {
     if (!last) break;
     const twoLast = words.slice(-2).join(" ").toLowerCase();
     if (/^\d{5}(-\d{4})?$/.test(last)) words.pop();
-    else if (words.length >= 2 && STATE_NAMES.has(twoLast)) words.splice(-2);
-    else if ((last.length === 2 && STATE_CODES.has(last.toUpperCase())) || STATE_NAMES.has(last.toLowerCase())) words.pop();
+    else if (words.length > 2 && STATE_NAMES.has(twoLast)) words.splice(-2);
+    // A two-letter state code is never a town, even alone ("TX"); a state name alone may be one ("Indiana, PA").
+    else if (last.length === 2 && STATE_CODES.has(last.toUpperCase())) words.pop();
+    else if (words.length > 1 && STATE_NAMES.has(last.toLowerCase())) words.pop();
     else break;
   }
   return matchKey(words.join(" "));

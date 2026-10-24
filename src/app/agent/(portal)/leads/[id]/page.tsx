@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { currentAgent } from "@/lib/sales/agents";
 import { OUTREACH_CHANNELS } from "@/lib/sales/outreach";
 import { blockedByDoNotContact, CLAIM_DAYS, getProspect, HOLD_DAYS, MAX_CONTACTS, prospectLink } from "@/lib/sales/prospects";
-import { formatDate, timeAgo } from "@/lib/utils";
+import { formatDate, pluralize, timeAgo } from "@/lib/utils";
 import { NotAnAgent } from "../../not-agent";
 import { ProspectBadges } from "../labels";
 import { MessageWriter, PlaceDetailsLoader, ProspectUpdateForm } from "./prospect-forms";
@@ -25,7 +25,7 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
   const link = agent.code ? prospectLink(agent.code, p.linkToken) : null;
   // Their own "Do not contact", or another agent's record of the same business.
   const blocked = await blockedByDoNotContact(p);
-  const countText = p.status === "replied" || p.contactCount > MAX_CONTACTS ? `${p.contactCount} times` : `${p.contactCount} of ${MAX_CONTACTS} times`;
+  const countText = p.status === "replied" || p.contactCount > MAX_CONTACTS ? pluralize(p.contactCount, "time") : `${p.contactCount} of ${MAX_CONTACTS} times`;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">

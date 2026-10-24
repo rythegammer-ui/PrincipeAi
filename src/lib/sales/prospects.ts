@@ -145,8 +145,9 @@ function sameBusiness(row: AgentProspect, key: BusinessKey): boolean {
   if (key.nameKey.length < 2 || row.nameKey !== key.nameKey) return false;
   const sameTown = !row.areaKey || !key.areaKey || row.areaKey === key.areaKey;
   // Two Google listings with different place IDs are usually different businesses (branches of a chain). But listings
-  // get duplicated and place IDs change, so a do-not-contact listing still blocks one of the same name in the same town.
-  if (row.placeId && key.placeId) return row.status === "do_not_contact" && sameTown;
+  // get duplicated and place IDs change, so a do-not-contact listing still blocks one of the same name in the same,
+  // named town (an unknown town isn't enough here).
+  if (row.placeId && key.placeId) return row.status === "do_not_contact" && Boolean(row.areaKey) && row.areaKey === key.areaKey;
   return row.status === "do_not_contact" || sameTown;
 }
 
@@ -408,6 +409,16 @@ async function overCap(agentId: string, row: AgentProspect, nextStatus: Prospect
   return count >= MAX_ACTIVE_PROSPECTS;
 }
 
+/** A business just became do-not-contact: other agents' copies of it stop asking them to follow up. */
+async function clearOtherFollowUps(blocked: AgentProspect): Promise<void> {
+  const where = candidatesWhere(keyOfRow(blocked));
+  if (!where) return;
+  const db = await getDb();
+  const p = schema.agentProspects;
+  const ids = (await db.select().from(p).where(and(where, ne(p.id, blocked.id)))).filter((r) => sameBusiness(blocked, keyOfRow(r))).map((r) => r.id);
+  if (ids.length) await db.update(p).set({ nextFollowUpAt: null }).where(inArray(p.id, ids));
+}
+
 /**
  * Whether another agent's row says this business asked not to be contacted (the rows can coexist: added by hand and from
  * Google in different towns, say). Checked before every message, mark-as-sent and tracked link.
@@ -453,8 +464,9 @@ export async function updateProspect(agentId: string, id: string, input: Prospec
       countContact = true;
     }
     if (input.status === "not_interested" || input.status === "do_not_contact") patch.nextFollowUpAt = null;
-    // Contact details are the agent's own notes, editable only on businesses they added by hand (Google details stay with Google).
-    if (!current.placeId) {
+    // Contact details are the agent's own notes, editable only on businesses they added by hand (Google details stay with
+    // Google). Not with a move to Do not contact: nothing may stand in the way of recording an opt-out.
+    if (!current.placeId && input.status !== "do_not_contact") {
       if (input.website !== undefined) {
         patch.website = normalizeWebsite(input.website);
         patch.domain = claimDomain(patch.website);
@@ -476,6 +488,9 @@ export async function updateProspect(agentId: string, id: string, input: Prospec
         const others = (await db.select().from(p).where(and(where, ne(p.id, id)))).filter((r) => sameBusiness(r, key));
         if (others.some((r) => r.status === "do_not_contact")) return "blocked";
         if (others.some((r) => r.agentId !== agentId && !claimExpired(r))) return "taken";
+        // Another agent's lapsed claim on that business ends here, as it would if this agent had added it now.
+        const lapsed = others.filter((r) => r.agentId !== agentId).map((r) => r.id);
+        if (lapsed.length) await db.update(p).set({ releasedAt: now, releaseReason: "expired", updatedAt: now }).where(inArray(p.id, lapsed));
       }
     }
   }
@@ -487,8 +502,9 @@ export async function updateProspect(agentId: string, id: string, input: Prospec
       // Re-checks the status in the same statement: an admin may have marked it do not contact since it was read.
       .where(and(eq(p.id, id), eq(p.agentId, agentId), isNull(p.releasedAt), current.status === "do_not_contact" ? undefined : ne(p.status, "do_not_contact")))
       .returning({ id: p.id });
-    if (updated) return "ok";
-    return (await getProspect(agentId, id))?.status === "do_not_contact" ? "locked" : "not_found";
+    if (!updated) return (await getProspect(agentId, id))?.status === "do_not_contact" ? "locked" : "not_found";
+    if (input.status === "do_not_contact" && current.status !== "do_not_contact") await clearOtherFollowUps({ ...current, status: "do_not_contact" });
+    return "ok";
   } catch (err) {
     // A website that another agent's active prospect already uses.
     if (isUniqueViolation(err)) return "taken";
@@ -624,7 +640,8 @@ export async function adminMarkDoNotContact(id: string): Promise<boolean> {
     .update(p)
     .set({ status: "do_not_contact", nextFollowUpAt: null, activeAt: now, updatedAt: now })
     .where(and(eq(p.id, id), isNull(p.releasedAt)))
-    .returning({ id: p.id });
+    .returning();
+  if (row) await clearOtherFollowUps(row);
   return Boolean(row);
 }
 

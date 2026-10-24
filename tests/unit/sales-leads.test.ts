@@ -109,6 +109,11 @@ describe("lead generator rules (pure)", () => {
     expect(areaKeyOf("TX")).toBe("");
     expect(areaKeyOf("Virginia Beach VA")).toBe("virginiabeach");
     expect(areaKeyOf("The Woodlands, TX")).toBe("woodlands");
+    // Towns named after states keep their name.
+    expect(areaKeyOf("New York, NY")).toBe("newyork");
+    expect(areaKeyOf("New York NY")).toBe("newyork");
+    expect(areaKeyOf("Washington, DC")).toBe("washington");
+    expect(areaKeyOf("Indiana, PA")).toBe("indiana");
   });
 
   it("only takes real calendar dates for follow-ups", () => {
@@ -276,6 +281,7 @@ describe("lead generator", () => {
     const samRow = await addProspect(sam, business({ name, area: "Tampa" }));
     const janeRow = await addProspect(jane, business({ name, placeId: placeId(), area: "Brandon, FL" }));
     if (samRow.status !== "added" || janeRow.status !== "added") throw new Error("not added");
+    await updateProspect(sam.id, samRow.prospect.id, { ...none, nextFollowUp: "2026-12-01" });
     expect(await blockedByDoNotContact(samRow.prospect)).toBe(false);
     await updateProspect(jane.id, janeRow.prospect.id, { status: "do_not_contact", ...none });
     // Sam's copy can't be messaged, marked as sent or opened through its link any more.
@@ -290,9 +296,17 @@ describe("lead generator", () => {
     const dupStates = await claimStatesForPlaces(sam.id, [{ placeId: dup, name }], "Brandon, FL");
     expect(dupStates.get(dup)).toBe("do_not_contact");
     expect((await addProspect(sam, business({ name, placeId: dup, area: "Brandon FL 33511" }))).status).toBe("do_not_contact");
-    // A branch of the same name in another town is a different business.
+    // A branch of the same name in another town is a different business (also when the blocked listing's town is New York).
     const branch = placeId();
     expect((await claimStatesForPlaces(sam.id, [{ placeId: branch, name }], "Orlando, FL")).get(branch)).toBe("available");
+    const nyName = `Joe's Pizza ${randomUUID().slice(0, 6)}`;
+    const ny = await addProspect(jane, business({ name: nyName, placeId: placeId(), area: "New York, NY" }));
+    if (ny.status !== "added") throw new Error("not added");
+    await updateProspect(jane.id, ny.prospect.id, { status: "do_not_contact", ...none });
+    const seattle = placeId();
+    expect((await claimStatesForPlaces(sam.id, [{ placeId: seattle, name: nyName }], "Seattle, WA")).get(seattle)).toBe("available");
+    // Sam's own reminder for the blocked business is cleared.
+    expect((await getProspect(sam.id, samRow.prospect.id))?.nextFollowUpAt).toBeNull();
 
     // Contact details typed in later are checked too.
     const blockedSite = `${randomUUID().slice(0, 8)}.example.com`;
@@ -307,6 +321,16 @@ describe("lead generator", () => {
     if (claimedRow.status !== "added") throw new Error("not added");
     expect(await updateProspect(sam.id, other.prospect.id, { ...none, phone: "813-555-0142" })).toBe("taken");
     expect(await getProspect(sam.id, other.prospect.id)).toMatchObject({ email: null, website: null, phone: null });
+    // Recording an opt-out always works, even if the same save typed in colliding details (those are ignored).
+    expect(await updateProspect(sam.id, other.prospect.id, { ...none, status: "do_not_contact", email: "owner@blocked.example.com" })).toBe("ok");
+    expect(await getProspect(sam.id, other.prospect.id)).toMatchObject({ status: "do_not_contact", email: null });
+    // Another agent's lapsed claim on the details typed in ends (no two active claims on one business).
+    await db.update(schema.agentProspects).set({ activeAt: new Date(Date.now() - (CLAIM_DAYS + 1) * DAY) }).where(eq(schema.agentProspects.id, claimedRow.prospect.id));
+    const third = await addProspect(sam, business({ name: `Third ${randomUUID().slice(0, 6)}` }));
+    if (third.status !== "added") throw new Error("not added");
+    expect(await updateProspect(sam.id, third.prospect.id, { ...none, phone: "813-555-0142" })).toBe("ok");
+    const [lapsed] = await db.select().from(schema.agentProspects).where(eq(schema.agentProspects.id, claimedRow.prospect.id));
+    expect(lapsed.releaseReason).toBe("expired");
   });
 
   it("re-keys stored names and areas to match the app (rows from before the keys existed)", async () => {

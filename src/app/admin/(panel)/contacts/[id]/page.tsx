@@ -359,16 +359,19 @@ export default async function ContactPage({ params }: Params) {
                 resetOnSuccess={false}
               />
             )}
-            {salesAgent?.followUpConsentAt && (
+            {/* Stays mounted after a withdrawal (button off), so its confirmation is still shown and announced. */}
+            {salesAgent && (
               <div className="mt-3 border-t border-zinc-100 pt-3">
                 <p className="text-xs text-zinc-500">
-                  Said it&apos;s OK for this agent to follow up ({formatDate(salesAgent.followUpConsentAt, {}, tz)}): the agent sees their name, email and
-                  what they signed up for.
+                  {salesAgent.followUpConsentAt
+                    ? `Said it's OK for this agent to follow up (${formatDate(salesAgent.followUpConsentAt, {}, tz)}): the agent sees their name, email and what they signed up for.`
+                    : "Hasn't said it's OK for this agent to follow up (or it was withdrawn): the agent doesn't see their details."}
                 </p>
                 <ActionForm
                   action={withdrawFollowUpConsentAction}
                   hidden={{ contactId: ct.id }}
-                  submit="Withdraw the agent's OK to follow up"
+                  submit={salesAgent.followUpConsentAt ? "Withdraw the agent's OK to follow up" : "No OK to follow up"}
+                  disabled={!salesAgent.followUpConsentAt}
                   pendingText="Withdrawing…"
                   variant="outline"
                   size="sm"

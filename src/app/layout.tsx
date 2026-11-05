@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { SpeedInsights } from "@/components/analytics/speed-insights";
+import { WebAnalytics } from "@/components/analytics/web-analytics";
 import { site } from "@/config/site";
 import { deployedOnVercel } from "@/lib/runtime-mode";
 import { absoluteUrl } from "@/lib/utils";
@@ -41,7 +42,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex min-h-full flex-col">
         {children}
         {/* Its script and endpoint only exist on Vercel; elsewhere (next start, e2e) it would 404 on every page. */}
-        {deployedOnVercel() && <SpeedInsights />}
+        {deployedOnVercel() && (
+          <>
+            <SpeedInsights />
+            <WebAnalytics />
+          </>
+        )}
       </body>
     </html>
   );

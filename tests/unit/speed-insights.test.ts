@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSafeSpeedInsightsRoute, redactSpeedInsightsUrl } from "@/components/analytics/speed-insights-redact";
+import { isSafeSpeedInsightsRoute, redactSpeedInsightsUrl, redactWebAnalyticsUrl } from "@/components/analytics/speed-insights-redact";
 
 const SITE = "https://principe.ai";
 
@@ -65,5 +65,26 @@ describe("Speed Insights route check", () => {
     expect(isSafeSpeedInsightsRoute("/[jane@example.com]")).toBe(false);
     expect(isSafeSpeedInsightsRoute("/Some_Page")).toBe(false);
     expect(isSafeSpeedInsightsRoute("/courses/a%20b")).toBe(false);
+  });
+});
+
+describe("Web Analytics URL redaction", () => {
+  it("keeps campaign tags and drops every other query parameter", () => {
+    expect(redactWebAnalyticsUrl(`${SITE}/free-guide?utm_source=instagram&utm_campaign=starter-kit&email=a%40b.com#x`)).toBe(
+      `${SITE}/free-guide?utm_source=instagram&utm_campaign=starter-kit`,
+    );
+    expect(redactWebAnalyticsUrl(`${SITE}/auth/verify?token=secret123&utm_medium=email`)).toBe(`${SITE}/auth/verify?utm_medium=email`);
+  });
+
+  it("drops a campaign tag that carries an email address", () => {
+    expect(redactWebAnalyticsUrl(`${SITE}/?utm_content=jane%40example.com&utm_source=newsletter`)).toBe(`${SITE}/?utm_source=newsletter`);
+  });
+
+  it("keeps no tags on private-link pages", () => {
+    expect(redactWebAnalyticsUrl(`${SITE}/booking/tok_123?utm_source=email`)).toBe(`${SITE}/booking/[token]`);
+  });
+
+  it("sends nothing when the URL can't be parsed", () => {
+    expect(redactWebAnalyticsUrl("not a url")).toBeNull();
   });
 });

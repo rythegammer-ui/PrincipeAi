@@ -35,3 +35,22 @@ export function redactSpeedInsightsUrl(href: string, base?: string): string | nu
     return null;
   }
 }
+
+const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"] as const;
+
+/**
+ * Like redactSpeedInsightsUrl, for Vercel Web Analytics page views: also keeps the campaign (UTM) tags, so its
+ * campaign reports still work. A tag that looks like an email address is dropped, and private-link pages keep none.
+ */
+export function redactWebAnalyticsUrl(href: string, base?: string): string | null {
+  const cleaned = redactSpeedInsightsUrl(href, base);
+  if (!cleaned) return null;
+  const original = new URL(href, base);
+  const url = new URL(cleaned);
+  if (url.pathname.endsWith("/[token]")) return cleaned;
+  for (const key of UTM_KEYS) {
+    const value = original.searchParams.get(key);
+    if (value && !value.includes("@")) url.searchParams.set(key, value.slice(0, 200));
+  }
+  return url.toString();
+}

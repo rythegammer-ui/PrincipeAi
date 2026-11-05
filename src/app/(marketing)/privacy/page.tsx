@@ -38,6 +38,7 @@ If you have any questions, contact us at [${site.contactEmail}](mailto:${site.co
 - **Usage and analytics data** — pages you visit, buttons you click and the steps you take through our funnels (for example, starting the assessment or booking a call), along with the referring website and any campaign (UTM) tags in the link you followed.
 - **Device and technical data** — such as your IP address and browser information, used for security, rate limiting and preventing abuse.
 - **Performance data** — anonymous page-speed measurements (Core Web Vitals) collected through Vercel Speed Insights, along with the page address, browser, device type, operating system, connection speed and country. It isn't tied to you or your IP address, and we remove private links and query strings from page addresses before they're sent.
+- **Visitor statistics** — anonymous page-view counts collected through Vercel Web Analytics: the page address and any campaign (UTM) tags, the referring website, browser, device type, operating system and country. It uses no cookies and isn't tied to you; we remove private links and all other query parameters from page addresses before they're sent.
 - **Cookies** — see the Cookies section below.
 
 ## How we use your information
@@ -67,7 +68,7 @@ We **do not sell** your personal information. We share it only with service prov
 - **Stripe** — payment processing.
 - **Resend** — sending email.
 - **HighLevel (LeadConnector)** — the live-chat widget on our website. Messages and any contact details you type into it are sent to our HighLevel account so we can reply.
-- **Vercel** — website hosting and infrastructure (including the anonymous performance measurement above), together with our database hosting provider.
+- **Vercel** — website hosting and infrastructure (including the anonymous performance measurement and visitor statistics above), together with our database hosting provider.
 - **Video-conferencing providers** (such as Zoom or Google Meet) — if you book a call with us.
 
 We may also disclose information if required by law, to protect our rights or the safety of others, or as part of a business transfer such as a merger or acquisition.

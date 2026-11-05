@@ -31,10 +31,19 @@ function useIsSmallScreen(): boolean {
 }
 
 /**
- * Floating AI assistant: a compact launcher pill (bottom-right, safe-area aware) that opens the chat panel.
- * Nothing is fetched until the visitor opens it for the first time.
+ * Floating AI assistant: a compact launcher pill (bottom corner, safe-area aware) that opens the chat panel.
+ * `side` picks the corner, so it can make way for another chat bubble. Nothing is fetched until the visitor opens it
+ * for the first time.
  */
-export function ChatWidget({ assistantName, greeting }: { assistantName: string; greeting: string }) {
+export function ChatWidget({
+  assistantName,
+  greeting,
+  side = "right",
+}: {
+  assistantName: string;
+  greeting: string;
+  side?: "right" | "left";
+}) {
   const [open, setOpen] = useState(false);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const trackedRef = useRef(false);
@@ -89,7 +98,8 @@ export function ChatWidget({ assistantName, greeting }: { assistantName: string;
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         className={cn(
-          "group fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 inline-flex h-12 items-center gap-2 rounded-full bg-ink py-1.5 pr-4 pl-1.5 text-sm font-semibold text-white shadow-lift ring-1 ring-white/15 transition-[translate,scale,opacity,background-color] duration-200 print:hidden",
+          side === "left" ? "left-[max(1rem,env(safe-area-inset-left))]" : "right-[max(1rem,env(safe-area-inset-right))]",
+          "group fixed bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 inline-flex h-12 items-center gap-2 rounded-full bg-ink py-1.5 pr-4 pl-1.5 text-sm font-semibold text-white shadow-lift ring-1 ring-white/15 transition-[translate,scale,opacity,background-color] duration-200 print:hidden",
           "hover:-translate-y-0.5 hover:bg-ink-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 active:scale-[0.97]",
           open && "invisible translate-y-2 opacity-0 transition-[translate,scale,opacity,background-color,visibility]",
         )}
@@ -103,7 +113,9 @@ export function ChatWidget({ assistantName, greeting }: { assistantName: string;
         </span>
       </button>
 
-      {open && <ChatPanel id={panelId} chat={chat} assistantName={assistantName} greeting={greeting} modal={smallScreen} onClose={closeChat} />}
+      {open && (
+        <ChatPanel id={panelId} chat={chat} assistantName={assistantName} greeting={greeting} modal={smallScreen} side={side} onClose={closeChat} />
+      )}
     </>
   );
 }

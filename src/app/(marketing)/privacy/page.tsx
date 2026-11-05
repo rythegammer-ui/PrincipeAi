@@ -9,7 +9,7 @@ import { absoluteUrl } from "@/lib/utils";
  * advice. Have it reviewed by a qualified professional for your jurisdiction (e.g. GDPR, CCPA/CPRA)
  * before relying on it, and update LAST_UPDATED whenever you change it.
  */
-const LAST_UPDATED = "October 20, 2026";
+const LAST_UPDATED = "November 5, 2026";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -66,6 +66,7 @@ We **do not sell** your personal information. We share it only with service prov
 - **Anthropic** — AI features described above.
 - **Stripe** — payment processing.
 - **Resend** — sending email.
+- **HighLevel (LeadConnector)** — the live-chat widget on our website. Messages and any contact details you type into it are sent to our HighLevel account so we can reply.
 - **Vercel** — website hosting and infrastructure (including the anonymous performance measurement above), together with our database hosting provider.
 - **Video-conferencing providers** (such as Zoom or Google Meet) — if you book a call with us.
 
@@ -90,7 +91,7 @@ We use a small number of first-party cookies:
 | \`pa_agent\` | If you followed an independent sales agent's link, their referral code, so the agent who introduced you is credited if you sign up or buy | 90 days |
 | \`pa_student\`, \`pa_admin\` | Keep you signed in to the student portal (or sales agent dashboard) or admin area | Session length |
 
-These cookies are set by us, not by third-party advertisers. You can block or delete cookies in your browser settings, although some features (such as staying signed in) may stop working. Stripe may set its own cookies on its checkout pages to prevent fraud.
+These cookies are set by us, not by third-party advertisers. You can block or delete cookies in your browser settings, although some features (such as staying signed in) may stop working. Stripe may set its own cookies on its checkout pages to prevent fraud, and the HighLevel live-chat widget may store its own cookies or data in your browser to keep your conversation going.
 
 ## How long we keep information
 

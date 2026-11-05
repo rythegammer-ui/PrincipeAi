@@ -4,6 +4,7 @@ import { ChatWidget } from "@/components/chat/chat-widget";
 import { AnnouncementBar } from "@/components/marketing/announcement-bar";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteHeader } from "@/components/marketing/site-header";
+import { site } from "@/config/site";
 import { getSettings } from "@/lib/settings";
 
 // Marketing pages read live data (prices, availability, settings) — render per request.
@@ -22,7 +23,14 @@ export default async function MarketingLayout({ children }: { children: React.Re
       <Suspense fallback={null}>
         <PageViewTracker />
       </Suspense>
-      {settings.aiAssistantEnabled && <ChatWidget assistantName={settings.aiAssistantName} greeting={settings.aiAssistantGreeting} />}
+      {settings.aiAssistantEnabled && (
+        <ChatWidget
+          assistantName={settings.aiAssistantName}
+          greeting={settings.aiAssistantGreeting}
+          // The HighLevel chat bubble (loaded in the footer) sits bottom-right.
+          side={site.leadConnectorChatWidgetId ? "left" : "right"}
+        />
+      )}
     </>
   );
 }

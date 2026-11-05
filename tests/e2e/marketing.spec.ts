@@ -1,4 +1,9 @@
+import { site } from "../../src/config/site";
 import { collectErrors, expect, test } from "./helpers";
+
+/** The HighLevel chat widget embed code, as supplied by HighLevel. */
+const LEAD_CONNECTOR_LOADER_URL = "https://widgets.leadconnectorhq.com/loader.js";
+const LEAD_CONNECTOR_RESOURCES_URL = "https://widgets.leadconnectorhq.com/chat-widget/loader.js";
 
 /** Every public page a visitor can reach from the navigation, footer or a funnel. */
 const PUBLIC_PAGES = [
@@ -56,6 +61,26 @@ test.describe("marketing site", () => {
       await expect(page).toHaveURL(path);
       await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
     }
+  });
+
+  test("the footer loads the HighLevel chat widget with its embed attributes", async ({ page }) => {
+    // Stand-in loader: records what the real one would read from its own <script> tag.
+    await page.route(LEAD_CONNECTOR_LOADER_URL, (route) =>
+      route.fulfill({
+        contentType: "application/javascript",
+        body: `var s = document.currentScript; window.__leadConnector = { widgetId: s.getAttribute("data-widget-id"), resourcesUrl: s.getAttribute("data-resources-url"), source: s.getAttribute("data-source") };`,
+      }),
+    );
+    await page.goto("/");
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __leadConnector?: unknown }).__leadConnector))
+      .toEqual({ widgetId: site.leadConnectorChatWidgetId, resourcesUrl: LEAD_CONNECTOR_RESOURCES_URL, source: "WEB_USER" });
+
+    // The built-in assistant makes way for the HighLevel bubble in the bottom-right corner.
+    const launcher = page.getByRole("button", { name: /Ask AI/ });
+    const box = await launcher.boundingBox();
+    expect(box, "Ask AI launcher is visible").not.toBeNull();
+    expect(box!.x + box!.width).toBeLessThan(page.viewportSize()!.width / 2);
   });
 });
 

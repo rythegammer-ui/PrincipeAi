@@ -186,6 +186,14 @@ export const test = base.extend<{ adminPage: Page }, { adminState: StorageState 
   extraHTTPHeaders: async ({ extraHTTPHeaders }, provide) => {
     await provide({ ...extraHTTPHeaders, "x-forwarded-for": randomClientIp() });
   },
+  // The HighLevel chat widget in the footer loads from HighLevel's servers: serve an empty stand-in so tests stay
+  // offline and don't open real chat sessions. A test can override it with page.route().
+  context: async ({ context }, provide) => {
+    await context.route(/^https:\/\/widgets\.leadconnectorhq\.com\//, (route) =>
+      route.fulfill({ status: 200, contentType: "application/javascript", body: "" }),
+    );
+    await provide(context);
+  },
   adminState: [
     async ({ browser }, provide, workerInfo) => {
       const baseURL = workerInfo.project.use.baseURL;

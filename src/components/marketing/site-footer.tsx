@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { site } from "@/config/site";
 import { Logo } from "@/components/ui/misc";
+import { LeadConnectorChat } from "./lead-connector-chat";
 import { socialProfiles } from "@/lib/social";
 
 const columns = [
@@ -85,6 +86,7 @@ export function SiteFooter() {
           <p>{site.tagline}</p>
         </div>
       </div>
+      {site.leadConnectorChatWidgetId && <LeadConnectorChat widgetId={site.leadConnectorChatWidgetId} />}
     </footer>
   );
 }

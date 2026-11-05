@@ -29,6 +29,11 @@ export const site = {
   },
   /** Add real client testimonials here. Sections that use them are hidden while this is empty. */
   testimonials: [] as { quote: string; name: string; role: string }[],
+  /**
+   * HighLevel (LeadConnector) live-chat widget, loaded from the site footer on every public page. Set to "" to remove
+   * it. Its bubble takes the bottom-right corner, so the built-in "Ask AI" launcher moves to the bottom-left.
+   */
+  leadConnectorChatWidgetId: "6aecde9e11a83697ce0358d4" as string,
 } as const;
 
 export const marketingNav = [

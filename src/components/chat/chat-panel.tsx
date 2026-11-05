@@ -27,6 +27,7 @@ export function ChatPanel({
   assistantName,
   greeting,
   modal,
+  side = "right",
   onClose,
 }: {
   id: string;
@@ -34,6 +35,8 @@ export function ChatPanel({
   assistantName: string;
   greeting: string;
   modal: boolean;
+  /** Corner the panel opens in on larger screens (it covers the whole screen on phones). */
+  side?: "right" | "left";
   onClose: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -110,7 +113,8 @@ export function ChatPanel({
       onKeyDown={onKeyDown}
       className={cn(
         "fixed inset-0 z-[60] flex flex-col bg-white outline-none print:hidden motion-safe:animate-fade-up",
-        "sm:inset-auto sm:right-[max(1.25rem,env(safe-area-inset-right))] sm:bottom-[max(1.25rem,env(safe-area-inset-bottom))] sm:h-[min(680px,calc(100dvh_-_2.5rem))] sm:w-[400px] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-zinc-200/80 sm:shadow-lift",
+        side === "left" ? "sm:left-[max(1.25rem,env(safe-area-inset-left))]" : "sm:right-[max(1.25rem,env(safe-area-inset-right))]",
+        "sm:inset-auto sm:bottom-[max(1.25rem,env(safe-area-inset-bottom))] sm:h-[min(680px,calc(100dvh_-_2.5rem))] sm:w-[400px] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-zinc-200/80 sm:shadow-lift",
       )}
     >
       <header className="relative flex items-center gap-3 overflow-hidden bg-ink px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 text-white sm:pt-3">

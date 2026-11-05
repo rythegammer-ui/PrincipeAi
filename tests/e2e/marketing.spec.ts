@@ -63,6 +63,15 @@ test.describe("marketing site", () => {
     }
   });
 
+  test("the HighLevel chat widget is in the page source, as HighLevel's compliance check reads it", async ({ request }) => {
+    for (const path of ["/", "/courses", "/privacy"]) {
+      const html = await (await request.get(path)).text();
+      expect(html, `widget script in the HTML of ${path}`).toContain(
+        `src="${LEAD_CONNECTOR_LOADER_URL}" data-resources-url="${LEAD_CONNECTOR_RESOURCES_URL}" data-widget-id="${site.leadConnectorChatWidgetId}" data-source="WEB_USER"`,
+      );
+    }
+  });
+
   test("the footer loads the HighLevel chat widget with its embed attributes", async ({ page }) => {
     // Stand-in loader: records what the real one would read from its own <script> tag.
     await page.route(LEAD_CONNECTOR_LOADER_URL, (route) =>
